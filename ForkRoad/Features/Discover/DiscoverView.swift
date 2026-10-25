@@ -53,18 +53,7 @@ struct DiscoverView: View {
     }
 
     private var cuisineChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                NoFastFoodChip()
-                ForEach(CuisineFilter.allCases) { cuisine in
-                    Chip(label: cuisine.label, isSelected: model.cuisine == cuisine) {
-                        model.cuisine = cuisine
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.horizontal, -16)
+        CuisineChips(selection: Binding(get: { model.cuisines }, set: { model.cuisines = $0 }))
     }
 
     private var spinBanner: some View {
@@ -80,7 +69,9 @@ struct DiscoverView: View {
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Can’t decide?").font(Theme.display(19))
-                    Text("Spin from \(visiblePlaces.count) places within \(model.radiusLabel)")
+                    Text(model.cuisines.isEmpty
+                         ? "Spin from \(visiblePlaces.count) places within \(model.radiusLabel)"
+                         : "Spin from \(visiblePlaces.count) \(model.cuisineSummary) places")
                         .font(.system(size: 13, weight: .medium))
                 }
                 Spacer()

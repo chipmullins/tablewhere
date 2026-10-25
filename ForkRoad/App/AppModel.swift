@@ -23,8 +23,9 @@ final class AppModel {
     var radiusMiles: Double = 2 {
         didSet { if radiusMiles != oldValue { scheduleSearch() } }
     }
-    var cuisine: CuisineFilter = .all {
-        didSet { if cuisine != oldValue { scheduleSearch() } }
+    /// Selected cuisines. Empty means "All".
+    var cuisines: Set<CuisineFilter> = [] {
+        didSet { if cuisines != oldValue { scheduleSearch() } }
     }
     /// "No fast food" toggle. Saved, and shared with the iMessage extension.
     var excludeFastFood: Bool = Preferences.excludeFastFood {
@@ -62,6 +63,9 @@ final class AppModel {
     }
     var radiusMeters: Double { radiusMiles * Place.metersPerMile }
 
+    /// "BBQ, Mexican" or "all" — used in labels like "Spin from 12 BBQ, Mexican places".
+    var cuisineSummary: String { CuisineFilter.summary(of: cuisines) }
+
     var radiusLabel: String {
         radiusMiles.truncatingRemainder(dividingBy: 1) == 0
             ? "\(Int(radiusMiles)) mi"
@@ -94,7 +98,7 @@ final class AppModel {
             let results = try await searchService.search(
                 near: center,
                 radiusMeters: radiusMeters,
-                cuisine: cuisine
+                cuisines: cuisines
             )
             guard generation == searchGeneration else { return }  // a newer search took over
             places = results

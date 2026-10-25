@@ -12,7 +12,7 @@ struct TripDetailView: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
 
-    @State private var cuisine: CuisineFilter = .all
+    @State private var cuisines: Set<CuisineFilter> = []
     @State private var results: [Place] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -72,16 +72,7 @@ struct TripDetailView: View {
                     }
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        NoFastFoodChip()
-                        ForEach(CuisineFilter.allCases) { item in
-                            Chip(label: item.label, isSelected: cuisine == item) { cuisine = item }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                .padding(.horizontal, -16)
+                CuisineChips(selection: $cuisines)
 
                 HStack {
                     Text("Worth the trip").font(Theme.display(22)).foregroundStyle(Theme.text)
@@ -101,7 +92,7 @@ struct TripDetailView: View {
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
-        .task(id: cuisine) { await load() }
+        .task(id: cuisines) { await load() }
         .alert("How about…", isPresented: Binding(get: { pick != nil }, set: { if !$0 { pick = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -159,7 +150,7 @@ struct TripDetailView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            results = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisine: cuisine)
+            results = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisines: cuisines)
         } catch is CancellationError {
         } catch {
             errorMessage = "Couldn’t load restaurants. Check your connection and try again."

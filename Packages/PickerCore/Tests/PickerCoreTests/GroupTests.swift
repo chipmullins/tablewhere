@@ -62,6 +62,15 @@ final class GroupTests: XCTestCase {
         XCTAssertNil(GroupLinks.sessionID(from: URL(string: "https://forkroad.web.app/")!))
     }
 
+    func testCuisineSelectionHelpers() {
+        XCTAssertEqual(CuisineFilter.ordered([]), [.all])
+        XCTAssertEqual(CuisineFilter.ordered([.thai, .bbq, .mexican]), [.mexican, .bbq, .thai])
+        XCTAssertEqual(CuisineFilter.summary(of: []), "all")
+        XCTAssertEqual(CuisineFilter.summary(of: [.bbq, .mexican]), "Mexican, BBQ")
+        XCTAssertEqual(CuisineFilter.summary(of: [.bbq, .mexican, .thai]), "Mexican, BBQ + 1 more")
+        XCTAssertFalse(CuisineFilter.specific.contains(.all))
+    }
+
     func testSessionCodableRoundTrip() throws {
         let session = GroupSession(id: "s", title: "Friday dinner", joinCode: "K7Q4MZ",
                                    createdBy: "u1", createdByName: "Chip", mode: .vote,

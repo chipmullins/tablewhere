@@ -4,10 +4,43 @@ import PickerCore
 
 /// Anything that can find restaurants. The app uses MapKit; previews and
 /// tests can swap in a fake.
-protocol PlaceSearching {
+protocol PlaceSearching: Sendable {
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
                 cuisine: CuisineFilter) async throws -> [Place]
+}
+
+extension PlaceSearching {
+    /// Searches several cuisines at once and merges the results (nearest first).
+    /// An empty selection means "All".
+    func search(near center: CLLocationCoordinate2D,
+                radiusMeters: Double,
+                cuisines: Set<CuisineFilter>) async throws -> [Place] {
+        let list = CuisineFilter.ordered(cuisines)
+        if list.count == 1 {
+            return try await search(near: center, radiusMeters: radiusMeters, cuisine: list[0])
+        }
+        let batches = try await withThrowingTaskGroup(of: (Int, [Place]?).self) { group in
+            for (index, cuisine) in list.enumerated() {
+                group.addTask {
+                    // One cuisine failing shouldn't sink the others.
+                    let places = try? await self.search(near: center, radiusMeters: radiusMeters, cuisine: cuisine)
+                    return (index, places)
+                }
+            }
+            var results = [(Int, [Place]?)]()
+            for try await result in group { results.append(result) }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+        if batches.allSatisfy({ $0 == nil }) { throw URLError(.cannotLoadFromNetwork) }
+
+        var seen = Set<String>()
+        return batches
+            .compactMap { $0 }
+            .flatMap { $0 }
+            .filter { seen.insert($0.id).inserted }
+            .sorted { $0.distanceMeters < $1.distanceMeters }
+    }
 }
 
 /// Searches Apple Maps data with MapKit. Free, with no API key.

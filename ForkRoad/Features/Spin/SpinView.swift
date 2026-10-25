@@ -60,7 +60,11 @@ struct SpinView: View {
                 .pickerStyle(.segmented)
                 .onChange(of: model.spinSource) { reset() }
 
-                NoFastFoodChip()
+                if model.spinSource == .nearby {
+                    CuisineChips(selection: $model.cuisines)
+                } else {
+                    NoFastFoodChip()
+                }
 
                 rulesSummary(count: pool.count)
 
@@ -95,6 +99,7 @@ struct SpinView: View {
     private func rulesSummary(count: Int) -> some View {
         let parts: [String?] = [
             model.spinSource == .nearby ? "Within \(model.radiusLabel)" : "From your saved places",
+            model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blocked",
             model.excludeFastFood ? "No fast food" : nil,
