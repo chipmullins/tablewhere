@@ -1,0 +1,157 @@
+import SwiftUI
+import SwiftData
+import MapKit
+import PickerCore
+
+/// Restaurant screen: Look Around street view, actions, menu, and address.
+struct PlaceDetailView: View {
+    let place: Place
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var lookAround: MKLookAroundScene?
+    @State private var browserURL: URL?
+    @State private var showBlockOptions = false
+    @State private var refresh = 0  // re-render after save/block
+
+    private var actions: ListActions { ListActions(context: context) }
+
+    var body: some View {
+        let isSaved = actions.isSaved(place)
+        let _ = refresh
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                hero
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(place.name)
+                        .font(Theme.display(32))
+                        .foregroundStyle(Theme.text)
+                    Text("\(place.category) · \(place.distanceLabel)")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(.horizontal, 16)
+
+                HStack(spacing: 8) {
+                    ActionTile(title: "Call", systemImage: "phone", tint: Theme.saffron, background: Theme.surface) {
+                        if let url = PlaceLinks.phoneURL(place) { openURL(url) }
+                    }
+                    .disabled(place.phoneNumber == nil)
+                    .opacity(place.phoneNumber == nil ? 0.4 : 1)
+
+                    ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.saffron, background: Theme.surface) {
+                        PlaceLinks.openDirections(place)
+                    }
+
+                    ActionTile(title: isSaved ? "Interested" : "Save",
+                               systemImage: isSaved ? "heart.fill" : "heart",
+                               tint: isSaved ? Theme.onSaffron : Theme.text,
+                               background: isSaved ? Theme.saffron : Theme.surface) {
+                        actions.toggleSaved(place)
+                        refresh += 1
+                    }
+
+                    ActionTile(title: "Block", systemImage: "nosign", background: Theme.surface) {
+                        showBlockOptions = true
+                    }
+                }
+                .padding(.horizontal, 16)
+                .sensoryFeedback(.impact(weight: .light), trigger: refresh)
+
+                menuButton.padding(.horizontal, 16)
+
+                if let address = place.address {
+                    HStack(spacing: 14) {
+                        Image(systemName: "mappin.and.ellipse").foregroundStyle(Theme.muted)
+                        Text(address)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                            .textSelection(.enabled)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(16)
+                    .card()
+                    .padding(.horizontal, 16)
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .background(Theme.night)
+        .ignoresSafeArea(edges: .top)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .task { await loadLookAround() }
+        .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
+        .confirmationDialog("Hide from your picks?", isPresented: $showBlockOptions, titleVisibility: .visible) {
+            Button("Just \(place.name)", role: .destructive) {
+                actions.block(place)
+                dismiss()
+            }
+            Button("All \(place.category) places", role: .destructive) {
+                actions.blockCategory(place.category)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let lookAround {
+                LookAroundPreview(initialScene: lookAround)
+            } else {
+                Map(initialPosition: .region(MKCoordinateRegion(center: place.coordinate,
+                                                                latitudinalMeters: 400,
+                                                                longitudinalMeters: 400))) {
+                    Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
+                        .tint(Theme.saffron)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .frame(height: 300)
+        .overlay(alignment: .bottom) {
+            LinearGradient(colors: [.clear, Theme.night], startPoint: .top, endPoint: .bottom)
+                .frame(height: 80)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var menuButton: some View {
+        Button {
+            browserURL = place.websiteURL
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "menucard")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Theme.onSaffron)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("View menu & hours").font(Theme.display(16)).foregroundStyle(Theme.text)
+                    Text(place.websiteURL == nil ? "No website listed" : "Opens their website in the app")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right").foregroundStyle(Theme.muted)
+            }
+            .padding(14)
+            .background(Color(hex: 0x1A1710), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+        }
+        .buttonStyle(.plain)
+        .disabled(place.websiteURL == nil)
+        .opacity(place.websiteURL == nil ? 0.5 : 1)
+    }
+
+    private func loadLookAround() async {
+        let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
+        lookAround = try? await request.scene
+    }
+}
