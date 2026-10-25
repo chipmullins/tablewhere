@@ -80,7 +80,7 @@ struct ListsView: View {
                         }
                     }
                 }
-                .onDelete { offsets in offsets.map { saved[$0] }.forEach(context.delete) }
+                .onDelete { offsets in offsets.map { saved[$0] }.forEach { context.delete($0) } }
                 .listRowBackground(Theme.surface)
             }
         }
@@ -96,14 +96,14 @@ struct ListsView: View {
         if !blockedCategories.isEmpty {
             Section("Categories") {
                 ForEach(blockedCategories) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedCategories[$0] }.forEach(context.delete) }
+                    .onDelete { offsets in offsets.map { blockedCategories[$0] }.forEach { context.delete($0) } }
                     .listRowBackground(Theme.surface)
             }
         }
         if !blockedPlaces.isEmpty {
             Section("Places") {
                 ForEach(blockedPlaces) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedPlaces[$0] }.forEach(context.delete) }
+                    .onDelete { offsets in offsets.map { blockedPlaces[$0] }.forEach { context.delete($0) } }
                     .listRowBackground(Theme.surface)
             }
         }

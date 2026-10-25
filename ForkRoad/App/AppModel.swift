@@ -35,6 +35,8 @@ final class AppModel {
 
     @ObservationIgnored private let searchService: PlaceSearching
     @ObservationIgnored private var searchTask: Task<Void, Never>?
+    /// Increments per search so only the newest one updates the UI.
+    @ObservationIgnored private var searchGeneration = 0
 
     init(searchService: PlaceSearching = MapKitPlaceSearch()) {
         self.searchService = searchService
@@ -50,10 +52,11 @@ final class AppModel {
             : String(format: "%.1f mi", radiusMiles)
     }
 
-    /// Call once when the app appears.
+    /// Call once when the app appears. The first search runs when a location
+    /// arrives (or we learn there won't be one), so fallback results don't flash first.
     func start() {
         location.start()
-        scheduleSearch()
+        if location.isDenied { scheduleSearch() }
     }
 
     /// Debounced search, so dragging the radius slider doesn't fire a search per pixel.
@@ -67,21 +70,24 @@ final class AppModel {
     }
 
     func search() async {
+        searchGeneration += 1
+        let generation = searchGeneration
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
         do {
             let results = try await searchService.search(
                 near: center,
                 radiusMeters: radiusMeters,
                 cuisine: cuisine
             )
-            guard !Task.isCancelled else { return }
+            guard generation == searchGeneration else { return }  // a newer search took over
             places = results
-        } catch is CancellationError {
-            // A newer search replaced this one.
         } catch {
-            errorMessage = "Couldn’t load restaurants. Check your connection and try again."
+            guard generation == searchGeneration else { return }
+            if !(error is CancellationError) {
+                errorMessage = "Couldn’t load restaurants. Check your connection and try again."
+            }
         }
+        isLoading = false
     }
 }

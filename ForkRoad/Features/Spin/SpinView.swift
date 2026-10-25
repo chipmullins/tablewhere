@@ -13,6 +13,9 @@ struct SpinView: View {
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
 
     @State private var reelIndex = 0
+    /// Frozen copy of the pool while spinning/landed, so new search results
+    /// arriving mid-spin can't change what the reel shows.
+    @State private var reelPool: [Place] = []
     @State private var isSpinning = false
     @State private var winner: Place?
     @State private var showDetail = false
@@ -24,7 +27,8 @@ struct SpinView: View {
             blockedPlaceIDs: Set(blockedPlaces.map(\.placeID)),
             blockedCategories: Set(blockedCategories.map(\.name)),
             recentPlaceIDs: actions.recentPlaceIDs(),
-            maxDistanceMeters: model.radiusMeters
+            // Saved places are the user's own picks, so the radius doesn't apply to them.
+            maxDistanceMeters: model.spinSource == .nearby ? model.radiusMeters : nil
         )
     }
 
@@ -41,6 +45,7 @@ struct SpinView: View {
     var body: some View {
         @Bindable var model = model
         let pool = self.pool
+        let shown = (isSpinning || winner != nil) ? reelPool : pool
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -57,7 +62,7 @@ struct SpinView: View {
 
                 rulesSummary(count: pool.count)
 
-                reel(pool)
+                reel(shown)
 
                 HStack {
                     Spacer()
@@ -86,16 +91,17 @@ struct SpinView: View {
     // MARK: Pieces
 
     private func rulesSummary(count: Int) -> some View {
-        let parts = [
-            "Within \(model.radiusLabel)",
+        let parts: [String?] = [
+            model.spinSource == .nearby ? "Within \(model.radiusLabel)" : "From your saved places",
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blocked",
             "No repeats this week"
-        ].compactMap { $0 }
+        ]
+        let labels = parts.compactMap { $0 }
 
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(parts, id: \.self) { part in
+                ForEach(labels, id: \.self) { part in
                     Text(part)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.muted)
@@ -205,19 +211,29 @@ struct SpinView: View {
 
     /// Decide the winner up front, then animate the reel slowing down onto it.
     private func spin(_ pool: [Place]) {
-        guard !isSpinning, let pick = Randomizer.pick(from: pool, rules: rules) else { return }
+        guard !isSpinning,
+              let pick = Randomizer.pick(from: pool, rules: rules),
+              let target = pool.firstIndex(of: pick) else { return }
+        reelPool = pool
         isSpinning = true
         winner = nil
 
+        // Start the reel exactly `steps` positions before the winner, so it
+        // lands on it naturally instead of jumping at the end. (The start
+        // position change isn't noticeable because the reel begins fast.)
+        let count = pool.count
+        let steps = 22 + Int.random(in: 0...6)
+        reelIndex = ((target - steps) % count + count) % count
+
         Task { @MainActor in
-            var delay = 0.045
-            let steps = 16 + Int.random(in: 0...5)
+            var delay = 0.03
+            let growth = pow(0.28 / 0.03, 1.0 / Double(steps))  // ease out to ~0.28s per step
             for _ in 0..<steps {
                 try? await Task.sleep(for: .seconds(delay))
-                reelIndex += 1
-                delay *= 1.13
+                reelIndex = (reelIndex + 1) % count
+                delay *= growth
             }
-            if let index = pool.firstIndex(of: pick) { reelIndex = index }
+            reelIndex = target
             winner = pick
             isSpinning = false
             actions.recordSpin(pick)
@@ -225,7 +241,9 @@ struct SpinView: View {
     }
 
     private func reset() {
+        guard !isSpinning else { return }
         reelIndex = 0
         winner = nil
+        reelPool = []
     }
 }

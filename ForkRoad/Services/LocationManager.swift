@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import Observation
 
 /// Wraps CLLocationManager: asks for permission, gets one location fix,
 /// and looks up a friendly place name ("Lexington, KY").
