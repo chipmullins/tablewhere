@@ -1,0 +1,79 @@
+import Foundation
+import Observation
+import FirebaseFirestore
+import PickerCore
+
+/// A group session that stays up to date in real time.
+/// Create one per screen; listeners stop when it's released.
+@MainActor
+@Observable
+final class LiveSession {
+    let sessionID: String
+
+    private(set) var session: GroupSession?
+    private(set) var votes: [GroupVote] = []
+    private(set) var members: [GroupMember] = []
+    private(set) var errorMessage: String?
+    private(set) var isLoaded = false
+
+    @ObservationIgnored nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
+
+    init(sessionID: String) {
+        self.sessionID = sessionID
+    }
+
+    deinit {
+        listeners.forEach { $0.remove() }
+    }
+
+    var tally: Tally { Tally(options: session?.options ?? [], votes: votes) }
+
+    var isOwner: Bool {
+        guard let session, let uid = GroupService.shared.currentUserID else { return false }
+        return session.isOwned(by: uid)
+    }
+
+    var myVote: String? {
+        guard let uid = GroupService.shared.currentUserID else { return nil }
+        return votes.first { $0.voterID == uid }?.optionID
+    }
+
+    /// Signs in if needed and starts listening.
+    func start() async {
+        guard listeners.isEmpty else { return }
+        do {
+            _ = try await GroupService.shared.userID()
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        let ref = GroupService.shared.sessionRef(sessionID)
+
+        listeners.append(ref.addSnapshotListener { [weak self] snapshot, error in
+            let decoded = try? snapshot?.data(as: GroupSession.self)
+            let exists = snapshot?.exists ?? false
+            Task { @MainActor in
+                guard let self else { return }
+                if let error { self.errorMessage = error.localizedDescription }
+                else if !exists { self.errorMessage = GroupError.sessionNotFound.localizedDescription }
+                self.session = decoded
+                self.isLoaded = true
+            }
+        })
+
+        listeners.append(ref.collection("votes").addSnapshotListener { [weak self] snapshot, _ in
+            let votes = snapshot?.documents.compactMap { try? $0.data(as: GroupVote.self) } ?? []
+            Task { @MainActor in self?.votes = votes }
+        })
+
+        listeners.append(ref.collection("members").addSnapshotListener { [weak self] snapshot, _ in
+            let members = snapshot?.documents.compactMap { try? $0.data(as: GroupMember.self) } ?? []
+            Task { @MainActor in self?.members = members }
+        })
+    }
+
+    func stop() {
+        listeners.forEach { $0.remove() }
+        listeners.removeAll()
+    }
+}

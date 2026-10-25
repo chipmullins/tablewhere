@@ -5,6 +5,11 @@ import SwiftData
 struct ForkRoadApp: App {
     @State private var model = AppModel()
 
+    init() {
+        // Group voting needs Firebase; everything else works without it.
+        FirebaseSetup.configureIfPossible()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootTabView()
@@ -12,11 +17,6 @@ struct ForkRoadApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.saffron)
         }
-        .modelContainer(for: [
-            SavedPlace.self,
-            BlockedPlace.self,
-            BlockedCategory.self,
-            SpinRecord.self
-        ])
+        .modelContainer(ForkRoadStore.container)
     }
 }

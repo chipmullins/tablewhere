@@ -3,7 +3,7 @@ import CoreLocation
 
 /// A restaurant the user can pick. Built from MapKit results in the app,
 /// but kept free of MapKit types so it is easy to test and to share.
-public struct Place: Identifiable, Hashable, Sendable {
+public struct Place: Identifiable, Hashable, Codable, Sendable {
     public let id: String
     public let name: String
     public let category: String

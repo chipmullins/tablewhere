@@ -23,12 +23,12 @@ struct SpinView: View {
     private var actions: ListActions { ListActions(context: context) }
 
     private var rules: Randomizer.Rules {
-        Randomizer.Rules(
-            blockedPlaceIDs: Set(blockedPlaces.map(\.placeID)),
-            blockedCategories: Set(blockedCategories.map(\.name)),
-            recentPlaceIDs: actions.recentPlaceIDs(),
+        model.rules(
+            blockedPlaces: blockedPlaces,
+            blockedCategories: blockedCategories,
+            recent: actions.recentPlaceIDs(),
             // Saved places are the user's own picks, so the radius doesn't apply to them.
-            maxDistanceMeters: model.spinSource == .nearby ? model.radiusMeters : nil
+            maxDistance: model.spinSource == .nearby ? model.radiusMeters : nil
         )
     }
 
@@ -59,6 +59,8 @@ struct SpinView: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: model.spinSource) { reset() }
+
+                NoFastFoodChip()
 
                 rulesSummary(count: pool.count)
 
@@ -95,6 +97,7 @@ struct SpinView: View {
             model.spinSource == .nearby ? "Within \(model.radiusLabel)" : "From your saved places",
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blocked",
+            model.excludeFastFood ? "No fast food" : nil,
             "No repeats this week"
         ]
         let labels = parts.compactMap { $0 }

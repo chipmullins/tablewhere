@@ -11,17 +11,21 @@ public enum Randomizer {
         public var recentPlaceIDs: Set<String>
         /// Places farther than this are left out. `nil` means no limit.
         public var maxDistanceMeters: Double?
+        /// Leaves out known fast-food chains (see `FastFood`).
+        public var excludeFastFood: Bool
 
         public init(
             blockedPlaceIDs: Set<String> = [],
             blockedCategories: Set<String> = [],
             recentPlaceIDs: Set<String> = [],
-            maxDistanceMeters: Double? = nil
+            maxDistanceMeters: Double? = nil,
+            excludeFastFood: Bool = false
         ) {
             self.blockedPlaceIDs = blockedPlaceIDs
             self.blockedCategories = blockedCategories
             self.recentPlaceIDs = recentPlaceIDs
             self.maxDistanceMeters = maxDistanceMeters
+            self.excludeFastFood = excludeFastFood
         }
     }
 
@@ -33,6 +37,7 @@ public enum Randomizer {
             if rules.blockedPlaceIDs.contains(place.id) { return false }
             if blockedCats.contains(place.category.lowercased()) { return false }
             if let max = rules.maxDistanceMeters, place.distanceMeters > max { return false }
+            if rules.excludeFastFood && FastFood.isFastFood(place.name) { return false }
             return true
         }
     }

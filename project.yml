@@ -1,6 +1,9 @@
 # ForkRoad — XcodeGen project definition.
 # Generate the Xcode project with:  xcodegen generate
 # (Install once with:  brew install xcodegen)
+#
+# Info.plist and .entitlements files are generated from this file, so edit
+# them here, not in Xcode.
 
 name: ForkRoad
 
@@ -13,6 +16,19 @@ options:
 packages:
   PickerCore:
     path: Packages/PickerCore
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    minVersion: 11.0.0
+    maxVersion: 14.0.0
+
+settingGroups:
+  common:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "2"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
 
 targets:
   ForkRoad:
@@ -20,26 +36,82 @@ targets:
     platform: iOS
     sources:
       - path: ForkRoad
+      - path: Shared
+      - path: Config/GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
     dependencies:
       - package: PickerCore
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - target: ForkRoadMessages
+    info:
+      path: ForkRoad/Info.plist
+      properties:
+        CFBundleDisplayName: ForkRoad
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        UIBackgroundModes: [remote-notification]
+        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you."
+        AppIdentifierPrefix: $(AppIdentifierPrefix)
+    entitlements:
+      path: ForkRoad/ForkRoad.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.chipmullins.forkroad]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.chipmullins.forkroad.shared"]
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.chipmullins.forkroad]
+        com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: development
     settings:
+      groups: [common]
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chipmullins.forkroad
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: "1"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: ForkRoad
-        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you."
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        DEVELOPMENT_TEAM: ""
-        CODE_SIGN_STYLE: Automatic
+
+  ForkRoadMessages:
+    type: app-extension.messages
+    platform: iOS
+    sources:
+      - path: MessagesExtension
+      - path: Shared
+      - path: Config/GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
+    dependencies:
+      - package: PickerCore
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+    info:
+      path: MessagesExtension/Info.plist
+      properties:
+        CFBundleDisplayName: ForkRoad
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.message-payload-provider
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController
+        AppIdentifierPrefix: $(AppIdentifierPrefix)
+    entitlements:
+      path: MessagesExtension/ForkRoadMessages.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.chipmullins.forkroad]
+        keychain-access-groups: ["$(AppIdentifierPrefix)com.chipmullins.forkroad.shared"]
+    settings:
+      groups: [common]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chipmullins.forkroad.messages
+        ASSETCATALOG_COMPILER_APPICON_NAME: iMessage App Icon
 
 schemes:
   ForkRoad:

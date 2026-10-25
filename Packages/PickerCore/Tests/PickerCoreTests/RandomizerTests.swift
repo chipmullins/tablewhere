@@ -61,6 +61,25 @@ final class RandomizerTests: XCTestCase {
         XCTAssertNil(Randomizer.pick(from: [tacos], rules: rules, using: &gen))
     }
 
+    func testFastFoodMatching() {
+        XCTAssertTrue(FastFood.isFastFood("McDonald's"))
+        XCTAssertTrue(FastFood.isFastFood("Taco Bell Cantina"))
+        XCTAssertTrue(FastFood.isFastFood("Chick-fil-A"))
+        XCTAssertTrue(FastFood.isFastFood("Raising Cane’s Chicken Fingers"))
+        XCTAssertFalse(FastFood.isFastFood("Sora Ramen Bar"))
+        XCTAssertTrue(FastFood.isFastFood("Subway"))
+        // Names that merely start with the same letters don't match.
+        XCTAssertFalse(FastFood.isFastFood("Sonicraft Kitchen"))
+        XCTAssertFalse(FastFood.isFastFood("Kfcake Bakery"))
+    }
+
+    func testExcludeFastFoodRule() {
+        let mcd = place("McDonald's", "Restaurant", miles: 0.2)
+        let rules = Randomizer.Rules(excludeFastFood: true)
+        XCTAssertEqual(Randomizer.eligible([mcd, ramen], rules: rules), [ramen])
+        XCTAssertEqual(Randomizer.eligible([mcd, ramen], rules: Randomizer.Rules()), [mcd, ramen])
+    }
+
     func testStableIDsAcrossSearches() {
         let a = Place(name: "Sora Ramen Bar", category: "Japanese", latitude: 38.04061, longitude: -84.50372, distanceMeters: 100)
         let b = Place(name: "Sora Ramen Bar", category: "Restaurant", latitude: 38.04062, longitude: -84.50371, distanceMeters: 900)

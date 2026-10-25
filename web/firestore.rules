@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// ForkRoad group sessions.
+// Everyone signs in anonymously (app, iMessage extension, and web page).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /sessions/{sessionId} {
+      // Anyone with the link or join code can see a session.
+      allow get: if signedIn();
+      // Join codes are looked up with a query limited to one result.
+      allow list: if signedIn() && request.query.limit <= 1;
+
+      // You can only create a session as yourself.
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.options.size() <= 12;
+
+      // The creator can change anything (lock in, meeting time, reopen).
+      // Anyone else can only add places while it's still open.
+      allow update: if signedIn() && (
+        resource.data.createdBy == request.auth.uid
+        || (
+          resource.data.status == 'open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['options'])
+          && request.resource.data.options.size() > resource.data.options.size()
+          && request.resource.data.options.size() <= 12
+        )
+      );
+
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      // One vote per person, written only by that person, only while open.
+      match /votes/{userId} {
+        allow read: if signedIn();
+        allow write: if signedIn()
+          && request.auth.uid == userId
+          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'open';
+      }
+
+      // Members list: you can only add or edit yourself.
+      match /members/{userId} {
+        allow read: if signedIn();
+        allow write: if signedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

@@ -11,10 +11,7 @@ struct DiscoverView: View {
 
     /// Results minus anything the user has blocked.
     private var visiblePlaces: [Place] {
-        let rules = Randomizer.Rules(
-            blockedPlaceIDs: Set(blockedPlaces.map(\.placeID)),
-            blockedCategories: Set(blockedCategories.map(\.name))
-        )
+        let rules = model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
         return Randomizer.eligible(model.places, rules: rules)
     }
 
@@ -58,6 +55,7 @@ struct DiscoverView: View {
     private var cuisineChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                NoFastFoodChip()
                 ForEach(CuisineFilter.allCases) { cuisine in
                     Chip(label: cuisine.label, isSelected: model.cuisine == cuisine) {
                         model.cuisine = cuisine
@@ -118,6 +116,28 @@ struct DiscoverView: View {
                     .buttonStyle(.plain)
             }
         }
+    }
+}
+
+/// Toggle that hides known fast-food chains everywhere in the app.
+struct NoFastFoodChip: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button {
+            model.excludeFastFood.toggle()
+        } label: {
+            Label("No fast food", systemImage: model.excludeFastFood ? "checkmark" : "takeoutbag.and.cup.and.straw")
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.horizontal, 14)
+                .frame(height: 40)
+                .foregroundStyle(model.excludeFastFood ? Theme.onSaffron : Theme.text)
+                .background(model.excludeFastFood ? Theme.saffron : Theme.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(model.excludeFastFood ? .clear : Theme.hairline))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(model.excludeFastFood ? .isSelected : [])
+        .sensoryFeedback(.selection, trigger: model.excludeFastFood)
     }
 }
 

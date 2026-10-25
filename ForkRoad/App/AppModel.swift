@@ -3,7 +3,7 @@ import CoreLocation
 import PickerCore
 
 enum AppTab: Hashable {
-    case discover, spin, lists
+    case discover, spin, lists, group, trips
 }
 
 enum SpinSource: String, CaseIterable, Identifiable {
@@ -26,6 +26,10 @@ final class AppModel {
     var cuisine: CuisineFilter = .all {
         didSet { if cuisine != oldValue { scheduleSearch() } }
     }
+    /// "No fast food" toggle. Saved, and shared with the iMessage extension.
+    var excludeFastFood: Bool = Preferences.excludeFastFood {
+        didSet { Preferences.excludeFastFood = excludeFastFood }
+    }
 
     private(set) var places: [Place] = []
     private(set) var isLoading = false
@@ -44,6 +48,18 @@ final class AppModel {
     }
 
     var center: CLLocationCoordinate2D { location.coordinate ?? LocationManager.fallback }
+
+    /// The block/fast-food rules every screen applies.
+    func rules(blockedPlaces: [BlockedPlace], blockedCategories: [BlockedCategory],
+               recent: Set<String> = [], maxDistance: Double? = nil) -> Randomizer.Rules {
+        Randomizer.Rules(
+            blockedPlaceIDs: Set(blockedPlaces.map(\.placeID)),
+            blockedCategories: Set(blockedCategories.map(\.name)),
+            recentPlaceIDs: recent,
+            maxDistanceMeters: maxDistance,
+            excludeFastFood: excludeFastFood
+        )
+    }
     var radiusMeters: Double { radiusMiles * Place.metersPerMile }
 
     var radiusLabel: String {
@@ -82,6 +98,7 @@ final class AppModel {
             )
             guard generation == searchGeneration else { return }  // a newer search took over
             places = results
+            SharedCache.saveNearby(results)  // lets the iMessage extension offer these
         } catch {
             guard generation == searchGeneration else { return }
             if !(error is CancellationError) {
