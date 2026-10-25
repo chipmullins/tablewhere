@@ -11,7 +11,7 @@ struct RadiusControl: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Search radius")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.body(14, .semibold))
                     .foregroundStyle(Theme.text)
                 Spacer()
                 Text(model.radiusLabel)
@@ -30,7 +30,7 @@ struct RadiusControl: View {
                 ForEach(presets, id: \.self) { miles in
                     let isOn = model.radiusMiles == miles
                     Button("\(Int(miles)) mi") { model.radiusMiles = miles }
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.body(13, .semibold))
                         .frame(maxWidth: .infinity, minHeight: 36)
                         .foregroundStyle(isOn ? Theme.night : Theme.text)
                         .background(isOn ? Theme.text : Theme.surfaceHigh,

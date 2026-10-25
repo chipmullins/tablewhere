@@ -74,8 +74,8 @@ struct ListsView: View {
                         HStack(spacing: 12) {
                             MonogramTile(name: item.name, size: 44)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(.system(size: 16, weight: .semibold))
-                                Text(item.category).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                                Text(item.name).font(Theme.body(16, .semibold))
+                                Text(item.category).font(Theme.body(13)).foregroundStyle(Theme.muted)
                             }
                         }
                     }
@@ -109,7 +109,7 @@ struct ListsView: View {
         }
         if !blockedPlaces.isEmpty || !blockedCategories.isEmpty {
             Text("Swipe left to unblock.")
-                .font(.system(size: 13))
+                .font(Theme.body(13))
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)
         }

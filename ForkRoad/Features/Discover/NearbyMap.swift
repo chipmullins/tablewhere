@@ -29,7 +29,7 @@ struct NearbyMap: View {
                 Circle().fill(Theme.open).frame(width: 7, height: 7)
                 Text("\(places.count) places within \(model.radiusLabel)")
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(Theme.body(12, .semibold))
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)

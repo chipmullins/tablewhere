@@ -9,11 +9,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function session(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+    }
+
+    // Open, and the timer (if any) hasn't run out.
+    function votingOpen(sessionId) {
+      let s = session(sessionId);
+      return s.status == 'open'
+        && (!('closesAt' in s) || s.closesAt == null || request.time < s.closesAt);
+    }
+
     match /sessions/{sessionId} {
-      // Anyone with the link or join code can see a session.
+      // Anyone with the link (the session ID) can see a session...
       allow get: if signedIn();
-      // Join codes are looked up with a query limited to one result.
-      allow list: if signedIn() && request.query.limit <= 1;
+      // ...but nobody can list them. Codes are looked up through joinCodes/.
+      allow list: if false;
 
       // You can only create a session as yourself.
       allow create: if signedIn()
@@ -35,12 +46,10 @@ service cloud.firestore {
 
       allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
 
-      // One vote per person, written only by that person, only while open.
+      // One vote per person, written only by that person, only while voting is open.
       match /votes/{userId} {
         allow read: if signedIn();
-        allow write: if signedIn()
-          && request.auth.uid == userId
-          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'open';
+        allow write: if signedIn() && request.auth.uid == userId && votingOpen(sessionId);
       }
 
       // Members list: you can only add or edit yourself.
@@ -48,6 +57,17 @@ service cloud.firestore {
         allow read: if signedIn();
         allow write: if signedIn() && request.auth.uid == userId;
       }
+    }
+
+    // joinCodes/{code} → { sessionId, createdBy }. Look up one code at a time.
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && session(request.resource.data.sessionId).createdBy == request.auth.uid
+        && session(request.resource.data.sessionId).joinCode == code;
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
     }
   }
 }

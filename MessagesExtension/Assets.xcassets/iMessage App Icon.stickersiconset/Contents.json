@@ -74,13 +74,15 @@
       "filename": "icon-1024x768@1x-ios-marketing.png",
       "idiom": "ios-marketing",
       "scale": "1x",
-      "size": "1024x768"
+      "size": "1024x768",
+      "platform": "ios"
     },
     {
       "filename": "icon-1024x1024@1x-ios-marketing.png",
       "idiom": "ios-marketing",
       "scale": "1x",
-      "size": "1024x1024"
+      "size": "1024x1024",
+      "platform": "ios"
     }
   ],
   "info": {

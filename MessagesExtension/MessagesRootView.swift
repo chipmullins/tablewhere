@@ -30,7 +30,7 @@ struct MessagesRootView: View {
 
     private func notice(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 15, weight: .semibold))
+            .font(Theme.body(15, .semibold))
             .foregroundStyle(Theme.muted)
             .multilineTextAlignment(.center)
             .padding(24)
@@ -76,13 +76,13 @@ struct NewVoteView: View {
             Button { state.expand() } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "fork.knife")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(Theme.body(18, .bold))
                         .foregroundStyle(Theme.saffron)
                         .frame(width: 44, height: 44)
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Start a dinner vote").font(Theme.display(18))
-                        Text("Pick a few places, friends vote right here").font(.system(size: 12, weight: .medium))
+                        Text("Pick a few places, friends vote right here").font(Theme.body(12, .medium))
                     }
                     Spacer()
                 }
@@ -203,7 +203,7 @@ struct MessageVoteView: View {
                             .foregroundStyle(Theme.text)
                         Spacer()
                         Button("New vote") { state.showNewVote() }
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(Theme.body(13, .semibold))
                             .foregroundStyle(Theme.saffron)
                     }
 
@@ -213,7 +213,7 @@ struct MessageVoteView: View {
                         if let url = directionsURL(winner) {
                             Button { state.open(url: url) } label: {
                                 Label("Directions", systemImage: "location.north.line")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .font(Theme.body(15, .bold))
                                     .foregroundStyle(Theme.night)
                                     .frame(maxWidth: .infinity, minHeight: 48)
                                     .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -247,7 +247,7 @@ struct MessageVoteView: View {
                         }
                     }
                     if let errorMessage {
-                        Text(errorMessage).font(.system(size: 13)).foregroundStyle(Theme.danger)
+                        Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
                     }
                 } else if let error = live.errorMessage {
                     Text(error).foregroundStyle(Theme.danger)
@@ -280,11 +280,9 @@ struct MessageVoteView: View {
                 } else {
                     try await GroupService.shared.vote(sessionID: session.id, optionID: option.id, displayName: name)
                 }
-                // Refresh the bubble so the thread shows the new count.
-                try? await Task.sleep(for: .milliseconds(400))
-                if let current = live.session {
-                    state.sendUpdate(current, tally: live.tally, memberCount: live.members.count)
-                }
+                // The live tally updates here. We don't post a new bubble per
+                // vote, so the group isn't notified for every tap; the bubble
+                // updates once, when the result is locked in.
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -294,10 +292,13 @@ struct MessageVoteView: View {
         Task {
             defer { isWorking = false }
             do {
-                _ = try await GroupService.shared.decide(session: session, votes: live.votes)
-                try? await Task.sleep(for: .milliseconds(400))
-                if let current = live.session {
-                    state.sendUpdate(current, tally: live.tally, memberCount: live.members.count)
+                if let winnerID = try await GroupService.shared.decide(session: session, votes: live.votes) {
+                    // Send right away (still part of the tap) rather than waiting
+                    // for the listener, so Messages treats it as a user action.
+                    var decided = session
+                    decided.status = .decided
+                    decided.winnerID = winnerID
+                    state.sendUpdate(decided, tally: live.tally, memberCount: live.members.count)
                 }
             } catch { errorMessage = error.localizedDescription }
         }

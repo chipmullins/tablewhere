@@ -31,7 +31,7 @@ struct PlaceDetailView: View {
                         .font(Theme.display(32))
                         .foregroundStyle(Theme.text)
                     Text("\(place.category) · \(place.distanceLabel)")
-                        .font(.system(size: 15))
+                        .font(Theme.body(15))
                         .foregroundStyle(Theme.muted)
                 }
                 .padding(.horizontal, 16)
@@ -68,7 +68,7 @@ struct PlaceDetailView: View {
                     HStack(spacing: 14) {
                         Image(systemName: "mappin.and.ellipse").foregroundStyle(Theme.muted)
                         Text(address)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(Theme.body(14, .medium))
                             .foregroundStyle(Theme.text)
                             .textSelection(.enabled)
                         Spacer(minLength: 0)
@@ -128,14 +128,14 @@ struct PlaceDetailView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "menucard")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(Theme.body(20, .semibold))
                     .foregroundStyle(Theme.onSaffron)
                     .frame(width: 44, height: 44)
                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("View menu & hours").font(Theme.display(16)).foregroundStyle(Theme.text)
                     Text(place.websiteURL == nil ? "No website listed" : "Opens their website in the app")
-                        .font(.system(size: 12))
+                        .font(Theme.body(12))
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer()

@@ -30,7 +30,7 @@ struct GroupLobbyView: View {
                         deciding(session)
                     }
                     if let errorMessage {
-                        Text(errorMessage).font(.system(size: 14)).foregroundStyle(Theme.danger)
+                        Text(errorMessage).font(Theme.body(14)).foregroundStyle(Theme.danger)
                     }
                 } else if let error = live.errorMessage {
                     Text(error).foregroundStyle(Theme.danger).padding(.top, 40)
@@ -66,9 +66,9 @@ struct GroupLobbyView: View {
                 }
                 Spacer()
                 VStack(spacing: 2) {
-                    Text("CODE").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.muted)
+                    Text("CODE").font(Theme.body(10, .bold)).foregroundStyle(Theme.muted)
                     Text(JoinCode.display(session.joinCode))
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .font(Theme.code(17))
                         .foregroundStyle(Theme.text)
                         .textSelection(.enabled)
                 }
@@ -81,10 +81,10 @@ struct GroupLobbyView: View {
                 memberAvatars
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(live.members.count) in the group")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(Theme.body(15, .semibold))
                         .foregroundStyle(Theme.text)
                     Text(statusLine(session))
-                        .font(.system(size: 13))
+                        .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer()
@@ -93,7 +93,7 @@ struct GroupLobbyView: View {
                               subject: Text(session.title),
                               message: Text("Help pick where we eat! Vote here, or join in ForkRoad with code \(JoinCode.display(session.joinCode)).")) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(Theme.body(17, .semibold))
                             .foregroundStyle(Theme.text)
                             .frame(width: 44, height: 44)
                             .background(Theme.surfaceHigh, in: Circle())
@@ -112,7 +112,7 @@ struct GroupLobbyView: View {
             ForEach(live.members.prefix(4)) { member in
                 let colors = Theme.tileColors(for: member.name)
                 Text(initials(member.name))
-                    .font(.system(size: 13, weight: .bold))
+                    .font(Theme.body(13, .bold))
                     .foregroundStyle(colors.ink)
                     .frame(width: 38, height: 38)
                     .background(colors.background, in: Circle())
@@ -142,7 +142,7 @@ struct GroupLobbyView: View {
                 let remaining = max(0, Int(closesAt.timeIntervalSince(context.date)))
                 Label(remaining > 0 ? "Closes in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Voting closed",
                       systemImage: "timer")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(Theme.body(13, .bold))
                     .foregroundStyle(Theme.saffron)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
@@ -170,7 +170,7 @@ struct GroupLobbyView: View {
 
         Button { showAddPlace = true } label: {
             Label("Add a place", systemImage: "plus")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.body(14, .semibold))
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5])).foregroundStyle(Theme.muted.opacity(0.4)))
@@ -179,7 +179,7 @@ struct GroupLobbyView: View {
 
         if session.mode == .vote {
             Label("If it ends in a tie, the app picks fairly between the tied places.", systemImage: "shuffle")
-                .font(.system(size: 13))
+                .font(Theme.body(13))
                 .foregroundStyle(Theme.muted)
         }
     }
@@ -215,7 +215,7 @@ struct GroupLobbyView: View {
                     ForEach(Self.meetSlots(), id: \.self) { slot in
                         let isOn = session.meetTime.map { abs($0.timeIntervalSince(slot)) < 60 } ?? false
                         Button(slot.formatted(date: .omitted, time: .shortened)) { setMeetTime(slot) }
-                            .font(.system(size: 14, weight: .bold))
+                            .font(Theme.body(14, .bold))
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .foregroundStyle(isOn ? Theme.night : Theme.text)
                             .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -256,7 +256,7 @@ struct GroupLobbyView: View {
                     .disabled(isWorking || session.options.isEmpty)
                 } else {
                     Text(session.mode == .vote ? "\(session.createdByName) will lock in the result" : "\(session.createdByName) will spin when everyone’s ready")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -374,7 +374,7 @@ private struct AddOptionView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(place.name).foregroundStyle(Theme.text)
                                 Text("\(place.category) · \(place.distanceLabel)")
-                                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                                    .font(Theme.body(12)).foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Image(systemName: "plus.circle").foregroundStyle(Theme.saffron)

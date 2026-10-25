@@ -19,7 +19,7 @@ public enum FastFood {
         "golden corral", "marcos pizza", "hungry howies", "papa murphys", "jersey mikes",
         "firehouse subs", "potbelly", "quiznos", "blimpie", "dunkin", "tim hortons",
         "krispy kreme", "cook out", "culvers", "freddys frozen custard", "portillos",
-        "hot n now", "jollibee", "biscuitville", "white castle"
+        "hot n now", "jollibee", "biscuitville"
     ]
 
     private static let normalizedChains: [String] = chains.map(normalize)

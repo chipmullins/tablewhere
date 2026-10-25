@@ -15,10 +15,12 @@ final class MessagesViewController: MSMessagesAppViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         FirebaseSetup.configureIfPossible()
+        Theme.applyUIKitAppearance()
         state.controller = self
 
         let root = AnyView(
             MessagesRootView(state: state)
+                .font(Theme.body(15))
                 .preferredColorScheme(.dark)
                 .tint(Theme.saffron)
         )

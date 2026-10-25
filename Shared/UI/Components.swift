@@ -26,16 +26,16 @@ struct PlaceRow: View {
             MonogramTile(name: place.name)
             VStack(alignment: .leading, spacing: 4) {
                 Text(place.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(Theme.body(16, .semibold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("\(place.category) · \(place.distanceLabel)")
-                    .font(.system(size: 13))
+                    .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.body(14, .semibold))
                 .foregroundStyle(Theme.muted.opacity(0.6))
         }
         .padding(12)
@@ -53,7 +53,7 @@ struct Chip: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.body(14, .semibold))
                 .padding(.horizontal, 16)
                 .frame(height: 40)
                 .foregroundStyle(isSelected ? Theme.night : Theme.text)
@@ -76,8 +76,8 @@ struct ActionTile: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: systemImage).font(.system(size: 19, weight: .semibold))
-                Text(title).font(.system(size: 12, weight: .semibold))
+                Image(systemName: systemImage).font(Theme.body(19, .semibold))
+                Text(title).font(Theme.body(12, .semibold))
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity, minHeight: 66)
@@ -93,7 +93,7 @@ struct SectionLabel: View {
     var color: Color = Theme.muted
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .bold))
+            .font(Theme.body(12, .bold))
             .tracking(1)
             .foregroundStyle(color)
     }

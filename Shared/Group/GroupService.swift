@@ -50,11 +50,12 @@ final class GroupService {
     func createSession(title: String, mode: GroupMode, options: [GroupOption],
                        closesInMinutes: Int?, displayName: String) async throws -> GroupSession {
         let uid = try await userID()
+        let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
         let session = GroupSession(
             id: ref.documentID,
             title: title,
-            joinCode: JoinCode.make(),
+            joinCode: code,
             createdBy: uid,
             createdByName: displayName,
             createdAt: Date(),
@@ -63,6 +64,9 @@ final class GroupService {
             options: options
         )
         try await ref.setData(Firestore.Encoder().encode(session))
+        // joinCodes/{code} → session, so codes can be looked up without
+        // letting anyone list every session.
+        try await joinCodeRef(code).setData(["sessionId": session.id, "createdBy": uid])
         try await join(sessionID: session.id, displayName: displayName)
         return session
     }
@@ -70,12 +74,26 @@ final class GroupService {
     func findSession(joinCode: String) async throws -> GroupSession {
         _ = try await userID()
         let code = JoinCode.normalize(joinCode)
-        let snapshot = try await db.collection("sessions")
-            .whereField("joinCode", isEqualTo: code)
-            .limit(to: 1)
-            .getDocuments()
-        guard let doc = snapshot.documents.first else { throw GroupError.sessionNotFound }
+        guard code.count == 6,
+              let sessionID = try await joinCodeRef(code).getDocument().data()?["sessionId"] as? String
+        else { throw GroupError.sessionNotFound }
+        let doc = try await sessionRef(sessionID).getDocument()
+        guard doc.exists else { throw GroupError.sessionNotFound }
         return try doc.data(as: GroupSession.self)
+    }
+
+    private func joinCodeRef(_ code: String) -> DocumentReference {
+        db.collection("joinCodes").document(code)
+    }
+
+    /// A join code nobody else is using (collisions are rare, but check anyway).
+    private func unusedJoinCode() async throws -> String {
+        for _ in 0..<5 {
+            let code = JoinCode.make()
+            let taken = try await joinCodeRef(code).getDocument().exists
+            if !taken { return code }
+        }
+        return JoinCode.make()
     }
 
     func join(sessionID: String, displayName: String) async throws {

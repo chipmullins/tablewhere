@@ -43,7 +43,7 @@ struct DiscoverView: View {
             VStack(alignment: .leading, spacing: 4) {
                 SectionLabel(text: "Near you")
                 Label(model.location.displayName, systemImage: "mappin")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(Theme.body(16, .semibold))
                     .foregroundStyle(Theme.text)
                     .labelStyle(TintedIconLabelStyle())
             }
@@ -63,7 +63,7 @@ struct DiscoverView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "dice")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Theme.body(22, .semibold))
                     .foregroundStyle(Theme.saffron)
                     .frame(width: 48, height: 48)
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -72,10 +72,10 @@ struct DiscoverView: View {
                     Text(model.cuisines.isEmpty
                          ? "Spin from \(visiblePlaces.count) places within \(model.radiusLabel)"
                          : "Spin from \(visiblePlaces.count) \(model.cuisineSummary) places")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(Theme.body(13, .medium))
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 16, weight: .bold))
+                Image(systemName: "chevron.right").font(Theme.body(16, .bold))
             }
             .foregroundStyle(Theme.onSaffron)
             .padding(16)
@@ -94,10 +94,10 @@ struct DiscoverView: View {
         }
 
         if let error = model.errorMessage {
-            Text(error).font(.system(size: 14)).foregroundStyle(Theme.danger)
+            Text(error).font(Theme.body(14)).foregroundStyle(Theme.danger)
         } else if visiblePlaces.isEmpty && !model.isLoading {
             Text("Nothing found within \(model.radiusLabel). Try a bigger radius.")
-                .font(.system(size: 14))
+                .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)
         }
 
@@ -119,7 +119,7 @@ struct NoFastFoodChip: View {
             model.excludeFastFood.toggle()
         } label: {
             Label("No fast food", systemImage: model.excludeFastFood ? "checkmark" : "takeoutbag.and.cup.and.straw")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.body(14, .semibold))
                 .padding(.horizontal, 14)
                 .frame(height: 40)
                 .foregroundStyle(model.excludeFastFood ? Theme.onSaffron : Theme.text)

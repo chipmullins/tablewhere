@@ -89,7 +89,7 @@ struct CreateGroupView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 Text("\(selected.count) of up to \(Self.maxOptions) selected")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -118,12 +118,12 @@ struct CreateGroupView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(place.name).foregroundStyle(Theme.text)
                                 Text("\(place.category) · \(place.distanceLabel)")
-                                    .font(.system(size: 12))
+                                    .font(Theme.body(12))
                                     .foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 22))
+                                .font(Theme.body(22))
                                 .foregroundStyle(isOn ? Theme.saffron : Theme.muted.opacity(0.5))
                         }
                     }

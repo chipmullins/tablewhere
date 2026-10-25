@@ -21,7 +21,7 @@ struct NewTripView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(result.title).foregroundStyle(Theme.text)
                             if !result.subtitle.isEmpty {
-                                Text(result.subtitle).font(.system(size: 13)).foregroundStyle(Theme.muted)
+                                Text(result.subtitle).font(Theme.body(13)).foregroundStyle(Theme.muted)
                             }
                         }
                     }

@@ -18,17 +18,22 @@ packages:
     path: Packages/PickerCore
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
+    # Stays on Firebase 11.x, which builds with Xcode 16.0 and later.
     minVersion: 11.0.0
-    maxVersion: 14.0.0
+    maxVersion: 12.0.0
 
 settingGroups:
   common:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
-    MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "3"
     CODE_SIGN_STYLE: Automatic
+    # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: ""
+    OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
+    # The Firebase-config copy script reads Config/, outside the build sandbox.
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
 
 targets:
   ForkRoad:
@@ -37,9 +42,21 @@ targets:
     sources:
       - path: ForkRoad
       - path: Shared
-      - path: Config/GoogleService-Info.plist
-        optional: true
-        buildPhase: resources
+    postCompileScripts:
+      - &copyFirebaseConfig
+        # Copies Config/GoogleService-Info.plist into the bundle when it exists, so
+        # the project still builds (without group voting) before Firebase is set up.
+        name: Copy Firebase config (if present)
+        basedOnDependencyAnalysis: false
+        script: |
+          PLIST="$SRCROOT/Config/GoogleService-Info.plist"
+          DEST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          if [ -f "$PLIST" ]; then
+            mkdir -p "$DEST"
+            cp "$PLIST" "$DEST/"
+          else
+            echo "warning: Config/GoogleService-Info.plist not found. Group voting is turned off until you add it (see README)."
+          fi
     dependencies:
       - package: PickerCore
       - package: Firebase
@@ -60,6 +77,14 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
         UIBackgroundModes: [remote-notification]
+        UIAppFonts: &appFonts
+          - Outfit-SemiBold.ttf
+          - Outfit-Bold.ttf
+          - Outfit-ExtraBold.ttf
+          - DMSans-Regular.ttf
+          - DMSans-Medium.ttf
+          - DMSans-SemiBold.ttf
+          - DMSans-Bold.ttf
         NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you."
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:
@@ -83,9 +108,8 @@ targets:
     sources:
       - path: MessagesExtension
       - path: Shared
-      - path: Config/GoogleService-Info.plist
-        optional: true
-        buildPhase: resources
+    postCompileScripts:
+      - *copyFirebaseConfig
     dependencies:
       - package: PickerCore
       - package: Firebase
@@ -98,6 +122,7 @@ targets:
       path: MessagesExtension/Info.plist
       properties:
         CFBundleDisplayName: ForkRoad
+        UIAppFonts: *appFonts
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController

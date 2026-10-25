@@ -42,9 +42,9 @@ struct TripsView: View {
                                     .frame(width: 44, height: 44)
                                     .background(Color(hex: 0x1B2433), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(trip.name).font(.system(size: 16, weight: .semibold))
+                                    Text(trip.name).font(Theme.body(16, .semibold))
                                     Text("\((trip.places ?? []).count) spots saved")
-                                        .font(.system(size: 13))
+                                        .font(Theme.body(13))
                                         .foregroundStyle(Theme.muted)
                                 }
                             }

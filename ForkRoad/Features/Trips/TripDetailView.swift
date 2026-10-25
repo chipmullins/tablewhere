@@ -36,7 +36,7 @@ struct TripDetailView: View {
                         .font(Theme.display(32))
                         .foregroundStyle(Theme.text)
                     Text("\(saved.count) spots saved")
-                        .font(.system(size: 14))
+                        .font(Theme.body(14))
                         .foregroundStyle(Theme.muted)
                 }
 
@@ -80,7 +80,7 @@ struct TripDetailView: View {
                     if isLoading { ProgressView().tint(Theme.muted) }
                 }
                 if let errorMessage {
-                    Text(errorMessage).font(.system(size: 14)).foregroundStyle(Theme.danger)
+                    Text(errorMessage).font(Theme.body(14)).foregroundStyle(Theme.danger)
                 }
                 ForEach(visibleResults.filter { !trip.contains($0) }) { place in
                     tripRow(place, isOnTrip: false)
@@ -107,11 +107,11 @@ struct TripDetailView: View {
                     MonogramTile(name: place.name, size: 50)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(place.name)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(Theme.body(15, .semibold))
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                         Text(place.category)
-                            .font(.system(size: 13))
+                            .font(Theme.body(13))
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
@@ -121,7 +121,7 @@ struct TripDetailView: View {
 
             Button { toggle(place) } label: {
                 Text(isOnTrip ? "On trip" : "+ Trip")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(Theme.body(13, .bold))
                     .foregroundStyle(isOnTrip ? Color(hex: 0x8FB4FF) : Theme.text)
                     .padding(.horizontal, 12)
                     .frame(height: 40)
@@ -150,7 +150,10 @@ struct TripDetailView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            results = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisines: cuisines)
+            let found = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisines: cuisines)
+            // A newer cuisine selection may have replaced this search.
+            guard !Task.isCancelled else { return }
+            results = found
         } catch is CancellationError {
         } catch {
             errorMessage = "Couldn’t load restaurants. Check your connection and try again."

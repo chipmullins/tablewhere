@@ -111,7 +111,7 @@ struct SpinView: View {
             HStack(spacing: 6) {
                 ForEach(labels, id: \.self) { part in
                     Text(part)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(Theme.body(12, .semibold))
                         .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -129,7 +129,7 @@ struct SpinView: View {
         let landed = winner != nil && !isSpinning
 
         return VStack(spacing: 14) {
-            Text(previous).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
             HStack(spacing: 12) {
                 if let current {
                     MonogramTile(name: current.name, size: 40)
@@ -152,7 +152,7 @@ struct SpinView: View {
                     .strokeBorder(landed ? Theme.saffron : Theme.hairline, lineWidth: 1.5)
             )
             .padding(.horizontal, 14)
-            Text(next).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            Text(next).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
         }
         .frame(maxWidth: .infinity, minHeight: 250)
         .card(radius: 28)
@@ -182,7 +182,7 @@ struct SpinView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(place.name).font(Theme.display(24)).foregroundStyle(Theme.text)
                 Text("\(place.category) · \(place.distanceLabel)")
-                    .font(.system(size: 14))
+                    .font(Theme.body(14))
                     .foregroundStyle(Theme.muted)
             }
             HStack(spacing: 8) {
@@ -204,7 +204,7 @@ struct SpinView: View {
                 }
             }
             Button("See details") { showDetail = true }
-                .font(.system(size: 15, weight: .bold))
+                .font(Theme.body(15, .bold))
                 .foregroundStyle(Theme.night)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

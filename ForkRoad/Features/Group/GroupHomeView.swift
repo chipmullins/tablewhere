@@ -35,7 +35,7 @@ struct GroupHomeView: View {
                     startCard
                     joinCard
                     if let errorMessage {
-                        Text(errorMessage).font(.system(size: 14)).foregroundStyle(Theme.danger)
+                        Text(errorMessage).font(Theme.body(14)).foregroundStyle(Theme.danger)
                     }
                     recent
                 }
@@ -53,11 +53,10 @@ struct GroupHomeView: View {
                 path.append(session.id)
             }
         }
-        .sheet(isPresented: $showNamePrompt) {
-            NamePromptView { _ in
-                showNamePrompt = false
-                runPending()
-            }
+        // Continue only after the name sheet has fully closed; opening the
+        // create sheet while it's still animating away gets ignored.
+        .sheet(isPresented: $showNamePrompt, onDismiss: runPending) {
+            NamePromptView { _ in showNamePrompt = false }
             .presentationDetents([.height(300)])
             .presentationBackground(Theme.night)
         }
@@ -69,10 +68,10 @@ struct GroupHomeView: View {
     private var setupNotice: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Group voting needs Firebase", systemImage: "wrench.and.screwdriver")
-                .font(.system(size: 16, weight: .semibold))
+                .font(Theme.body(16, .semibold))
                 .foregroundStyle(Theme.text)
             Text("Add your GoogleService-Info.plist to the Config folder and rebuild. The README’s Firebase setup section walks through it in about 10 minutes.")
-                .font(.system(size: 14))
+                .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)
         }
         .padding(16)
@@ -85,16 +84,16 @@ struct GroupHomeView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "person.2.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(Theme.body(20, .semibold))
                     .foregroundStyle(Theme.saffron)
                     .frame(width: 48, height: 48)
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Start a group pick").font(Theme.display(19))
-                    Text("Vote or spin, then send everyone the plan").font(.system(size: 13, weight: .medium))
+                    Text("Vote or spin, then send everyone the plan").font(Theme.body(13, .medium))
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 16, weight: .bold))
+                Image(systemName: "chevron.right").font(Theme.body(16, .bold))
             }
             .foregroundStyle(Theme.onSaffron)
             .padding(16)
@@ -106,13 +105,13 @@ struct GroupHomeView: View {
     private var joinCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Got a code?")
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.text)
             HStack(spacing: 10) {
                 TextField("K7Q·4MZ", text: $joinCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(Theme.code(20))
                     .padding(.horizontal, 14)
                     .frame(height: 50)
                     .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -123,7 +122,7 @@ struct GroupHomeView: View {
                 } label: {
                     if isJoining { ProgressView().tint(Theme.night) } else { Text("Join") }
                 }
-                .font(.system(size: 15, weight: .bold))
+                .font(Theme.body(15, .bold))
                 .foregroundStyle(Theme.night)
                 .frame(width: 80, height: 50)
                 .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -141,7 +140,10 @@ struct GroupHomeView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Recent")
                 ForEach(recentIDs, id: \.self) { id in
-                    RecentSessionRow(sessionID: id) { path.append(id) }
+                    RecentSessionRow(sessionID: id, open: { path.append(id) }) {
+                        SharedCache.forgetSession(id)
+                        recentIDs = SharedCache.recentSessionIDs()
+                    }
                 }
             }
         }
@@ -183,23 +185,27 @@ struct GroupHomeView: View {
 private struct RecentSessionRow: View {
     let sessionID: String
     let open: () -> Void
+    let remove: () -> Void
     @State private var live: LiveSession
 
-    init(sessionID: String, open: @escaping () -> Void) {
+    init(sessionID: String, open: @escaping () -> Void, remove: @escaping () -> Void) {
         self.sessionID = sessionID
         self.open = open
+        self.remove = remove
         _live = State(initialValue: LiveSession(sessionID: sessionID))
     }
 
     var body: some View {
-        Button(action: open) {
+        Button {
+            if live.session != nil { open() }
+        } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(live.session?.title ?? "Loading…")
-                        .font(.system(size: 16, weight: .semibold))
+                    Text(live.session?.title ?? (live.errorMessage == nil ? "Loading…" : "No longer available"))
+                        .font(Theme.body(16, .semibold))
                         .foregroundStyle(Theme.text)
                     Text(subtitle)
-                        .font(.system(size: 13))
+                        .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer()
@@ -211,6 +217,9 @@ private struct RecentSessionRow: View {
         .buttonStyle(.plain)
         .task { await live.start() }
         .onDisappear { live.stop() }
+        .contextMenu {
+            Button("Remove from Recent", systemImage: "trash", role: .destructive, action: remove)
+        }
     }
 
     private var subtitle: String {

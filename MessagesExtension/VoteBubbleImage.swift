@@ -20,12 +20,12 @@ private struct VoteBubbleCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "fork.knife")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(Theme.body(12, .bold))
                     .foregroundStyle(Theme.onSaffron)
                     .frame(width: 24, height: 24)
                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 7))
                 Text(session.winner == nil ? "FORKROAD · VOTE" : "FORKROAD · DECIDED")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(Theme.body(11, .bold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.saffron)
             }
@@ -36,7 +36,7 @@ private struct VoteBubbleCard: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
                 Text(winner.category)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
             } else {
                 let maxVotes = max(tally.counts.values.max() ?? 0, 1)
@@ -49,7 +49,7 @@ private struct VoteBubbleCard: View {
                             Spacer()
                             Text("\(count)").foregroundStyle(leading ? Theme.saffron : Theme.muted)
                         }
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.body(13, .semibold))
                         .foregroundStyle(Theme.text)
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
@@ -64,7 +64,7 @@ private struct VoteBubbleCard: View {
                 }
                 if session.options.count > 4 {
                     Text("+\(session.options.count - 4) more")
-                        .font(.system(size: 12))
+                        .font(Theme.body(12))
                         .foregroundStyle(Theme.muted)
                 }
             }

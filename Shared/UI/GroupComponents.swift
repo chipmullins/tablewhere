@@ -64,12 +64,12 @@ struct VoteOptionRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(option.name)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(Theme.body(16, .semibold))
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
                             if isLeading {
                                 Text("LEADING")
-                                    .font(.system(size: 10, weight: .heavy))
+                                    .font(Theme.body(10, .heavy))
                                     .tracking(0.6)
                                     .foregroundStyle(Theme.onSaffron)
                                     .padding(.horizontal, 6)
@@ -78,7 +78,7 @@ struct VoteOptionRow: View {
                             }
                         }
                         Text(voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : voters.joined(separator: ", "))
-                            .font(.system(size: 12))
+                            .font(Theme.body(12))
                             .foregroundStyle(Theme.muted)
                             .lineLimit(1)
                     }
@@ -125,14 +125,14 @@ struct WinnerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("THE GROUP PICKED")
-                .font(.system(size: 12, weight: .heavy))
+                .font(Theme.body(12, .heavy))
                 .tracking(1.2)
             Text(option.name)
                 .font(Theme.display(32))
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
             Text(detail)
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.body(14, .semibold))
         }
         .foregroundStyle(Theme.onSaffron)
         .frame(maxWidth: .infinity, alignment: .leading)

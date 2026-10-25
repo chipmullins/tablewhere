@@ -26,7 +26,7 @@ struct CuisineChips: View {
 
             if selection.count > 1 {
                 Text("Mixing \(CuisineFilter.summary(of: selection)) · up to \(CuisineFilter.maxSelection)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(Theme.body(12, .medium))
                     .foregroundStyle(Theme.muted)
             }
         }

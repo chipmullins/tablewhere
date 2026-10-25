@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ForkRoad's colors and type, matching the prototype (dark + saffron).
 enum Theme {
@@ -13,10 +14,48 @@ enum Theme {
     static let open = Color(hex: 0x5ED39A)
     static let danger = Color(hex: 0xFF8A7A)
 
-    /// Big headings. Rounded system font for now; swap in Bricolage Grotesque
-    /// (free under the SIL Open Font License) once it's added to the bundle.
+    // Type: Outfit for headings, DM Sans for everything else (same pairing as
+    // Glofly). Both are bundled from Google Fonts under the SIL Open Font License
+    // (see Licenses/). Sizes scale with the user's Dynamic Type setting.
+
+    /// Headings: Outfit ExtraBold for big titles, Bold for smaller ones.
     static func display(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .heavy, design: .rounded)
+        .custom(size >= 26 ? "Outfit-ExtraBold" : "Outfit-Bold", size: size, relativeTo: .title)
+    }
+
+    /// Body and UI text in DM Sans.
+    static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        let name: String
+        switch weight {
+        case .bold, .heavy, .black: name = "DMSans-Bold"
+        case .semibold: name = "DMSans-SemiBold"
+        case .medium: name = "DMSans-Medium"
+        default: name = "DMSans-Regular"
+        }
+        return .custom(name, size: size, relativeTo: .body)
+    }
+
+    /// Codes like "K7Q·4MZ".
+    static func code(_ size: CGFloat) -> Font {
+        .custom("Outfit-Bold", size: size, relativeTo: .body)
+    }
+
+    /// Applies the fonts to UIKit-drawn chrome (navigation bars, tab bar,
+    /// segmented controls) so they match the SwiftUI screens.
+    @MainActor
+    static func applyUIKitAppearance() {
+        func font(_ name: String, _ size: CGFloat) -> UIFont {
+            UIFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: .semibold)
+        }
+        let nav = UINavigationBar.appearance()
+        nav.titleTextAttributes = [.font: font("Outfit-Bold", 17), .foregroundColor: UIColor(text)]
+        nav.largeTitleTextAttributes = [.font: font("Outfit-ExtraBold", 32), .foregroundColor: UIColor(text)]
+
+        let segmented = UISegmentedControl.appearance()
+        segmented.setTitleTextAttributes([.font: font("DMSans-SemiBold", 13)], for: .normal)
+        segmented.setTitleTextAttributes([.font: font("DMSans-Bold", 13)], for: .selected)
+
+        UITabBarItem.appearance().setTitleTextAttributes([.font: font("DMSans-Medium", 10)], for: .normal)
     }
 
     /// Monogram tile colors, picked by a stable hash of the name so a

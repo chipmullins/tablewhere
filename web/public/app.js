@@ -5,7 +5,6 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
 
 const $ = (id) => document.getElementById(id);
 const sections = ["loading", "error", "name-step", "vote-step", "decided-step"];
@@ -44,6 +43,15 @@ const sessionId = (location.pathname.match(/^\/v\/([^/]+)/) || [])[1];
 if (!sessionId) {
   fail("This link is missing its vote ID. Ask whoever sent it to share it again.");
   throw new Error("No session id");
+}
+
+// Loaded dynamically so a missing config shows a message instead of hanging on "Loading…".
+let firebaseConfig;
+try {
+  ({ firebaseConfig } = await import("./firebase-config.js"));
+} catch {
+  fail("This vote page isn’t set up yet. (Missing firebase-config.js — see the README.)");
+  throw new Error("Missing firebase-config.js");
 }
 
 const app = initializeApp(firebaseConfig);
@@ -108,6 +116,12 @@ function render() {
   $("code").textContent = formatCode(session.joinCode);
   $("footer").hidden = false;
 
+  // Anyone opening the link after the group decided sees the result right away.
+  if (session.status === "decided" && session.winnerID) {
+    renderDecided();
+    return;
+  }
+
   const name = myName();
   if (!name) {
     $("name-title").textContent = session.title || "Help pick dinner";
@@ -120,11 +134,7 @@ function render() {
     join(name).catch(() => {});
   }
 
-  if (session.status === "decided" && session.winnerID) {
-    renderDecided();
-  } else {
-    renderVote();
-  }
+  renderVote();
 }
 
 function tally() {
@@ -140,15 +150,30 @@ function tally() {
   return { counts, voters, leader: leaders.length === 1 ? leaders[0] : null, total: Object.values(counts).reduce((a, b) => a + b, 0) };
 }
 
+function statusText() {
+  const waiting = Math.max(0, members.length - votes.length);
+  let text = `${members.length} in the group · ` +
+    (waiting === 0 ? "everyone has voted" : `waiting on ${waiting} vote${waiting === 1 ? "" : "s"}`);
+  const closes = session.closesAt && session.closesAt.toDate ? session.closesAt.toDate() : null;
+  if (closes) {
+    const left = Math.max(0, Math.floor((closes - Date.now()) / 1000));
+    text += left > 0 ? ` · closes in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : " · voting closed";
+  }
+  return text;
+}
+
+// Keep the countdown ticking without rebuilding the buttons.
+setInterval(() => {
+  if (session && !$("vote-step").hidden) $("status").textContent = statusText();
+}, 1000);
+
 function renderVote() {
   const t = tally();
   const mine = votes.find((v) => v.voterID === uid)?.optionID;
   const slots = Math.max(members.length, t.total, 1);
-  const waiting = Math.max(0, members.length - votes.length);
 
   $("title").textContent = session.title;
-  $("status").textContent = `${members.length} in the group · ` +
-    (waiting === 0 ? "everyone has voted" : `waiting on ${waiting} vote${waiting === 1 ? "" : "s"}`);
+  $("status").textContent = statusText();
 
   const list = $("options");
   list.replaceChildren();
