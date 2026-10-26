@@ -50,7 +50,7 @@ struct MessagesRootView: View {
     }
 }
 
-/// Pick places from your Interested list and last nearby search, then send a vote.
+/// Pick places from your Favorites, Interested list, and last nearby search, then send a vote.
 struct NewVoteView: View {
     @Bindable var state: MessagesState
 
@@ -61,9 +61,10 @@ struct NewVoteView: View {
 
     private let maxOptions = 6
 
+    private var favorites: [Place] { filtered(SharedCache.loadFavorites()) }
     private var interested: [Place] { filtered(SharedCache.loadInterested()) }
     private var nearby: [Place] {
-        let ids = Set(interested.map(\.id))
+        let ids = Set((favorites + interested).map(\.id))
         return filtered(SharedCache.loadNearby()).filter { !ids.contains($0.id) }
     }
 
@@ -95,12 +96,13 @@ struct NewVoteView: View {
         } else {
             VStack(spacing: 0) {
                 List {
-                    if interested.isEmpty && nearby.isEmpty {
+                    if favorites.isEmpty && interested.isEmpty && nearby.isEmpty {
                         Text("Open ForkRoad and look around nearby first. Places you see there show up here.")
                             .foregroundStyle(Theme.muted)
                             .listRowBackground(Color.clear)
                     }
-                    section("Interested list", interested)
+                    section("Favorites", favorites)
+                    section("Want to try", interested)
                     section("Nearby", nearby)
                     Section {
                         Toggle("Also send a web link for friends without ForkRoad", isOn: $includeWebLink)

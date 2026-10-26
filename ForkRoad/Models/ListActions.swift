@@ -2,27 +2,40 @@ import Foundation
 import SwiftData
 import PickerCore
 
-/// Save, block, and spin-history actions, in one place so every screen
+/// Save, blacklist, and spin-history actions, in one place so every screen
 /// behaves the same way and duplicates never get stored.
 @MainActor
 struct ListActions {
     let context: ModelContext
 
-    // MARK: Interested list
+    // MARK: Favorites & Interested
 
-    func isSaved(_ place: Place) -> Bool {
-        savedRecord(for: place.id) != nil
+    /// Which list a place is on, if any. A place is on at most one.
+    func list(for place: Place) -> SavedList? {
+        savedRecord(for: place.id)?.list
     }
 
-    func toggleSaved(_ place: Place) {
+    /// Puts a place on `list`, moves it there from the other list, or removes
+    /// it if it's already on `list`.
+    func toggle(_ place: Place, in list: SavedList) {
         if let existing = savedRecord(for: place.id) {
-            context.delete(existing)
+            if existing.list == list {
+                context.delete(existing)
+            } else {
+                existing.list = list
+                existing.savedAt = .now
+            }
         } else {
-            context.insert(SavedPlace(place: place))
+            context.insert(SavedPlace(place: place, list: list))
         }
     }
 
-    // MARK: Blocking
+    func move(_ item: SavedPlace, to list: SavedList) {
+        item.list = list
+        item.savedAt = .now
+    }
+
+    // MARK: Blacklist
 
     func isBlocked(_ place: Place) -> Bool {
         let id = place.id
@@ -33,7 +46,7 @@ struct ListActions {
     func block(_ place: Place) {
         guard !isBlocked(place) else { return }
         context.insert(BlockedPlace(place: place))
-        // A blocked place shouldn't stay on the Interested list.
+        // A blacklisted place shouldn't stay on Favorites or Interested.
         if let saved = savedRecord(for: place.id) { context.delete(saved) }
     }
 

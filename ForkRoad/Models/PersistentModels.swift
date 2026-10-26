@@ -9,9 +9,35 @@ import PickerCore
 // unique constraints, so duplicates are prevented in code instead (see ListActions).
 // Every property also has a default value, which CloudKit requires.
 
-/// A restaurant on the user's Interested list.
+/// Which list a saved restaurant is on.
+enum SavedList: String, CaseIterable, Identifiable {
+    /// Places you love and go back to.
+    case favorites
+    /// Places you want to try.
+    case interested
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .favorites: return "Favorites"
+        case .interested: return "Interested"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .favorites: return "heart"
+        case .interested: return "bookmark"
+        }
+    }
+}
+
+/// A restaurant on the user's Favorites or Interested list.
 @Model
 final class SavedPlace {
+    /// Raw value of `SavedList`. Older saves (before Favorites existed) default to Interested.
+    var listRaw: String = SavedList.interested.rawValue
     var placeID: String = ""
     var name: String = ""
     var category: String = ""
@@ -21,7 +47,13 @@ final class SavedPlace {
     var websiteURL: URL?
     var savedAt: Date = Date()
 
-    init(place: Place) {
+    var list: SavedList {
+        get { SavedList(rawValue: listRaw) ?? .interested }
+        set { listRaw = newValue.rawValue }
+    }
+
+    init(place: Place, list: SavedList) {
+        listRaw = list.rawValue
         placeID = place.id
         name = place.name
         category = place.category

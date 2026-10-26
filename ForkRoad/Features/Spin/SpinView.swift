@@ -37,7 +37,9 @@ struct SpinView: View {
         let source: [Place]
         switch model.spinSource {
         case .nearby: source = model.places
-        case .interested: source = saved.map { $0.asPlace(from: model.center) }
+        case .favorites, .interested:
+            let list = model.spinSource.savedList
+            source = saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
         }
         return Randomizer.eligible(source, rules: rules)
     }
@@ -98,7 +100,8 @@ struct SpinView: View {
 
     private func rulesSummary(count: Int) -> some View {
         let parts: [String?] = [
-            model.spinSource == .nearby ? "Within \(model.radiusLabel)" : "From your saved places",
+            model.spinSource == .nearby ? "Within \(model.radiusLabel)"
+                : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
             model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
@@ -139,7 +142,7 @@ struct SpinView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 } else {
-                    Text(model.spinSource == .interested ? "Save some places first" : "No places in range")
+                    Text(emptyReelText)
                         .font(Theme.display(20))
                         .foregroundStyle(Theme.muted)
                 }
@@ -158,6 +161,14 @@ struct SpinView: View {
         .card(radius: 28)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(current.map { "Reel showing \($0.name)" } ?? "Reel is empty")
+    }
+
+    private var emptyReelText: String {
+        switch model.spinSource {
+        case .nearby: return "No places in range"
+        case .favorites: return "Heart some favorites first"
+        case .interested: return "Bookmark places to try first"
+        }
     }
 
     private func spinButton(_ pool: [Place]) -> some View {
@@ -193,12 +204,18 @@ struct SpinView: View {
                 ActionTile(title: "Go", systemImage: "location.north.line") {
                     PlaceLinks.openDirections(place)
                 }
-                ActionTile(title: actions.isSaved(place) ? "Saved" : "Save",
-                           systemImage: actions.isSaved(place) ? "heart.fill" : "heart",
-                           tint: actions.isSaved(place) ? Theme.saffron : Theme.text) {
-                    actions.toggleSaved(place)
+                let onList = actions.list(for: place)
+                ActionTile(title: "Favorite",
+                           systemImage: onList == .favorites ? "heart.fill" : "heart",
+                           tint: onList == .favorites ? Theme.saffron : Theme.text) {
+                    actions.toggle(place, in: .favorites)
                 }
-                ActionTile(title: "Not this", systemImage: "nosign") {
+                ActionTile(title: "Try",
+                           systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
+                           tint: onList == .interested ? Theme.saffron : Theme.text) {
+                    actions.toggle(place, in: .interested)
+                }
+                ActionTile(title: "Nope", systemImage: "nosign") {
                     actions.block(place)
                     winner = nil
                 }

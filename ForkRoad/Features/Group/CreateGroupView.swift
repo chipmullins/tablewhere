@@ -24,11 +24,11 @@ struct CreateGroupView: View {
     private var rules: Randomizer.Rules {
         model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
     }
-    private var interested: [Place] {
-        Randomizer.eligible(saved.map { $0.asPlace(from: model.center) }, rules: rules)
+    private func savedPlaces(in list: SavedList) -> [Place] {
+        Randomizer.eligible(saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }, rules: rules)
     }
     private var nearby: [Place] {
-        let savedIDs = Set(interested.map(\.id))
+        let savedIDs = Set(saved.map(\.placeID))
         return Randomizer.eligible(model.places, rules: rules).filter { !savedIDs.contains($0.id) }
     }
 
@@ -63,7 +63,8 @@ struct CreateGroupView: View {
                         .listRowInsets(EdgeInsets())
                 }
 
-                placeSection("From your Interested list", places: interested)
+                placeSection("Your favorites", places: savedPlaces(in: .favorites))
+                placeSection("Places you want to try", places: savedPlaces(in: .interested))
                 placeSection("Nearby within \(model.radiusLabel)", places: nearby)
 
                 if let errorMessage {

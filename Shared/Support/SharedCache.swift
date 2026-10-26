@@ -6,6 +6,7 @@ import PickerCore
 enum SharedCache {
     private static let nearbyKey = "cache.nearby"
     private static let interestedKey = "cache.interested"
+    private static let favoritesKey = "cache.favorites"
     private static let sessionsKey = "cache.recentSessions"
 
     static func saveNearby(_ places: [Place]) { save(Array(places.prefix(25)), key: nearbyKey) }
@@ -13,6 +14,9 @@ enum SharedCache {
 
     static func saveInterested(_ places: [Place]) { save(places, key: interestedKey) }
     static func loadInterested() -> [Place] { load(key: interestedKey) }
+
+    static func saveFavorites(_ places: [Place]) { save(places, key: favoritesKey) }
+    static func loadFavorites() -> [Place] { load(key: favoritesKey) }
 
     // MARK: Recent group sessions (newest first)
 

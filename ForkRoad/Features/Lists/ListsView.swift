@@ -2,12 +2,21 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// The Interested list and the Blocked list.
+/// Favorites (places you love), Interested (places to try), and Blacklisted.
 struct ListsView: View {
     enum Tab: String, CaseIterable, Identifiable {
+        case favorites = "Favorites"
         case interested = "Interested"
         case blocked = "Blacklisted"
         var id: Self { self }
+
+        var savedList: SavedList? {
+            switch self {
+            case .favorites: return .favorites
+            case .interested: return .interested
+            case .blocked: return nil
+            }
+        }
     }
 
     @Environment(AppModel.self) private var model
@@ -17,7 +26,13 @@ struct ListsView: View {
     @Query(sort: \BlockedPlace.blockedAt, order: .reverse) private var blockedPlaces: [BlockedPlace]
     @Query(sort: \BlockedCategory.blockedAt, order: .reverse) private var blockedCategories: [BlockedCategory]
 
-    @State private var tab: Tab = .interested
+    @State private var tab: Tab = .favorites
+
+    private var actions: ListActions { ListActions(context: context) }
+
+    private func items(in list: SavedList) -> [SavedPlace] {
+        saved.filter { $0.list == list }
+    }
 
     var body: some View {
         List {
@@ -30,37 +45,46 @@ struct ListsView: View {
                 .listRowInsets(EdgeInsets())
             }
 
-            switch tab {
-            case .interested: interestedSection
-            case .blocked: blockedSections
+            if let list = tab.savedList {
+                savedSections(list)
+            } else {
+                blockedSections
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.night)
         .navigationTitle("Your lists")
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
+        .animation(.snappy, value: saved.map(\.listRaw))
     }
 
     private func label(for tab: Tab) -> String {
         switch tab {
-        case .interested: return "Interested · \(saved.count)"
-        case .blocked: return "Blacklisted · \(blockedPlaces.count + blockedCategories.count)"
+        case .favorites: return "Favorites \(items(in: .favorites).count)"
+        case .interested: return "Interested \(items(in: .interested).count)"
+        case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
         }
     }
 
+    // MARK: Favorites / Interested
+
     @ViewBuilder
-    private var interestedSection: some View {
-        if saved.isEmpty {
-            Text("Tap the heart on any restaurant to save it here.")
+    private func savedSections(_ list: SavedList) -> some View {
+        let rows = items(in: list)
+        if rows.isEmpty {
+            Text(list == .favorites
+                 ? "Tap the heart on a restaurant you love to add it here."
+                 : "Tap the bookmark on a restaurant you want to try to save it here.")
+                .font(Theme.body(15))
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)
         } else {
             Section {
                 Button {
-                    model.spinSource = .interested
+                    model.spinSource = SpinSource(list)
                     model.selectedTab = .spin
                 } label: {
-                    Label("Pick from these", systemImage: "dice")
+                    Label(list == .favorites ? "Spin my favorites" : "Spin something new", systemImage: "dice")
                         .font(Theme.display(17))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 50)
@@ -69,7 +93,7 @@ struct ListsView: View {
             }
 
             Section {
-                ForEach(saved) { item in
+                ForEach(rows) { item in
                     NavigationLink(value: item.asPlace(from: model.center)) {
                         HStack(spacing: 12) {
                             MonogramTile(name: item.name, size: 44)
@@ -79,17 +103,37 @@ struct ListsView: View {
                             }
                         }
                     }
+                    .swipeActions(edge: .trailing) {
+                        Button("Remove", systemImage: "trash", role: .destructive) { context.delete(item) }
+                    }
+                    .swipeActions(edge: .leading) {
+                        if list == .interested {
+                            Button("Loved it", systemImage: "heart.fill") { actions.move(item, to: .favorites) }
+                                .tint(Theme.saffron)
+                        } else {
+                            Button("Try later", systemImage: "bookmark.fill") { actions.move(item, to: .interested) }
+                                .tint(Color(hex: 0x5C5A66))
+                        }
+                    }
                 }
-                .onDelete { offsets in offsets.map { saved[$0] }.forEach { context.delete($0) } }
                 .listRowBackground(Theme.surface)
+            } footer: {
+                Text(list == .interested
+                     ? "Tried one and loved it? Swipe right to move it to Favorites."
+                     : "Swipe right to move a place back to Interested, or left to remove it.")
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
             }
         }
     }
+
+    // MARK: Blacklisted
 
     @ViewBuilder
     private var blockedSections: some View {
         if blockedPlaces.isEmpty && blockedCategories.isEmpty {
             Text("Nothing blacklisted. Blacklisted places and categories never come up in Discover or spins.")
+                .font(Theme.body(15))
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)
         }

@@ -7,9 +7,23 @@ enum AppTab: Hashable {
 }
 
 enum SpinSource: String, CaseIterable, Identifiable {
-    case nearby = "Everywhere nearby"
-    case interested = "Interested list"
+    case nearby = "Nearby"
+    case favorites = "Favorites"
+    case interested = "Interested"
     var id: Self { self }
+
+    /// The saved list this source spins from, if it's one.
+    var savedList: SavedList? {
+        switch self {
+        case .nearby: return nil
+        case .favorites: return .favorites
+        case .interested: return .interested
+        }
+    }
+
+    init(_ list: SavedList) {
+        self = list == .favorites ? .favorites : .interested
+    }
 }
 
 /// App-wide state shared by every tab: where we're searching, how far,

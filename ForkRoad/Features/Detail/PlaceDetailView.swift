@@ -19,7 +19,7 @@ struct PlaceDetailView: View {
     private var actions: ListActions { ListActions(context: context) }
 
     var body: some View {
-        let isSaved = actions.isSaved(place)
+        let onList = actions.list(for: place)
         let _ = refresh
 
         ScrollView {
@@ -43,15 +43,23 @@ struct PlaceDetailView: View {
                     .disabled(place.phoneNumber == nil)
                     .opacity(place.phoneNumber == nil ? 0.4 : 1)
 
-                    ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.saffron, background: Theme.surface) {
+                    ActionTile(title: "Go", systemImage: "location.north.line", tint: Theme.saffron, background: Theme.surface) {
                         PlaceLinks.openDirections(place)
                     }
 
-                    ActionTile(title: isSaved ? "Interested" : "Save",
-                               systemImage: isSaved ? "heart.fill" : "heart",
-                               tint: isSaved ? Theme.onSaffron : Theme.text,
-                               background: isSaved ? Theme.saffron : Theme.surface) {
-                        actions.toggleSaved(place)
+                    ActionTile(title: "Favorite",
+                               systemImage: onList == .favorites ? "heart.fill" : "heart",
+                               tint: onList == .favorites ? Theme.onSaffron : Theme.text,
+                               background: onList == .favorites ? Theme.saffron : Theme.surface) {
+                        actions.toggle(place, in: .favorites)
+                        refresh += 1
+                    }
+
+                    ActionTile(title: "Try",
+                               systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
+                               tint: onList == .interested ? Theme.onSaffron : Theme.text,
+                               background: onList == .interested ? Theme.saffron : Theme.surface) {
+                        actions.toggle(place, in: .interested)
                         refresh += 1
                     }
 

@@ -33,9 +33,10 @@ struct RootTabView: View {
         .toolbarBackground(Theme.night, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
         .task { model.start() }
-        // Keep the iMessage extension's copy of the Interested list current.
-        .onChange(of: saved.map(\.placeID), initial: true) {
-            SharedCache.saveInterested(saved.map { $0.asPlace(from: model.center) })
+        // Keep the iMessage extension's copies of Favorites and Interested current.
+        .onChange(of: saved.map { "\($0.placeID)|\($0.listRaw)" }, initial: true) {
+            SharedCache.saveFavorites(saved.filter { $0.list == .favorites }.map { $0.asPlace(from: model.center) })
+            SharedCache.saveInterested(saved.filter { $0.list == .interested }.map { $0.asPlace(from: model.center) })
         }
     }
 }
