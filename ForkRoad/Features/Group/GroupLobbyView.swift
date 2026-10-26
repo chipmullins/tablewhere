@@ -586,6 +586,8 @@ private struct AddOptionView: View {
             do {
                 try await GroupService.shared.addOption(sessionID: session.id, option: GroupOption(place: place, addedBy: name))
                 dismiss()
+            } catch let error as GroupError {
+                errorMessage = error.localizedDescription
             } catch {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
             }

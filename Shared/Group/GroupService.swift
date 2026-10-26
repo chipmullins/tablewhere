@@ -7,12 +7,16 @@ enum GroupError: LocalizedError {
     case notConfigured
     case sessionNotFound
     case notOwner
+    case alreadyAdded
+    case optionsFull
 
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "Group voting isn’t set up yet. Add Firebase (see the README)."
         case .sessionNotFound: return "This group pick has ended or doesn’t exist."
         case .notOwner: return "Only the person who started this pick can lock it in."
+        case .alreadyAdded: return "That place is already in the vote."
+        case .optionsFull: return "This pick already has 12 places, the most it can hold."
         }
     }
 }
@@ -137,10 +141,26 @@ final class GroupService {
         try await sessionRef(sessionID).collection("votes").document(uid).delete()
     }
 
+    /// Adds a place unless it's already there. A transaction, so two people
+    /// adding the same place at the same moment can't both get it in.
     func addOption(sessionID: String, option: GroupOption) async throws {
         _ = try await userID()
+        let ref = sessionRef(sessionID)
         let data = try Firestore.Encoder().encode(option)
-        try await sessionRef(sessionID).updateData(["options": FieldValue.arrayUnion([data])])
+        let optionID = option.id
+        _ = try await db.runTransaction { transaction, errorPointer in
+            do {
+                let snapshot = try transaction.getDocument(ref)
+                guard snapshot.exists else { throw GroupError.sessionNotFound }
+                let existing = snapshot.data()?["options"] as? [[String: Any]] ?? []
+                if existing.contains(where: { $0["id"] as? String == optionID }) { throw GroupError.alreadyAdded }
+                if existing.count >= 12 { throw GroupError.optionsFull }
+                transaction.updateData(["options": FieldValue.arrayUnion([data])], forDocument: ref)
+            } catch {
+                errorPointer?.pointee = error as NSError
+            }
+            return nil
+        }
     }
 
     // MARK: Owner actions

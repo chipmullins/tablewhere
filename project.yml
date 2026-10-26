@@ -27,7 +27,7 @@ settingGroups:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: ""
@@ -42,6 +42,12 @@ targets:
     sources:
       - path: ForkRoad
       - path: Shared
+      # Apple's privacy manifest, and license texts for Settings → Acknowledgements.
+      - path: Config/Privacy/App/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Licenses
+        type: folder
+        buildPhase: resources
     postCompileScripts:
       - &copyFirebaseConfig
         # Copies Config/GoogleService-Info.plist into the bundle when it exists, so
@@ -73,6 +79,8 @@ targets:
       path: ForkRoad/Info.plist
       properties:
         CFBundleDisplayName: ForkRoad
+        # Only standard HTTPS, which is exempt: skips the export question on upload.
+        ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -113,6 +121,8 @@ targets:
     sources:
       - path: MessagesExtension
       - path: Shared
+      - path: Config/Privacy/Messages/PrivacyInfo.xcprivacy
+        buildPhase: resources
     postCompileScripts:
       - *copyFirebaseConfig
     dependencies:
@@ -152,6 +162,8 @@ targets:
       - path: Shared/Support
       - path: Shared/Fonts
       - path: Shared/Resources
+      - path: Config/Privacy/Widgets/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - package: PickerCore
     info:

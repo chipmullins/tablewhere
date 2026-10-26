@@ -113,7 +113,7 @@ Packages/PickerCore/        Pure logic + tests: Place, randomizer, fast food, ta
 ForkRoadWidgets/            Home Screen and Lock Screen widget
 web/                        Firebase Hosting vote page, Firestore rules, Cloud Functions (pushes)
 Design/                     Source artwork (app icon SVG, plus an alternate fork icon)
-Licenses/                   Font licenses (SIL OFL)
+Licenses/                   Font and library licenses (shown in Settings → Acknowledgements)
 Config/                     Your GoogleService-Info.plist (not committed)
 ```
 

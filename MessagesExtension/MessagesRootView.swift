@@ -401,6 +401,8 @@ struct MessageAddPlaceView: View {
                     sessionID: session.id,
                     option: GroupOption(place: place, addedBy: Identity.displayName ?? "Someone"))
                 dismiss()
+            } catch let error as GroupError {
+                errorMessage = error.localizedDescription
             } catch {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the list is full."
             }

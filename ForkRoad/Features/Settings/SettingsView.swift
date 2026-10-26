@@ -99,7 +99,7 @@ struct SettingsView: View {
                 Section {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Restaurant data", value: "Apple Maps")
-                    LabeledContent("Fonts", value: "Outfit, DM Sans (SIL OFL)")
+                    NavigationLink("Acknowledgements") { AcknowledgementsView() }
                 } header: {
                     Text("About")
                 } footer: {
