@@ -58,19 +58,10 @@ struct NewVoteView: View {
     @State private var includeWebLink = true
     @State private var isSending = false
     @State private var errorMessage: String?
+    @State private var query = ""
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
 
     private let maxOptions = 6
-
-    private var favorites: [Place] { filtered(SharedCache.loadFavorites()) }
-    private var interested: [Place] { filtered(SharedCache.loadInterested()) }
-    private var nearby: [Place] {
-        let ids = Set((favorites + interested).map(\.id))
-        return filtered(SharedCache.loadNearby()).filter { !ids.contains($0.id) }
-    }
-
-    private func filtered(_ places: [Place]) -> [Place] {
-        Randomizer.eligible(places, rules: Randomizer.Rules(excludeFastFood: Preferences.excludeFastFood))
-    }
 
     var body: some View {
         if !state.isExpanded {
@@ -96,14 +87,29 @@ struct NewVoteView: View {
         } else {
             VStack(spacing: 0) {
                 List {
-                    if favorites.isEmpty && interested.isEmpty && nearby.isEmpty {
-                        Text("Open ForkRoad and look around nearby first. Places you see there show up here.")
-                            .foregroundStyle(Theme.muted)
-                            .listRowBackground(Color.clear)
+                    Section {
+                        MessageSearchField(text: $query)
                     }
-                    section("Favorites", favorites)
-                    section("Want to try", interested)
-                    section("Nearby", nearby)
+                    .listRowBackground(Theme.surface)
+                    if !selected.isEmpty {
+                        Section("Picked (\(selected.count) of \(maxOptions))") {
+                            ForEach(selected) { place in
+                                Button { toggle(place) } label: {
+                                    HStack(spacing: 12) {
+                                        MonogramTile(name: place.name, category: place.category, size: 30)
+                                        Text(place.name).foregroundStyle(Theme.text).lineLimit(1)
+                                        Spacer()
+                                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
+                                    }
+                                }
+                            }
+                        }
+                        .listRowBackground(Theme.surface)
+                    }
+                    MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
+                                       accessory: { .check(isOn: selected.contains($0)) },
+                                       isDisabled: { !selected.contains($0) && selected.count >= maxOptions },
+                                       onTap: toggle)
                     Section {
                         Toggle("Also send a web link for friends without ForkRoad", isOn: $includeWebLink)
                             .tint(Theme.saffron)
@@ -133,29 +139,9 @@ struct NewVoteView: View {
         }
     }
 
-    @ViewBuilder
-    private func section(_ title: String, _ places: [Place]) -> some View {
-        if !places.isEmpty {
-            Section(title) {
-                ForEach(places) { place in
-                    let isOn = selected.contains(place)
-                    Button {
-                        if let i = selected.firstIndex(of: place) { selected.remove(at: i) }
-                        else if selected.count < maxOptions { selected.append(place) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            MonogramTile(name: place.name, category: place.category, size: 34)
-                            Text(place.name).foregroundStyle(Theme.text)
-                            Spacer()
-                            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
-                        }
-                    }
-                    .disabled(!isOn && selected.count >= maxOptions)
-                }
-            }
-            .listRowBackground(Theme.surface)
-        }
+    private func toggle(_ place: Place) {
+        if let i = selected.firstIndex(of: place) { selected.remove(at: i) }
+        else if selected.count < maxOptions { selected.append(place) }
     }
 
     private func send() {
@@ -223,6 +209,15 @@ struct MessageVoteView: View {
                                     .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                             .buttonStyle(.plain)
+                        }
+                        if let note = session.trimmedNote {
+                            PlanNoteCard(note: note, author: session.createdByName)
+                        }
+                        if session.mode == .vote {
+                            VoteBreakdown(options: session.options,
+                                          tally: live.tally,
+                                          winnerID: session.winnerID,
+                                          nonVoters: live.nonVoterNames)
                         }
                     } else {
                         let tally = live.tally
@@ -366,25 +361,14 @@ struct MessageVoteView: View {
     }
 }
 
-/// Add a place to a vote from the iMessage app (your saved places and last nearby search).
+/// Add a place to a vote from the iMessage app, with Discover's filters and search.
 struct MessageAddPlaceView: View {
     let session: GroupSession
     @Environment(\.dismiss) private var dismiss
     @State private var adding: String?
     @State private var errorMessage: String?
-
-    private var candidates: [(String, [Place])] {
-        let taken = Set(session.options.map(\.id))
-        let rules = SharedCache.pickRules()
-        func clean(_ places: [Place]) -> [Place] {
-            Randomizer.eligible(places, rules: rules).filter { !taken.contains($0.id) }
-        }
-        let favorites = clean(SharedCache.loadFavorites())
-        let interested = clean(SharedCache.loadInterested())
-        let savedIDs = Set((favorites + interested).map(\.id))
-        let nearby = clean(SharedCache.loadNearby()).filter { !savedIDs.contains($0.id) }
-        return [("Favorites", favorites), ("Want to try", interested), ("Nearby", nearby)].filter { !$0.1.isEmpty }
-    }
+    @State private var query = ""
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
 
     var body: some View {
         NavigationStack {
@@ -392,31 +376,16 @@ struct MessageAddPlaceView: View {
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
                 }
-                if candidates.isEmpty {
-                    Text("Open ForkRoad and look around nearby (or search) first. Places you see there show up here.")
-                        .foregroundStyle(Theme.muted)
-                        .listRowBackground(Color.clear)
-                }
-                ForEach(candidates, id: \.0) { group in
-                    Section(group.0) {
-                        ForEach(group.1) { place in
-                            Button { add(place) } label: {
-                                HStack(spacing: 12) {
-                                    MonogramTile(name: place.name, category: place.category, size: 34)
-                                    Text(place.name).foregroundStyle(Theme.text)
-                                    Spacer()
-                                    if adding == place.id { ProgressView() }
-                                    else { Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText) }
-                                }
-                            }
-                            .disabled(adding != nil)
-                        }
-                    }
-                    .listRowBackground(Theme.surface)
-                }
+                MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
+                                   excludedIDs: Set(session.options.map(\.id)),
+                                   accessory: { .add(isBusy: adding == $0.id) },
+                                   isDisabled: { _ in adding != nil },
+                                   onTap: add)
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search restaurants or cravings")
             .navigationTitle("Add a place")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
@@ -436,5 +405,76 @@ struct MessageAddPlaceView: View {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the list is full."
             }
         }
+    }
+}
+
+/// The group place picker fed from what the app shares with the extension:
+/// saved lists, the last nearby results, and where the app last searched.
+struct MessagePlacePicker: View {
+    let query: String
+    let excludeFastFood: Bool
+    var excludedIDs: Set<String> = []
+    let accessory: (Place) -> PlacePickerAccessory
+    var isDisabled: (Place) -> Bool = { _ in false }
+    let onTap: (Place) -> Void
+
+    // Read once per sheet, not on every redraw.
+    @State private var area = SharedCache.loadSearchArea()
+    @State private var favorites = SharedCache.loadFavorites()
+    @State private var interested = SharedCache.loadInterested()
+    @State private var nearby = SharedCache.loadNearby()
+
+    private var rules: Randomizer.Rules {
+        var rules = SharedCache.pickRules()
+        rules.excludeFastFood = excludeFastFood
+        return rules
+    }
+
+    var body: some View {
+        GroupPlacePicker(
+            query: query,
+            center: area?.center,
+            favorites: favorites,
+            interested: interested,
+            startingFilters: area.map { PlacePickerFilters($0) } ?? PlacePickerFilters(),
+            startingNearby: nearby,
+            rules: rules,
+            excludedIDs: excludedIDs,
+            accessory: accessory,
+            isDisabled: isDisabled,
+            onTap: onTap
+        )
+    }
+}
+
+/// A plain search field (the iMessage drawer has no navigation bar for `.searchable`).
+struct MessageSearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            TextField("Search restaurants or cravings", text: $text)
+                .foregroundStyle(Theme.text)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+    }
+}
+
+/// The iMessage extension's "No fast food" chip (the app's reads AppModel).
+/// Same saved setting, so the app and extension stay in sync.
+struct NoFastFoodChip: View {
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
+
+    var body: some View {
+        FastFoodChip(isOn: $excludeFastFood)
     }
 }

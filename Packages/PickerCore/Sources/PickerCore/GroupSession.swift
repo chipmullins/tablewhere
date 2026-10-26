@@ -68,11 +68,14 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var options: [GroupOption]
     public var winnerID: String?
     public var meetTime: Date?
+    /// Short note from the creator sent with the plan ("Bring a gift!").
+    /// Optional, so sessions from older app versions still decode.
+    public var note: String?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
-                winnerID: String? = nil, meetTime: Date? = nil) {
+                winnerID: String? = nil, meetTime: Date? = nil, note: String? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -85,7 +88,17 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.options = options
         self.winnerID = winnerID
         self.meetTime = meetTime
+        self.note = note
     }
+
+    /// The note, trimmed, or nil when it's blank.
+    public var trimmedNote: String? {
+        let text = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+
+    /// Longest note the creator can add.
+    public static let maxNoteLength = 120
 
     public var winner: GroupOption? {
         guard let winnerID else { return nil }

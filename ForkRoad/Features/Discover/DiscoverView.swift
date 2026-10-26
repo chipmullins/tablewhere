@@ -164,19 +164,7 @@ struct NoFastFoodChip: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Button {
-            model.excludeFastFood.toggle()
-        } label: {
-            Label("No fast food", systemImage: model.excludeFastFood ? "checkmark" : "takeoutbag.and.cup.and.straw")
-                .font(Theme.body(14, .semibold))
-                .padding(.horizontal, 14)
-                .frame(height: 40)
-                .foregroundStyle(model.excludeFastFood ? Theme.onSaffron : Theme.text)
-                .background(model.excludeFastFood ? Theme.saffron : Theme.surface, in: Capsule())
-                .overlay(Capsule().strokeBorder(model.excludeFastFood ? .clear : Theme.hairline))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(model.excludeFastFood ? .isSelected : [])
-        .sensoryFeedback(.selection, trigger: model.excludeFastFood)
+        @Bindable var model = model
+        FastFoodChip(isOn: $model.excludeFastFood)
     }
 }

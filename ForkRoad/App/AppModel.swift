@@ -135,11 +135,7 @@ final class AppModel {
     /// "BBQ, Mexican" or "all" — used in labels like "Spin from 12 BBQ, Mexican places".
     var cuisineSummary: String { CuisineFilter.summary(of: cuisines) }
 
-    var radiusLabel: String {
-        radiusMiles.truncatingRemainder(dividingBy: 1) == 0
-            ? "\(Int(radiusMiles)) mi"
-            : String(format: "%.1f mi", radiusMiles)
-    }
+    var radiusLabel: String { RadiusSlider.label(radiusMiles) }
 
     /// Call once when the app appears. The first search runs when a location
     /// arrives (or we learn there won't be one), so fallback results don't flash first.
@@ -152,6 +148,15 @@ final class AppModel {
             || location.authorization == .authorizedWhenInUse || location.authorization == .authorizedAlways {
             scheduleSearch()
         }
+    }
+
+    /// Runs a filtered nearby search without touching Discover's results
+    /// (used by the group place pickers, which have their own filters).
+    var placeSearch: PlaceSearching { searchService }
+
+    /// Discover's current filters, as a starting point for the group pickers.
+    var searchArea: SearchArea {
+        SearchArea(center: center, radiusMiles: radiusMiles, cuisines: cuisines, diet: diet)
     }
 
     /// Searches restaurants by name or craving around the current area
@@ -191,6 +196,8 @@ final class AppModel {
             places = results
             Task { await refreshCurrentCity() }
             SharedCache.saveNearby(results)  // lets the iMessage extension offer these
+            SharedCache.saveSearchArea(SearchArea(center: center, radiusMiles: radiusMiles,
+                                                  cuisines: cuisines, diet: diet))
         } catch {
             guard generation == searchGeneration else { return }
             if !(error is CancellationError) {

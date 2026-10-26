@@ -1,5 +1,29 @@
 import Foundation
+import CoreLocation
 import PickerCore
+
+/// Where (and with which filters) the app last searched. The group pickers
+/// start from it, and the iMessage extension searches around its center.
+struct SearchArea: Equatable, Codable, Sendable {
+    var latitude: Double
+    var longitude: Double
+    var radiusMiles: Double
+    var cuisineIDs: [String]
+    var dietID: String
+
+    init(center: CLLocationCoordinate2D, radiusMiles: Double,
+         cuisines: Set<CuisineFilter>, diet: DietFilter) {
+        latitude = center.latitude
+        longitude = center.longitude
+        self.radiusMiles = radiusMiles
+        cuisineIDs = CuisineFilter.ordered(cuisines).filter { $0 != .all }.map(\.rawValue)
+        dietID = diet.rawValue
+    }
+
+    var center: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
+    var cuisines: Set<CuisineFilter> { Set(cuisineIDs.compactMap(CuisineFilter.init(rawValue:))) }
+    var diet: DietFilter { DietFilter(rawValue: dietID) ?? .none }
+}
 
 /// Small JSON snapshots the app writes so the iMessage extension can offer
 /// places without running its own location search.
@@ -10,6 +34,17 @@ enum SharedCache {
     private static let blockedKey = "cache.blockedIDs"
     private static let blockedCategoriesKey = "cache.blockedCategories"
     private static let sessionsKey = "cache.recentSessions"
+    private static let searchAreaKey = "cache.searchArea"
+
+    static func saveSearchArea(_ area: SearchArea) {
+        guard let data = try? JSONEncoder().encode(area) else { return }
+        SharedDefaults.store.set(data, forKey: searchAreaKey)
+    }
+
+    static func loadSearchArea() -> SearchArea? {
+        guard let data = SharedDefaults.store.data(forKey: searchAreaKey) else { return nil }
+        return try? JSONDecoder().decode(SearchArea.self, from: data)
+    }
 
     static func saveNearby(_ places: [Place]) { save(Array(places.prefix(25)), key: nearbyKey) }
     static func loadNearby() -> [Place] { load(key: nearbyKey) }

@@ -18,6 +18,7 @@ struct CreateGroupView: View {
     @State private var selected: [Place] = []
     @State private var isCreating = false
     @State private var errorMessage: String?
+    @State private var query = ""
 
     static let maxOptions = 8
 
@@ -25,11 +26,7 @@ struct CreateGroupView: View {
         model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
     }
     private func savedPlaces(in list: SavedList) -> [Place] {
-        Randomizer.eligible(saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }, rules: rules)
-    }
-    private var nearby: [Place] {
-        let savedIDs = Set(saved.map(\.placeID))
-        return Randomizer.eligible(model.places, rules: rules).filter { !savedIDs.contains($0.id) }
+        saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
     }
 
     var body: some View {
@@ -57,15 +54,37 @@ struct CreateGroupView: View {
                 }
                 .listRowBackground(Theme.surface)
 
-                Section {
-                    NoFastFoodChip()
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
+                if !selected.isEmpty {
+                    Section("Picked (\(selected.count))") {
+                        ForEach(selected) { place in
+                            Button { toggle(place) } label: {
+                                HStack(spacing: 12) {
+                                    MonogramTile(name: place.name, category: place.category, size: 30)
+                                    Text(place.name).foregroundStyle(Theme.text).lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(Theme.muted)
+                                        .accessibilityLabel("Remove")
+                                }
+                            }
+                        }
+                    }
+                    .listRowBackground(Theme.surface)
                 }
 
-                placeSection("Your favorites", places: savedPlaces(in: .favorites))
-                placeSection("Places you want to try", places: savedPlaces(in: .interested))
-                placeSection("Nearby within \(model.radiusLabel)", places: nearby)
+                GroupPlacePicker(
+                    query: query,
+                    center: model.center,
+                    favorites: savedPlaces(in: .favorites),
+                    interested: savedPlaces(in: .interested),
+                    startingFilters: PlacePickerFilters(model.searchArea),
+                    startingNearby: model.places,
+                    rules: rules,
+                    search: model.placeSearch,
+                    accessory: { .check(isOn: selected.contains($0)) },
+                    isDisabled: { !selected.contains($0) && selected.count >= Self.maxOptions },
+                    onTap: toggle
+                )
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(Theme.danger) }
@@ -74,6 +93,8 @@ struct CreateGroupView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search restaurants or cravings")
             .navigationTitle("New group pick")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

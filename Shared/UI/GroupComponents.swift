@@ -152,3 +152,113 @@ struct WinnerCard: View {
         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
+
+/// After a vote closes: every place, who voted for it, and who didn't vote.
+/// Shared by the app and the iMessage extension (the web page has its own copy).
+struct VoteBreakdown: View {
+    let options: [GroupOption]
+    let tally: Tally
+    let winnerID: String?
+    /// Members who never voted.
+    var nonVoters: [String] = []
+
+    /// Winner first, then most votes, then the original order.
+    private var ordered: [GroupOption] {
+        let position = Dictionary(uniqueKeysWithValues: options.enumerated().map { ($1.id, $0) })
+        return options.sorted { a, b in
+            if (a.id == winnerID) != (b.id == winnerID) { return a.id == winnerID }
+            let ca = tally.count(for: a.id), cb = tally.count(for: b.id)
+            if ca != cb { return ca > cb }
+            return (position[a.id] ?? 0) < (position[b.id] ?? 0)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "How everyone voted")
+            VStack(spacing: 0) {
+                ForEach(Array(ordered.enumerated()), id: \.element.id) { index, option in
+                    if index > 0 { Divider().overlay(Theme.hairline) }
+                    row(option)
+                }
+                if !nonVoters.isEmpty {
+                    Divider().overlay(Theme.hairline)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "moon.zzz")
+                            .foregroundStyle(Theme.muted)
+                        Text("Didn’t vote: \(nonVoters.joined(separator: ", "))")
+                            .font(Theme.body(13))
+                            .foregroundStyle(Theme.muted)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 12)
+                }
+            }
+            .padding(.horizontal, 14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline))
+        }
+    }
+
+    private func row(_ option: GroupOption) -> some View {
+        let count = tally.count(for: option.id)
+        let voters = tally.votersByOption[option.id] ?? []
+        let isWinner = option.id == winnerID
+        return HStack(spacing: 12) {
+            MonogramTile(name: option.name, category: option.category, size: 36)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(option.name)
+                        .font(Theme.body(15, .semibold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    if isWinner {
+                        Image(systemName: "crown.fill")
+                            .font(Theme.body(11, .bold))
+                            .foregroundStyle(Theme.accentText)
+                            .accessibilityLabel("Winner")
+                    }
+                }
+                Text(voters.isEmpty ? "No votes" : voters.joined(separator: ", "))
+                    .font(Theme.body(12))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Text("\(count)")
+                .font(Theme.display(20))
+                .foregroundStyle(isWinner ? Theme.accentText : Theme.text)
+        }
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(option.name), \(count) vote\(count == 1 ? "" : "s")\(voters.isEmpty ? "" : ": " + voters.joined(separator: ", "))")
+    }
+}
+
+/// The creator's note shown with the plan ("Bring a gift!").
+struct PlanNoteCard: View {
+    let note: String
+    let author: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "quote.bubble.fill")
+                .font(Theme.body(16, .semibold))
+                .foregroundStyle(Theme.accentText)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(note)
+                    .font(Theme.body(15, .semibold))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("— \(author)")
+                    .font(Theme.body(12))
+                    .foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Note from \(author): \(note)")
+    }
+}

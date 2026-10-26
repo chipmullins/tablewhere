@@ -28,6 +28,12 @@ final class LiveSession {
 
     var tally: Tally { Tally(options: session?.options ?? [], votes: votes) }
 
+    /// Names of members who haven't voted.
+    var nonVoterNames: [String] {
+        let voted = Set(votes.map(\.voterID))
+        return members.filter { !voted.contains($0.id) }.map(\.name)
+    }
+
     var isOwner: Bool {
         guard let session, let uid = GroupService.shared.currentUserID else { return false }
         return session.isOwned(by: uid)

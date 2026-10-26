@@ -201,4 +201,13 @@ final class GroupService {
             "meetTimeLabel": date.formatted(date: .omitted, time: .shortened)
         ])
     }
+
+    /// Saves (or clears) the creator's short note sent with the plan.
+    /// An extra field, so older app versions simply don't show it.
+    func setNote(sessionID: String, note: String) async throws {
+        _ = try await userID()
+        let text = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(GroupSession.maxNoteLength))
+        let value: Any = text.isEmpty ? FieldValue.delete() : text
+        try await sessionRef(sessionID).updateData(["note": value])
+    }
 }

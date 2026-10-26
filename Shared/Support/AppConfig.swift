@@ -30,7 +30,7 @@ enum Identity {
 
 /// App-wide preferences that both the app and the extension respect.
 enum Preferences {
-    private static let noFastFoodKey = "excludeFastFood"
+    static let noFastFoodKey = "excludeFastFood"
 
     static var excludeFastFood: Bool {
         get { SharedDefaults.store.bool(forKey: noFastFoodKey) }

@@ -263,5 +263,65 @@ function renderDecided() {
   } else {
     site.hidden = true;
   }
+
+  // The creator's note ("Bring a gift!"), if there is one.
+  const note = typeof session.note === "string" ? session.note.trim() : "";
+  $("note").hidden = !note;
+  $("note-text").textContent = note;
+  $("note-by").textContent = note ? `— ${session.createdByName || "the organizer"}` : "";
+
+  renderBreakdown(winner.id);
   show("decided-step");
+}
+
+// After the vote closes: every place, who voted for it, and who didn't vote.
+function renderBreakdown(winnerId) {
+  const wrap = $("breakdown-wrap");
+  if (session.mode === "spin") { wrap.hidden = true; return; }
+  const t = tally();
+  const options = (session.options || []).map((o, i) => ({ o, i, n: t.counts[o.id] || 0 }));
+  options.sort((a, b) =>
+    (b.o.id === winnerId) - (a.o.id === winnerId) || b.n - a.n || a.i - b.i);
+
+  const list = $("breakdown");
+  list.replaceChildren();
+  for (const { o, n } of options) {
+    const item = document.createElement("div");
+    item.className = "item" + (o.id === winnerId ? " won" : "");
+    const [bg, ink] = tileColors(o.name);
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.style.background = bg;
+    tile.style.color = ink;
+    tile.textContent = o.name.charAt(0).toUpperCase();
+    const text = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = o.name;
+    if (o.id === winnerId) {
+      const crown = document.createElement("span");
+      crown.className = "crown";
+      crown.textContent = "★ WINNER";
+      name.append(crown);
+    }
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = (t.voters[o.id] || []).join(", ") || "No votes";
+    text.append(name, sub);
+    const count = document.createElement("div");
+    count.className = "count";
+    count.textContent = String(n);
+    item.append(tile, text, count);
+    list.append(item);
+  }
+
+  const voted = new Set(votes.map((v) => v.voterID));
+  const skipped = members.filter((m) => !voted.has(m.id)).map((m) => m.name);
+  if (skipped.length) {
+    const item = document.createElement("div");
+    item.className = "item sub";
+    item.textContent = `Didn’t vote: ${skipped.join(", ")}`;
+    list.append(item);
+  }
+  wrap.hidden = false;
 }

@@ -17,6 +17,9 @@ struct GroupLobbyView: View {
     @State private var browserURL: URL?
     @State private var errorMessage: String?
     @State private var isWorking = false
+    @State private var showTimePicker = false
+    @State private var noteDraft = ""
+    @FocusState private var noteFocused: Bool
 
     init(sessionID: String) {
         self.sessionID = sessionID
@@ -262,19 +265,41 @@ struct GroupLobbyView: View {
             .opacity(winner.websiteURL == nil ? 0.4 : 1)
         }
 
+        meetTimeSection(session)
+        noteSection(session)
+
+        if session.mode == .vote {
+            VoteBreakdown(options: session.options,
+                          tally: live.tally,
+                          winnerID: session.winnerID,
+                          nonVoters: live.nonVoterNames)
+        }
+    }
+
+    @ViewBuilder
+    private func meetTimeSection(_ session: GroupSession) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: live.isOwner ? "Meet at" : "Meeting time")
             if live.isOwner {
-                HStack(spacing: 8) {
-                    ForEach(Self.meetSlots(), id: \.self) { slot in
-                        let isOn = session.meetTime.map { abs($0.timeIntervalSince(slot)) < 60 } ?? false
-                        Button(slot.formatted(date: .omitted, time: .shortened)) { setMeetTime(slot) }
-                            .font(Theme.body(14, .bold))
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .foregroundStyle(isOn ? Theme.night : Theme.text)
-                            .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .buttonStyle(.plain)
+                let slots = MeetTimes.slots()
+                let isSlot: (Date) -> Bool = { slot in
+                    session.meetTime.map { abs($0.timeIntervalSince(slot)) < 60 } ?? false
+                }
+                let isCustom = session.meetTime != nil && !slots.contains(where: isSlot)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(slots, id: \.self) { slot in
+                        meetButton(slot.formatted(date: .omitted, time: .shortened), isOn: isSlot(slot)) {
+                            setMeetTime(slot)
+                        }
                     }
+                    meetButton(isCustom ? (session.meetTime?.formatted(date: .omitted, time: .shortened) ?? "Custom")
+                                        : "Custom…",
+                               systemImage: "clock", isOn: isCustom) {
+                        showTimePicker = true
+                    }
+                }
+                .sheet(isPresented: $showTimePicker) {
+                    MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setMeetTime($0) }
                 }
             } else {
                 Text(session.meetTime.map { $0.formatted(date: .omitted, time: .shortened) } ?? "\(session.createdByName) hasn’t set a time yet")
@@ -284,6 +309,77 @@ struct GroupLobbyView: View {
         }
     }
 
+    private func meetButton(_ title: String, systemImage: String? = nil, isOn: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let systemImage { Image(systemName: systemImage) }
+                Text(title).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .font(Theme.body(14, .bold))
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .foregroundStyle(isOn ? Theme.night : Theme.text)
+            .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func noteSection(_ session: GroupSession) -> some View {
+        if live.isOwner {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Note for the group")
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Optional, like “Bring a gift!”", text: $noteDraft, axis: .vertical)
+                        .lineLimit(1...3)
+                        .font(Theme.body(15, .medium))
+                        .foregroundStyle(Theme.text)
+                        .focused($noteFocused)
+                        .submitLabel(.done)
+                        .onSubmit { saveNote() }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 13)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    if noteIsDirty(session) {
+                        Button("Save") { saveNote() }
+                            .font(Theme.body(14, .bold))
+                            .foregroundStyle(Theme.onSaffron)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 48)
+                            .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .buttonStyle(.plain)
+                    }
+                }
+                Text("Everyone sees it with the plan. \(noteDraft.count)/\(GroupSession.maxNoteLength)")
+                    .font(Theme.body(12))
+                    .foregroundStyle(Theme.muted)
+            }
+            .onAppear { noteDraft = session.note ?? "" }
+            .onChange(of: session.note) { _, newValue in
+                if !noteFocused { noteDraft = newValue ?? "" }
+            }
+            .onChange(of: noteDraft) { _, newValue in
+                // A return key in a vertical field means "done", not a new line.
+                if newValue.contains("\n") {
+                    noteDraft = newValue.replacingOccurrences(of: "\n", with: "")
+                    noteFocused = false
+                } else if newValue.count > GroupSession.maxNoteLength {
+                    noteDraft = String(newValue.prefix(GroupSession.maxNoteLength))
+                }
+            }
+            .onChange(of: noteFocused) { _, focused in
+                if !focused && noteIsDirty(session) { saveNote() }
+            }
+        } else if let note = session.trimmedNote {
+            PlanNoteCard(note: note, author: session.createdByName)
+        }
+    }
+
+    private func noteIsDirty(_ session: GroupSession) -> Bool {
+        noteDraft.trimmingCharacters(in: .whitespacesAndNewlines) != (session.trimmedNote ?? "")
+    }
+
     // MARK: Bottom bar
 
     @ViewBuilder
@@ -291,7 +387,7 @@ struct GroupLobbyView: View {
         if let session = live.session {
             Group {
                 if session.status == .decided, let winner = session.winner {
-                    ShareLink(item: Self.planText(session, winner: winner)) {
+                    ShareLink(item: Self.planText(session, winner: winner, note: live.isOwner ? noteDraft : nil)) {
                         Label("Send everyone the plan", systemImage: "paperplane.fill")
                             .font(Theme.display(17))
                             .foregroundStyle(Theme.onSaffron)
@@ -390,6 +486,15 @@ struct GroupLobbyView: View {
         }
     }
 
+    private func saveNote() {
+        noteFocused = false
+        let text = noteDraft
+        Task {
+            do { try await GroupService.shared.setNote(sessionID: sessionID, note: text) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+
     /// On the owner's phone, lock in automatically when the timer runs out.
     private func autoCloseWhenTimeIsUp() async {
         guard let session = live.session, let closesAt = session.closesAt,
@@ -408,21 +513,13 @@ struct GroupLobbyView: View {
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
-    /// The next four half-hour slots, starting at least 20 minutes out.
-    static func meetSlots(from now: Date = .now) -> [Date] {
-        let calendar = Calendar.current
-        let start = now.addingTimeInterval(20 * 60)
-        let minute = calendar.component(.minute, from: start)
-        let roundUp = minute == 0 || minute == 30 ? 0 : (minute < 30 ? 30 - minute : 60 - minute)
-        let first = calendar.date(byAdding: .minute, value: roundUp, to: start) ?? start
-        let clean = calendar.date(bySetting: .second, value: 0, of: first) ?? first
-        return (0..<4).compactMap { calendar.date(byAdding: .minute, value: $0 * 30, to: clean) }
-    }
-
-    static func planText(_ session: GroupSession, winner: GroupOption) -> String {
+    static func planText(_ session: GroupSession, winner: GroupOption, note: String? = nil) -> String {
         var text = "\(session.title): we’re going to \(winner.name)"
         if let time = session.meetTime {
             text += " at \(time.formatted(date: .omitted, time: .shortened))"
+        }
+        if let note = (note ?? session.note)?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            text += ".\nNote: \(note)"
         }
         let name = winner.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         text += ".\nDirections: https://maps.apple.com/?daddr=\(winner.latitude),\(winner.longitude)&q=\(name)"
@@ -430,8 +527,8 @@ struct GroupLobbyView: View {
     }
 }
 
-/// Sheet for adding a place to an open session: search, or pick from your
-/// Favorites, Interested list, or what's nearby.
+/// Sheet for adding a place to an open session, with the same filters as
+/// Discover: radius, cuisines, diet, no fast food, and a name search.
 private struct AddOptionView: View {
     let session: GroupSession
 
@@ -441,24 +538,11 @@ private struct AddOptionView: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
     @State private var query = ""
-    @State private var searchResults: [Place] = []
-    @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var adding: String?
 
-    private var taken: Set<String> { Set(session.options.map(\.id)) }
-    private var rules: Randomizer.Rules {
-        model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
-    }
-    private func available(_ places: [Place]) -> [Place] {
-        Randomizer.eligible(places, rules: rules).filter { !taken.contains($0.id) }
-    }
     private func savedPlaces(_ list: SavedList) -> [Place] {
-        available(saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) })
-    }
-    private var nearby: [Place] {
-        let savedIDs = Set(saved.map(\.placeID))
-        return available(model.places).filter { !savedIDs.contains($0.id) }
+        saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
     }
 
     var body: some View {
@@ -467,69 +551,30 @@ private struct AddOptionView: View {
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
                 }
-                if query.trimmingCharacters(in: .whitespaces).count >= 2 {
-                    section(isSearching ? "Searching…" : "Results", available(searchResults))
-                } else {
-                    section("Your favorites", savedPlaces(.favorites))
-                    section("Want to try", savedPlaces(.interested))
-                    section("Nearby", nearby)
-                    if savedPlaces(.favorites).isEmpty && savedPlaces(.interested).isEmpty && nearby.isEmpty {
-                        Text("Search for a restaurant above.")
-                            .foregroundStyle(Theme.muted)
-                            .listRowBackground(Color.clear)
-                    }
-                }
+                GroupPlacePicker(
+                    query: query,
+                    center: model.center,
+                    favorites: savedPlaces(.favorites),
+                    interested: savedPlaces(.interested),
+                    startingFilters: PlacePickerFilters(model.searchArea),
+                    startingNearby: model.places,
+                    rules: model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories),
+                    excludedIDs: Set(session.options.map(\.id)),
+                    search: model.placeSearch,
+                    accessory: { .add(isBusy: adding == $0.id) },
+                    isDisabled: { _ in adding != nil },
+                    onTap: add
+                )
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Search restaurants")
-            .task(id: query) { await search() }
+                        prompt: "Search restaurants or cravings")
             .navigationTitle(session.mode == .spin ? "Add your pick" : "Suggest a place")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
         }
         .presentationBackground(Theme.night)
-    }
-
-    @ViewBuilder
-    private func section(_ title: String, _ places: [Place]) -> some View {
-        if !places.isEmpty {
-            Section(title) {
-                ForEach(places) { place in
-                    Button { add(place) } label: {
-                        HStack(spacing: 12) {
-                            MonogramTile(name: place.name, category: place.category, size: 36)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(place.name).foregroundStyle(Theme.text)
-                                Text("\(place.category) · \(place.distanceLabel)")
-                                    .font(Theme.body(12)).foregroundStyle(Theme.muted)
-                            }
-                            Spacer()
-                            if adding == place.id {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText)
-                            }
-                        }
-                    }
-                    .disabled(adding != nil)
-                }
-            }
-            .listRowBackground(Theme.surface)
-        }
-    }
-
-    private func search() async {
-        let text = query.trimmingCharacters(in: .whitespaces)
-        guard text.count >= 2 else { searchResults = []; return }
-        try? await Task.sleep(for: .milliseconds(350))
-        guard !Task.isCancelled else { return }
-        isSearching = true
-        defer { isSearching = false }
-        if let found = try? await model.searchRestaurants(text), !Task.isCancelled {
-            searchResults = found
-        }
     }
 
     private func add(_ place: Place) {

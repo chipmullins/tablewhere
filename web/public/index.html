@@ -49,6 +49,16 @@
     .error { color: var(--danger); }
     .code { font: 800 18px ui-rounded, Outfit, sans-serif; letter-spacing: .06em; }
     footer { margin-top: 28px; font-size: 13px; color: var(--muted); text-align: center; }
+    .note { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,178,63,0.14); border-radius: 18px; padding: 14px; margin-top: 14px; }
+    .note .by { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .section-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
+    .breakdown { background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px; padding: 0 14px; }
+    .breakdown .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+    .breakdown .item + .item { border-top: 1px solid var(--hairline); }
+    .breakdown .tile { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; }
+    .breakdown .count { font-size: 20px; }
+    .breakdown .won .count { color: var(--saffron); }
+    .breakdown .crown { color: var(--saffron); margin-left: 6px; font-size: 12px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -95,6 +105,14 @@
         <a class="btn light" id="apple-maps" target="_blank" rel="noopener">Directions in Apple Maps</a>
         <a class="btn ghost" id="google-maps" target="_blank" rel="noopener">Directions in Google Maps</a>
         <a class="btn ghost" id="website" target="_blank" rel="noopener" hidden>Menu &amp; hours</a>
+      </div>
+      <div class="note" id="note" hidden>
+        <span aria-hidden="true">💬</span>
+        <div><div id="note-text" style="font-weight:600"></div><div class="by" id="note-by"></div></div>
+      </div>
+      <div id="breakdown-wrap" hidden>
+        <div class="section-label">How everyone voted</div>
+        <div class="breakdown" id="breakdown"></div>
       </div>
     </section>
 

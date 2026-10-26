@@ -177,3 +177,14 @@ schemes:
         ForkRoad: all
     run:
       config: Debug
+  # Run this scheme and choose Messages when Xcode asks which app to launch,
+  # to debug the iMessage extension with its console output.
+  ForkRoadMessages:
+    build:
+      targets:
+        ForkRoadMessages: all
+        ForkRoad: all
+    run:
+      config: Debug
+      askForAppToLaunch: true
+      launchAutomaticallySubstyle: "2"

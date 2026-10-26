@@ -1,7 +1,12 @@
 import UIKit
 import SwiftUI
 import Messages
+import os
 import PickerCore
+
+/// Filter Console.app by subsystem "com.chipmullins.forkroad.messages" to follow
+/// the extension's launch on a real device (no Xcode attach needed).
+let messagesLog = Logger(subsystem: "com.chipmullins.forkroad.messages", category: "lifecycle")
 
 /// Entry point for the ForkRoad iMessage app.
 ///
@@ -14,7 +19,13 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        FirebaseSetup.configureIfPossible()
+        // Paint our background first. If the drawer is still the system's light
+        // gray after this, the extension never got this far (it failed to launch);
+        // if it turns dark but stays empty, the SwiftUI view is the problem.
+        view.backgroundColor = UIColor(Theme.night)
+        messagesLog.notice("viewDidLoad")
+        let firebaseReady = FirebaseSetup.configureIfPossible()
+        messagesLog.notice("Firebase configured: \(firebaseReady, privacy: .public)")
         Theme.applyUIKitAppearance()
         state.controller = self
 
@@ -36,10 +47,12 @@ final class MessagesViewController: MSMessagesAppViewController {
         ])
         host.didMove(toParent: self)
         hosting = host
+        messagesLog.notice("SwiftUI root attached")
     }
 
     override func willBecomeActive(with conversation: MSConversation) {
         super.willBecomeActive(with: conversation)
+        messagesLog.notice("willBecomeActive, style \(self.presentationStyle.rawValue, privacy: .public)")
         state.style = presentationStyle
         state.open(message: conversation.selectedMessage)
     }
