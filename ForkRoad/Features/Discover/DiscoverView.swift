@@ -9,6 +9,10 @@ struct DiscoverView: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
     @State private var showLocationPicker = false
+    @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
+
+    private var isSearching: Bool { searchText.trimmingCharacters(in: .whitespaces).count >= 2 }
 
     /// Results minus anything the user has blocked.
     private var visiblePlaces: [Place] {
@@ -24,11 +28,16 @@ struct DiscoverView: View {
                     .font(Theme.display(36))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                NearbyMap(places: visiblePlaces)
-                RadiusControl()
-                cuisineChips
-                spinBanner
-                results
+                RestaurantSearchField(text: $searchText, isFocused: $searchFocused)
+                if isSearching {
+                    RestaurantSearchResults(query: searchText)
+                } else {
+                    NearbyMap(places: visiblePlaces)
+                    RadiusControl()
+                    cuisineChips
+                    spinBanner
+                    results
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
@@ -37,6 +46,7 @@ struct DiscoverView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
         .refreshable { await model.search() }
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private var header: some View {

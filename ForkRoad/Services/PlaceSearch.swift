@@ -8,6 +8,11 @@ protocol PlaceSearching: Sendable {
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
                 cuisine: CuisineFilter) async throws -> [Place]
+
+    /// Free-text search ("Sora Ramen", "tacos", "brunch") around a point.
+    func search(text: String,
+                near center: CLLocationCoordinate2D,
+                radiusMeters: Double) async throws -> [Place]
 }
 
 extension PlaceSearching {
@@ -55,8 +60,26 @@ struct MapKitPlaceSearch: PlaceSearching {
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
                 cuisine: CuisineFilter) async throws -> [Place] {
+        try await run(query: cuisine.query, center: center, radiusMeters: radiusMeters,
+                      cuisine: cuisine, trimToRadius: true)
+    }
+
+    func search(text: String,
+                near center: CLLocationCoordinate2D,
+                radiusMeters: Double) async throws -> [Place] {
+        // A name search shouldn't miss a place just outside the circle,
+        // so results aren't trimmed to the radius (MapKit still favors the area).
+        try await run(query: text, center: center, radiusMeters: radiusMeters,
+                      cuisine: .all, trimToRadius: false)
+    }
+
+    private func run(query: String,
+                     center: CLLocationCoordinate2D,
+                     radiusMeters: Double,
+                     cuisine: CuisineFilter,
+                     trimToRadius: Bool) async throws -> [Place] {
         let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = cuisine.query
+        request.naturalLanguageQuery = query
         request.resultTypes = .pointOfInterest
         request.pointOfInterestFilter = MKPointOfInterestFilter(including: [
             .restaurant, .cafe, .bakery, .brewery, .winery, .foodMarket
@@ -76,7 +99,7 @@ struct MapKitPlaceSearch: PlaceSearching {
                 guard let name = item.name, let location = item.placemark.location else { return nil }
                 let distance = origin.distance(from: location)
                 // The search region is a square; trim results to the circle the user chose.
-                guard distance <= radiusMeters else { return nil }
+                if trimToRadius && distance > radiusMeters { return nil }
                 return Place(
                     name: name,
                     category: Self.categoryName(for: item, cuisine: cuisine),

@@ -42,6 +42,15 @@ struct ListActions {
         }
     }
 
+    /// Whether a saved place is left out of spins (false if it isn't saved).
+    func isSkippedInSpins(_ place: Place) -> Bool {
+        savedRecord(for: place.id)?.skipInSpins ?? false
+    }
+
+    func setSkippedInSpins(_ place: Place, _ skipped: Bool) {
+        savedRecord(for: place.id)?.skipInSpins = skipped
+    }
+
     func move(_ item: SavedPlace, to list: SavedList) {
         item.list = list
         item.savedAt = .now

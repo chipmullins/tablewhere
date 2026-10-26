@@ -41,6 +41,8 @@ final class SavedPlace {
     /// "Lexington, KY". Filled in by looking up the coordinates after saving;
     /// empty until then (and for saves made before cities existed).
     var city: String = ""
+    /// Still on the list, but never picked by a spin (e.g. a favorite you're tired of for now).
+    var skipInSpins: Bool = false
     var placeID: String = ""
     var name: String = ""
     var category: String = ""

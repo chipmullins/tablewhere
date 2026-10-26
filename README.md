@@ -6,10 +6,10 @@ Built with SwiftUI, SwiftData + CloudKit, MapKit, and Firebase. iOS 17+. Type is
 
 ## Features
 
-- **Discover:** live map with your search radius (0.5 to 10 mi), multi-select cuisine filters (mix up to 4), and a "No fast food" toggle
+- **Discover:** search restaurants by name or craving, plus a live map with your search radius (0.5 to 10 mi), multi-select cuisine filters (mix up to 4), and a "No fast food" toggle
 - **Spin:** a slot-machine pick from Nearby, Favorites, or Interested that skips blacklisted places and avoids repeats from the past week
 - **Restaurant screen:** Look Around, call, directions, menu and hours (their website, in the app), save, block
-- **Lists:** Favorites (places you love), Interested (places to try), and Blacklisted (one place or a whole category). Saved places are grouped into metro areas (cities within about 25 miles join the biggest one), so the lists and spins show the area you're in, any other area, or all of them. Syncs with iCloud.
+- **Lists:** Favorites (places you love), Interested (places to try), and Blacklisted (one place or a whole category). Any saved place can be left out of spins while staying on its list. Saved places are grouped into metro areas (cities within about 25 miles join the biggest one), so the lists and spins show the area you're in, any other area, or all of them. Syncs with iCloud.
 - **Group picks:** vote or spin together, with a live tally, fair tie-breaks, a meeting time, and "send everyone the plan"
 - **iMessage app:** start and vote on a dinner pick right in a group text
 - **Web voting:** friends without ForkRoad vote from a link in any browser

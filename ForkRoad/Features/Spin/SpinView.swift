@@ -39,7 +39,7 @@ struct SpinView: View {
         case .nearby: source = model.places
         case .favorites, .interested:
             let list = model.spinSource.savedList
-            source = saved.filter { $0.list == list }
+            source = saved.filter { $0.list == list && !$0.skipInSpins }
                 .filtered(by: model.listCity, near: model.center)
                 .map { $0.asPlace(from: model.center) }
         }
@@ -109,6 +109,7 @@ struct SpinView: View {
             model.spinSource == .nearby ? "Within \(model.radiusLabel)"
                 : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
             model.spinSource != .nearby ? areaChip : nil,
+            skippedCount > 0 ? "Skipping \(skippedCount) you left out" : nil,
             model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
@@ -168,6 +169,13 @@ struct SpinView: View {
         .card(radius: 28)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(current.map { "Reel showing \($0.name)" } ?? "Reel is empty")
+    }
+
+    /// Saved places on the current list (and area) that are left out of spins.
+    private var skippedCount: Int {
+        guard let list = model.spinSource.savedList else { return 0 }
+        return saved.filter { $0.list == list && $0.skipInSpins }
+            .filtered(by: model.listCity, near: model.center).count
     }
 
     private var areaChip: String {

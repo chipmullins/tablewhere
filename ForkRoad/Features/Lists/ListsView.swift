@@ -140,8 +140,8 @@ struct ListsView: View {
 
             Section {} footer: {
                 Text(list == .interested
-                     ? "Tried one and loved it? Swipe right to move it to Favorites."
-                     : "Swipe right to move a place back to Interested, or left to remove it.")
+                     ? "Tried one and loved it? Swipe right to move it to Favorites. Swipe left to skip a place in spins or remove it."
+                     : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it back to Interested.")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
             }
@@ -169,14 +169,34 @@ struct ListsView: View {
             NavigationLink(value: item.asPlace(from: model.center)) {
                 HStack(spacing: 12) {
                     MonogramTile(name: item.name, size: 44)
+                        .opacity(item.skipInSpins ? 0.45 : 1)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(Theme.body(16, .semibold))
-                        Text(item.category).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                        Text(item.skipInSpins ? "\(item.category) · left out of spins" : item.category)
+                            .font(Theme.body(13))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                    if item.skipInSpins {
+                        Image(systemName: "pause.circle")
+                            .foregroundStyle(Theme.muted)
+                            .accessibilityLabel("Left out of spins")
                     }
                 }
             }
             .swipeActions(edge: .trailing) {
                 Button("Remove", systemImage: "trash", role: .destructive) { context.delete(item) }
+                Button(item.skipInSpins ? "Spin it" : "Skip",
+                       systemImage: item.skipInSpins ? "dice" : "pause.circle") {
+                    item.skipInSpins.toggle()
+                }
+                .tint(Color(hex: 0x5C5A66))
+            }
+            .contextMenu {
+                Button(item.skipInSpins ? "Include in spins" : "Leave out of spins",
+                       systemImage: item.skipInSpins ? "dice" : "pause.circle") {
+                    item.skipInSpins.toggle()
+                }
             }
             .swipeActions(edge: .leading) {
                 if list == .interested {

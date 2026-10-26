@@ -70,6 +70,26 @@ struct PlaceDetailView: View {
                 .padding(.horizontal, 16)
                 .sensoryFeedback(.impact(weight: .light), trigger: refresh)
 
+                if let onList {
+                    Toggle(isOn: Binding(
+                        get: { actions.isSkippedInSpins(place) },
+                        set: { actions.setSkippedInSpins(place, $0); refresh += 1 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Leave out of spins")
+                                .font(Theme.body(15, .semibold))
+                                .foregroundStyle(Theme.text)
+                            Text("Stays in your \(onList.title), but the dice skips it.")
+                                .font(Theme.body(12))
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .tint(Theme.saffron)
+                    .padding(14)
+                    .card()
+                    .padding(.horizontal, 16)
+                }
+
                 menuButton.padding(.horizontal, 16)
 
                 if let address = place.address {

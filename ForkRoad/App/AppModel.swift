@@ -127,6 +127,13 @@ final class AppModel {
         if location.isDenied || chosenLocation != nil { scheduleSearch() }
     }
 
+    /// Searches restaurants by name or craving around the current area
+    /// (at least 15 miles, so a name search finds places just outside your radius).
+    func searchRestaurants(_ text: String) async throws -> [Place] {
+        try await searchService.search(text: text, near: center,
+                                       radiusMeters: max(radiusMeters, 15 * Place.metersPerMile))
+    }
+
     private func refreshCurrentCity() async {
         if let city = await CityResolver.city(for: center) { currentCity = city }
     }
