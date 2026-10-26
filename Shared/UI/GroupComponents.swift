@@ -164,7 +164,9 @@ struct VoteBreakdown: View {
 
     /// Winner first, then most votes, then the original order.
     private var ordered: [GroupOption] {
-        let position = Dictionary(uniqueKeysWithValues: options.enumerated().map { ($1.id, $0) })
+        // uniquingKeysWith: the same place can land in a vote twice if two
+        // people add it at once, and uniqueKeysWithValues would crash on that.
+        let position = Dictionary(options.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         return options.sorted { a, b in
             if (a.id == winnerID) != (b.id == winnerID) { return a.id == winnerID }
             let ca = tally.count(for: a.id), cb = tally.count(for: b.id)
