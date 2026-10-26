@@ -53,9 +53,9 @@ struct VoteOptionRow: View {
     let voters: [String]
     let isMine: Bool
     /// False in spin mode, where nobody votes: hides the count and bar.
-    var showsVotes: Bool = true
     let isLeading: Bool
     let isEnabled: Bool
+    var showsVotes: Bool = true
     let action: () -> Void
 
     var body: some View {

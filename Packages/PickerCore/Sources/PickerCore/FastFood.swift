@@ -3,8 +3,8 @@ import Foundation
 /// Recognizes fast-food chains by name.
 ///
 /// MapKit doesn't tag restaurants as fast food, so we match against a list of
-/// well-known chains. Fast-casual places (Chipotle, Panera, Shake Shack) are
-/// intentionally not on the list. Add or remove names in `chains`.
+/// well-known chains, plus fast-casual counter-service chains (Chipotle,
+/// Fazoli's, Moe's). Add or remove names in `chains`.
 public enum FastFood {
 
     public static let chains: [String] = [

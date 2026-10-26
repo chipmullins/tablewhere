@@ -11,7 +11,7 @@ struct OpenSpinIntent: AppIntent {
     init() {}
 
     func perform() async throws -> some IntentResult {
-        SharedDefaults.store.set("spin", forKey: "pendingDeepLink")
+        await MainActor.run { DeepLink.post("spin") }
         return .result()
     }
 }

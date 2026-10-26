@@ -53,7 +53,7 @@ struct RootTabView: View {
         .onChange(of: scenePhase, initial: true) {
             guard scenePhase == .active else { return }
             if let link = DeepLink.take() { handle(link) }
-            if followUp == nil, UserDefaults.standard.bool(forKey: "didOnboard") {
+            if followUp == nil, VisitFollowUp.remindersOn, UserDefaults.standard.bool(forKey: "didOnboard") {
                 followUp = VisitFollowUp.pending(in: context)
             }
         }
@@ -126,6 +126,10 @@ struct HowWasItSheet: View {
         }
         .padding(.horizontal, 20)
         .sensoryFeedback(.success, trigger: visit.answeredAt)
+        .onDisappear {
+            // Swiped away: count it as skipped so it doesn't come back every launch.
+            if visit.answeredAt == nil { VisitFollowUp.answer(visit, .skipped, in: context) }
+        }
     }
 
     private func answerButton(_ title: String, icon: String, note: String,

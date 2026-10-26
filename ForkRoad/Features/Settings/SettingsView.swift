@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var confirmClear = false
     @State private var clearedHistory = false
+    @State private var replayWelcome = false
 
     private let radiusOptions: [Double] = [0.5, 1, 2, 3, 5, 10]
 
@@ -89,7 +90,8 @@ struct SettingsView: View {
                     }
                     .disabled(clearedHistory)
                     Button("Show the welcome screens again") {
-                        didOnboard = false
+                        // Shown once this sheet has fully closed, so the two don't collide.
+                        replayWelcome = true
                         dismiss()
                     }
                 }
@@ -122,6 +124,7 @@ struct SettingsView: View {
             }
             .task { await refreshNotificationStatus() }
         }
+        .onDisappear { if replayWelcome { didOnboard = false } }
         .presentationBackground(Theme.night)
     }
 
@@ -148,7 +151,9 @@ struct SettingsView: View {
     }
 
     private func clearHistory() {
-        try? context.delete(model: SpinRecord.self)
+        // One by one (not a batch delete) so iCloud sync and open lists see it.
+        let records = (try? context.fetch(FetchDescriptor<SpinRecord>())) ?? []
+        records.forEach(context.delete)
         try? context.save()
         clearedHistory = true
     }
