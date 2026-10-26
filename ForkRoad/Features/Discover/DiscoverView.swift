@@ -20,7 +20,7 @@ struct DiscoverView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                Text("What are we\neating tonight?")
+                Text("Which way\nto dinner?")
                     .font(Theme.display(36))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -83,7 +83,7 @@ struct DiscoverView: View {
                     .frame(width: 48, height: 48)
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Can’t decide?").font(Theme.display(19))
+                    Text("Spin for it").font(Theme.display(19))
                     Text(model.cuisines.isEmpty
                          ? "Spin from \(visiblePlaces.count) places within \(model.radiusLabel)"
                          : "Spin from \(visiblePlaces.count) \(model.cuisineSummary) places")

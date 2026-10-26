@@ -15,7 +15,7 @@ struct RootTabView: View {
                 .tag(AppTab.discover)
 
             NavigationStack { SpinView() }
-                .tabItem { Label("Spin", systemImage: "shuffle") }
+                .tabItem { Label("Spin", systemImage: "dice") }
                 .tag(AppTab.spin)
 
             NavigationStack { ListsView() }

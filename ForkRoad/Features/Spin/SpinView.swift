@@ -49,7 +49,7 @@ struct SpinView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Feeling lucky?")
+                Text("Can’t decide?\nWe got you.")
                     .font(Theme.display(34))
                     .foregroundStyle(Theme.text)
                     .padding(.top, 8)

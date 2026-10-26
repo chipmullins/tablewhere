@@ -60,7 +60,7 @@ struct ListsView: View {
                     model.spinSource = .interested
                     model.selectedTab = .spin
                 } label: {
-                    Label("Pick from these", systemImage: "shuffle")
+                    Label("Pick from these", systemImage: "dice")
                         .font(Theme.display(17))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 50)
