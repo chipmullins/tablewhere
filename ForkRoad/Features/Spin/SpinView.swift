@@ -39,7 +39,9 @@ struct SpinView: View {
         case .nearby: source = model.places
         case .favorites, .interested:
             let list = model.spinSource.savedList
-            source = saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
+            source = saved.filter { $0.list == list }
+                .inCity(model.effectiveListCity)
+                .map { $0.asPlace(from: model.center) }
         }
         return Randomizer.eligible(source, rules: rules)
     }
@@ -61,11 +63,15 @@ struct SpinView: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: model.spinSource) { reset() }
+                .onChange(of: model.listCity) { reset() }
 
                 if model.spinSource == .nearby {
                     CuisineChips(selection: $model.cuisines)
                 } else {
-                    NoFastFoodChip()
+                    HStack(spacing: 8) {
+                        CityMenu(cityCounts: saved.filter { $0.list == model.spinSource.savedList }.cityCounts)
+                        NoFastFoodChip()
+                    }
                 }
 
                 rulesSummary(count: pool.count)
@@ -102,6 +108,7 @@ struct SpinView: View {
         let parts: [String?] = [
             model.spinSource == .nearby ? "Within \(model.radiusLabel)"
                 : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
+            model.spinSource != .nearby ? (model.effectiveListCity.map { "In \($0)" } ?? "All cities") : nil,
             model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
@@ -166,8 +173,10 @@ struct SpinView: View {
     private var emptyReelText: String {
         switch model.spinSource {
         case .nearby: return "No places in range"
-        case .favorites: return "Heart some favorites first"
-        case .interested: return "Bookmark places to try first"
+        case .favorites:
+            return model.effectiveListCity == nil ? "Heart some favorites first" : "No favorites in this city yet"
+        case .interested:
+            return model.effectiveListCity == nil ? "Bookmark places to try first" : "Nothing saved in this city yet"
         }
     }
 

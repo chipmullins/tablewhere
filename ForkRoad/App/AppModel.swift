@@ -50,6 +50,20 @@ final class AppModel {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
+    /// The city you're searching in ("Lexington, KY"), looked up from `center`.
+    private(set) var currentCity: String?
+    /// Which city the Favorites/Interested lists (and spins from them) show.
+    var listCity: CityFilter = .here
+
+    /// The city name the saved lists should be filtered to, or nil for all cities.
+    var effectiveListCity: String? {
+        switch listCity {
+        case .here: return currentCity
+        case .all: return nil
+        case .city(let name): return name
+        }
+    }
+
     let location = LocationManager()
 
     @ObservationIgnored private let searchService: PlaceSearching
@@ -122,6 +136,10 @@ final class AppModel {
         if location.isDenied || chosenLocation != nil { scheduleSearch() }
     }
 
+    private func refreshCurrentCity() async {
+        if let city = await CityResolver.city(for: center) { currentCity = city }
+    }
+
     /// Debounced search, so dragging the radius slider doesn't fire a search per pixel.
     func scheduleSearch() {
         searchTask?.cancel()
@@ -145,6 +163,7 @@ final class AppModel {
             )
             guard generation == searchGeneration else { return }  // a newer search took over
             places = results
+            Task { await refreshCurrentCity() }
             SharedCache.saveNearby(results)  // lets the iMessage extension offer these
         } catch {
             guard generation == searchGeneration else { return }

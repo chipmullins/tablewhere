@@ -38,6 +38,9 @@ enum SavedList: String, CaseIterable, Identifiable {
 final class SavedPlace {
     /// Raw value of `SavedList`. Older saves (before Favorites existed) default to Interested.
     var listRaw: String = SavedList.interested.rawValue
+    /// "Lexington, KY". Filled in by looking up the coordinates after saving;
+    /// empty until then (and for saves made before cities existed).
+    var city: String = ""
     var placeID: String = ""
     var name: String = ""
     var category: String = ""

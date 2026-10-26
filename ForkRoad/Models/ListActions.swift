@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import SwiftData
 import PickerCore
 
@@ -26,7 +27,18 @@ struct ListActions {
                 existing.savedAt = .now
             }
         } else {
-            context.insert(SavedPlace(place: place, list: list))
+            let item = SavedPlace(place: place, list: list)
+            context.insert(item)
+            Task { await Self.fillInCity(item) }
+        }
+    }
+
+    /// Looks up and stores the city for a saved place, if it doesn't have one.
+    static func fillInCity(_ item: SavedPlace) async {
+        guard item.city.isEmpty else { return }
+        let coordinate = CLLocationCoordinate2D(latitude: item.latitude, longitude: item.longitude)
+        if let city = await CityResolver.city(for: coordinate) {
+            item.city = city
         }
     }
 
