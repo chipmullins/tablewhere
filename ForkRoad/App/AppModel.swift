@@ -45,10 +45,39 @@ final class AppModel {
 
     init(searchService: PlaceSearching = MapKitPlaceSearch()) {
         self.searchService = searchService
-        location.onUpdate = { [weak self] in self?.scheduleSearch() }
+        location.onUpdate = { [weak self] in
+            // GPS updates don't matter while a chosen place is in use.
+            guard let self, self.chosenLocation == nil else { return }
+            self.scheduleSearch()
+        }
     }
 
-    var center: CLLocationCoordinate2D { location.coordinate ?? LocationManager.fallback }
+    /// A place the user picked instead of their current location. Saved between launches.
+    private(set) var chosenLocation: ChosenLocation? = ChosenLocation.saved
+
+    /// Where searches are centered: the chosen place, else GPS, else Lexington.
+    var center: CLLocationCoordinate2D {
+        chosenLocation?.coordinate ?? location.coordinate ?? LocationManager.fallback
+    }
+
+    var isUsingCurrentLocation: Bool { chosenLocation == nil }
+
+    /// "Lexington, KY", "Chevy Chase", or "Near you".
+    var locationName: String { chosenLocation?.name ?? location.displayName }
+
+    func choose(_ place: ChosenLocation) {
+        chosenLocation = place
+        ChosenLocation.saved = place
+        ChosenLocation.remember(place)
+        scheduleSearch()
+    }
+
+    func useCurrentLocation() {
+        chosenLocation = nil
+        ChosenLocation.saved = nil
+        location.start()
+        scheduleSearch()
+    }
 
     /// The block/fast-food rules every screen applies.
     func rules(blockedPlaces: [BlockedPlace], blockedCategories: [BlockedCategory],
@@ -76,7 +105,7 @@ final class AppModel {
     /// arrives (or we learn there won't be one), so fallback results don't flash first.
     func start() {
         location.start()
-        if location.isDenied { scheduleSearch() }
+        if location.isDenied || chosenLocation != nil { scheduleSearch() }
     }
 
     /// Debounced search, so dragging the radius slider doesn't fire a search per pixel.

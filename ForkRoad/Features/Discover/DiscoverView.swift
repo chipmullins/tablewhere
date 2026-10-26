@@ -8,6 +8,7 @@ struct DiscoverView: View {
     @Environment(AppModel.self) private var model
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
+    @State private var showLocationPicker = false
 
     /// Results minus anything the user has blocked.
     private var visiblePlaces: [Place] {
@@ -40,16 +41,30 @@ struct DiscoverView: View {
 
     private var header: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                SectionLabel(text: "Near you")
-                Label(model.location.displayName, systemImage: "mappin")
+            Button { showLocationPicker = true } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionLabel(text: model.isUsingCurrentLocation ? "Near you" : "Searching near")
+                    HStack(spacing: 6) {
+                        Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
+                            .foregroundStyle(Theme.saffron)
+                        Text(model.locationName)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(Theme.body(12, .bold))
+                            .foregroundStyle(Theme.muted)
+                    }
                     .font(Theme.body(16, .semibold))
                     .foregroundStyle(Theme.text)
-                    .labelStyle(TintedIconLabelStyle())
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Searching near \(model.locationName). Change location")
             Spacer()
         }
         .padding(.top, 8)
+        .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
     }
 
     private var cuisineChips: some View {

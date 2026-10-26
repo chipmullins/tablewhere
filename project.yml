@@ -55,7 +55,7 @@ targets:
             mkdir -p "$DEST"
             cp "$PLIST" "$DEST/"
           else
-            echo "warning: Config/GoogleService-Info.plist not found. Group voting is turned off until you add it (see README)."
+            echo "Firebase config not found; group voting is off until you add Config/GoogleService-Info.plist (see README)."
           fi
     dependencies:
       - package: PickerCore

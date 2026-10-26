@@ -11,7 +11,12 @@ struct NearbyMap: View {
 
     var body: some View {
         Map(position: $camera) {
-            UserAnnotation()
+            if model.isUsingCurrentLocation {
+                UserAnnotation()
+            } else {
+                Marker(model.locationName, systemImage: "mappin", coordinate: model.center)
+                    .tint(Theme.text)
+            }
             MapCircle(center: model.center, radius: model.radiusMeters)
                 .foregroundStyle(Theme.saffron.opacity(0.08))
                 .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
@@ -39,6 +44,7 @@ struct NearbyMap: View {
         .onAppear { fitToRadius() }
         .onChange(of: model.radiusMiles) { fitToRadius() }
         .onChange(of: model.center.latitude) { fitToRadius() }
+        .onChange(of: model.center.longitude) { fitToRadius() }
         .accessibilityLabel("Map of \(places.count) restaurants within \(model.radiusLabel)")
     }
 
