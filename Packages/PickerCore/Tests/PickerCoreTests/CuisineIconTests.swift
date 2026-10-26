@@ -78,3 +78,22 @@ final class CuisineIconTests: XCTestCase {
         XCTAssertEqual(CuisineIcon.guess(name: "Holly Hill Inn", category: "American"), .general)
     }
 }
+
+final class CuisineIconNameTests: XCTestCase {
+    func testRealWorldNamesFromAppleMaps() {
+        XCTAssertEqual(CuisineIcon.guess(name: "Grimes's Fast Food Restaurant", category: "Restaurant"), .burger)
+        XCTAssertEqual(CuisineIcon.guess(name: "Wild Eggs", category: "Restaurant"), .breakfast)
+        XCTAssertEqual(CuisineIcon.guess(name: "Asian Bistro Express", category: "Restaurant"), .noodles)
+        XCTAssertEqual(CuisineIcon.guess(name: "Fazoli's", category: "Restaurant"), .pizza)
+        XCTAssertEqual(CuisineIcon.guess(name: "New Shanghai Bistro", category: "Restaurant"), .noodles)
+        XCTAssertEqual(CuisineIcon.guess(name: "Kyoto Japanese Kitchen", category: "Restaurant"), .sushi)
+        XCTAssertEqual(CuisineIcon.guess(name: "Cinco de Mayo", category: "Restaurant"), .taco)
+        XCTAssertEqual(CuisineIcon.guess(name: "Pepper's Mexican Grill", category: "Restaurant"), .taco)
+    }
+
+    func testWeakWordsOnlyDecideAlone() {
+        // Generic words never beat a specific one.
+        XCTAssertEqual(CuisineIcon.guess(name: "Kyoto Kitchen", category: ""), .sushi)
+        XCTAssertEqual(CuisineIcon.guess(name: "Texas Roadhouse Steaks", category: ""), .steak)
+    }
+}

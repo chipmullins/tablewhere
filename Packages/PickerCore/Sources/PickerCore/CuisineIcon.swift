@@ -63,39 +63,82 @@ public enum CuisineIcon: String, CaseIterable, Sendable {
 
     // MARK: - Name keywords
 
-    /// Checked in order; the first rule with a matching word wins.
+    /// Checked in order; the first rule with a matching word wins. Includes
+    /// cuisine and place words ("Japanese", "Shanghai", "Kyoto", "Cinco") and
+    /// well-known chains, since Apple Maps usually just says "Restaurant".
     private static let nameRules: [(CuisineIcon, Set<String>)] = [
-        (.burrito, ["burrito", "burritos"]),
-        (.taco, ["taco", "tacos", "taqueria", "cantina"]),
+        (.burrito, ["burrito", "burritos", "chipotle", "qdoba", "moes"]),
+        (.taco, ["taco", "tacos", "taqueria", "cantina", "mexican", "mexicana", "mexicano", "cocina",
+                 "tortilleria", "jalisco", "guadalajara", "azteca", "aztec", "fiesta", "amigos", "hacienda",
+                 "cinco", "mayo", "texmex", "tex", "mex", "enchilada", "tamale", "tamales", "nacho", "nachos"]),
         (.ramen, ["ramen"]),
-        (.sushi, ["sushi", "sake", "izakaya"]),
-        (.noodles, ["pho", "noodle", "noodles", "thai", "wok", "dumpling", "dumplings"]),
-        (.pizza, ["pizza", "pizzas", "pizzeria"]),
-        (.burger, ["burger", "burgers"]),
-        (.curry, ["curry", "masala", "tandoor", "tandoori", "india", "indian"]),
-        (.bbq, ["bbq", "barbecue", "smokehouse", "smoke", "smokin"]),
-        (.steak, ["steak", "steaks", "steakhouse", "chophouse"]),
-        (.seafood, ["fish", "oyster", "oysters", "crab", "seafood", "lobster"]),
-        (.chicken, ["chicken", "wings", "wing"]),
-        (.sandwich, ["deli", "sandwich", "sandwiches", "subs", "sub"]),
-        (.salad, ["salad", "salads", "vegan", "green", "greens"]),
-        (.breakfast, ["breakfast", "pancake", "pancakes", "waffle", "waffles", "brunch", "diner"]),
-        (.dessert, ["creamery", "gelato", "dessert", "desserts", "sweets", "cupcake", "cupcakes"]),
-        (.bakery, ["bakery", "bake", "bakehouse", "bread", "donut", "donuts", "doughnut", "doughnuts", "croissant"]),
-        (.coffee, ["coffee", "espresso", "cafe", "roasters"]),
-        (.beer, ["brew", "brewing", "brewery", "taproom", "pub", "tavern"]),
-        (.wine, ["wine", "vino", "winery"]),
+        (.sushi, ["sushi", "sake", "izakaya", "japanese", "japan", "kyoto", "tokyo", "osaka", "hibachi",
+                  "teppanyaki", "sakura", "sashimi", "maki", "nigiri", "yakitori", "teriyaki"]),
+        (.noodles, ["pho", "noodle", "noodles", "thai", "thailand", "bangkok", "siam", "wok", "dumpling",
+                    "dumplings", "chinese", "china", "shanghai", "beijing", "peking", "szechuan", "sichuan",
+                    "hunan", "canton", "cantonese", "mandarin", "panda", "asian", "asia", "vietnamese",
+                    "vietnam", "saigon", "hanoi", "mein", "lo", "udon", "pad", "bao", "hong", "kong"]),
+        (.pizza, ["pizza", "pizzas", "pizzeria", "italian", "italia", "italiano", "trattoria", "ristorante",
+                  "osteria", "pasta", "napoli", "roma", "sicilian", "calzone", "fazolis", "dominos", "papa",
+                  "marcos", "caesars", "sbarro"]),
+        (.burger, ["burger", "burgers", "hamburger", "hamburgers", "mcdonalds", "wendys", "culvers",
+                   "whataburger", "sonic", "checkers", "rallys", "hardees", "arbys", "shack", "drivein"]),
+        (.curry, ["curry", "masala", "tandoor", "tandoori", "india", "indian", "nepal", "nepali",
+                  "himalayan", "bombay", "mumbai", "delhi", "punjab", "punjabi", "taj", "biryani", "naan"]),
+        (.bbq, ["bbq", "barbecue", "smokehouse", "smoke", "smokin", "smoked", "brisket", "ribs", "rib",
+                "pit", "korean", "kbbq", "kalbi"]),
+        (.steak, ["steak", "steaks", "steakhouse", "chophouse", "prime", "longhorn", "outback", "texas"]),
+        (.seafood, ["fish", "oyster", "oysters", "crab", "seafood", "lobster", "shrimp", "crawfish",
+                    "catfish", "cajun", "boil", "clam", "clams", "poke", "captain"]),
+        (.chicken, ["chicken", "wings", "wing", "chick", "kfc", "popeyes", "canes", "bojangles", "zaxbys",
+                    "wingstop", "fried", "rotisserie", "hen"]),
+        (.sandwich, ["deli", "sandwich", "sandwiches", "subs", "sub", "subway", "hoagie", "hoagies",
+                     "panini", "jimmy", "jersey", "potbelly", "firehouse", "quiznos", "cheesesteak"]),
+        (.salad, ["salad", "salads", "vegan", "greens", "vegetarian", "veggie", "plant", "bowl",
+                  "bowls", "mediterranean", "greek", "falafel", "gyro", "gyros"]),
+        (.breakfast, ["breakfast", "pancake", "pancakes", "waffle", "waffles", "brunch", "diner", "egg",
+                      "eggs", "biscuit", "biscuits", "ihop", "omelet", "omelette", "griddle", "skillet"]),
+        (.dessert, ["creamery", "gelato", "dessert", "desserts", "sweets", "cupcake", "cupcakes", "yogurt",
+                    "froyo", "custard", "frozen", "candy", "chocolate", "cookie", "cookies", "boba", "dairy"]),
+        (.bakery, ["bakery", "bake", "bakehouse", "bread", "donut", "donuts", "doughnut", "doughnuts",
+                   "croissant", "bagel", "bagels", "pastry", "patisserie", "krispy", "kreme"]),
+        (.coffee, ["coffee", "espresso", "cafe", "roasters", "starbucks", "dunkin", "latte", "tea", "teahouse"]),
+        (.beer, ["brew", "brewing", "brewery", "brewhouse", "taproom", "pub", "tavern", "bar", "alehouse",
+                 "saloon", "sports", "ale", "beer"]),
+        (.wine, ["wine", "vino", "winery", "vineyard", "cellar"]),
     ]
 
+    /// Two-word phrases checked before single words.
+    private static let phraseRules: [((String, String), CuisineIcon)] = [
+        (("fast", "food"), .burger), (("ice", "cream"), .dessert), (("dim", "sum"), .noodles),
+        (("lo", "mein"), .noodles), (("olive", "garden"), .pizza), (("waffle", "house"), .breakfast),
+        (("cracker", "barrel"), .breakfast), (("first", "watch"), .breakfast), (("five", "guys"), .burger),
+        (("burger", "king"), .burger), (("taco", "bell"), .taco), (("dairy", "queen"), .dessert),
+        (("pizza", "hut"), .pizza), (("hot", "pot"), .noodles), (("red", "lobster"), .seafood),
+        (("long", "john"), .seafood), (("jack", "box"), .burger), (("steak", "n"), .burger)
+    ]
+
+    /// Words that are too generic to decide on their own; only used when
+    /// nothing more specific matches.
+    private static let weakWords: Set<String> = ["bowl", "bowls", "lo", "pad", "hong", "kong",
+                                                 "prime", "texas", "papa", "hen", "pit", "captain", "plant",
+                                                 "sports", "tex", "mex", "jersey", "jimmy", "firehouse",
+                                                 "dairy", "fried", "boil", "cellar", "smoke"]
+
     private static func fromName(_ words: [String]) -> CuisineIcon? {
-        let set = Set(words)
-        // Two-word phrase.
-        for (a, b) in zip(words, words.dropFirst()) where a == "ice" && b == "cream" {
-            return .dessert
+        for (a, b) in zip(words, words.dropFirst()) {
+            if let hit = phraseRules.first(where: { $0.0.0 == a && $0.0.1 == b }) { return hit.1 }
         }
-        for (icon, keys) in nameRules where !set.isDisjoint(with: keys) {
+        let strong = Set(words).subtracting(weakWords)
+        for (icon, keys) in nameRules where !strong.isDisjoint(with: keys) {
             return icon
         }
+        let weak = Set(words).intersection(weakWords)
+        for (icon, keys) in nameRules where !weak.isDisjoint(with: keys) {
+            return icon
+        }
+        // Known fast-food chains not listed above.
+        if FastFood.isFastFood(words.joined(separator: " ")) { return .burger }
         return nil
     }
 

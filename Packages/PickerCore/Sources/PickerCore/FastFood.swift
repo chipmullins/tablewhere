@@ -19,7 +19,11 @@ public enum FastFood {
         "golden corral", "marcos pizza", "hungry howies", "papa murphys", "jersey mikes",
         "firehouse subs", "potbelly", "quiznos", "blimpie", "dunkin", "tim hortons",
         "krispy kreme", "cook out", "culvers", "freddys frozen custard", "portillos",
-        "hot n now", "jollibee", "biscuitville"
+        "hot n now", "jollibee", "biscuitville",
+        // Fast casual: order at the counter, food in minutes.
+        "fazolis", "chipotle", "moes southwest grill", "qdoba", "five guys", "shake shack",
+        "smashburger", "freddys", "panera bread", "noodles and company", "cicis", "sbarro",
+        "wienerschnitzel", "taco cabana", "chicken salad chick", "tropical smoothie cafe"
     ]
 
     private static let normalizedChains: [String] = chains.map(normalize)

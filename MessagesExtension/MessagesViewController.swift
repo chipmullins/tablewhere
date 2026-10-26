@@ -78,7 +78,7 @@ final class MessagesState {
     func showNewVote() { sessionID = nil }
 
     /// Extensions can't open links directly; ask the host (Messages) to.
-    func open(url: URL) { controller?.extensionContext?.open(url, completionHandler: nil) }
+    func open(url: URL) { controller?.extensionContext?.open(url) { @Sendable _ in } }
 
     func expand() { controller?.requestPresentationStyle(.expanded) }
     func collapse() { controller?.requestPresentationStyle(.compact) }
@@ -89,9 +89,9 @@ final class MessagesState {
         guard let conversation = controller?.activeConversation else { return }
         let message = MSMessage(session: MSSession())
         configure(message, session: session, tally: Tally(options: session.options, votes: []))
-        conversation.insert(message) { _ in }
+        conversation.insert(message) { @Sendable _ in }
         if includeWebLink, let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
-            conversation.insertText("No ForkRoad? Vote here: \(url.absoluteString)") { _ in }
+            conversation.insertText("No ForkRoad? Vote here: \(url.absoluteString)") { @Sendable _ in }
         }
         collapse()
     }
@@ -101,7 +101,7 @@ final class MessagesState {
         guard let conversation = controller?.activeConversation else { return }
         let message = MSMessage(session: conversation.selectedMessage?.session ?? MSSession())
         configure(message, session: session, tally: tally, memberCount: memberCount)
-        conversation.send(message) { _ in }
+        conversation.send(message) { @Sendable _ in }
     }
 
     private func configure(_ message: MSMessage, session: GroupSession, tally: Tally, memberCount: Int = 0) {
