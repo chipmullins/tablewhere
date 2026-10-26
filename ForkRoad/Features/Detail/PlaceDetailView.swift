@@ -55,7 +55,7 @@ struct PlaceDetailView: View {
                         refresh += 1
                     }
 
-                    ActionTile(title: "Block", systemImage: "nosign", background: Theme.surface) {
+                    ActionTile(title: "Blacklist", systemImage: "nosign", background: Theme.surface) {
                         showBlockOptions = true
                     }
                 }
@@ -86,7 +86,7 @@ struct PlaceDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .task { await loadLookAround() }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
-        .confirmationDialog("Hide from your picks?", isPresented: $showBlockOptions, titleVisibility: .visible) {
+        .confirmationDialog("Add to your blacklist?", isPresented: $showBlockOptions, titleVisibility: .visible) {
             Button("Just \(place.name)", role: .destructive) {
                 actions.block(place)
                 dismiss()

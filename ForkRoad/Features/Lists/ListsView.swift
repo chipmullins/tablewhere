@@ -6,7 +6,7 @@ import PickerCore
 struct ListsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case interested = "Interested"
-        case blocked = "Blocked"
+        case blocked = "Blacklisted"
         var id: Self { self }
     }
 
@@ -44,7 +44,7 @@ struct ListsView: View {
     private func label(for tab: Tab) -> String {
         switch tab {
         case .interested: return "Interested · \(saved.count)"
-        case .blocked: return "Blocked · \(blockedPlaces.count + blockedCategories.count)"
+        case .blocked: return "Blacklisted · \(blockedPlaces.count + blockedCategories.count)"
         }
     }
 
@@ -89,7 +89,7 @@ struct ListsView: View {
     @ViewBuilder
     private var blockedSections: some View {
         if blockedPlaces.isEmpty && blockedCategories.isEmpty {
-            Text("Nothing blocked. Blocked places and categories never come up in Discover or spins.")
+            Text("Nothing blacklisted. Blacklisted places and categories never come up in Discover or spins.")
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)
         }
@@ -108,7 +108,7 @@ struct ListsView: View {
             }
         }
         if !blockedPlaces.isEmpty || !blockedCategories.isEmpty {
-            Text("Swipe left to unblock.")
+            Text("Swipe left to remove from the blacklist.")
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.muted)
                 .listRowBackground(Color.clear)

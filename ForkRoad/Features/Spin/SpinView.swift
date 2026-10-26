@@ -101,7 +101,7 @@ struct SpinView: View {
             model.spinSource == .nearby ? "Within \(model.radiusLabel)" : "From your saved places",
             model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
             "\(count) in the wheel",
-            blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blocked",
+            blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
             model.excludeFastFood ? "No fast food" : nil,
             "No repeats this week"
         ]
