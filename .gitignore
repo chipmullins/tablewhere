@@ -12,7 +12,6 @@ MessagesExtension/ForkRoadMessages.entitlements
 # Your Firebase project config (download from the Firebase console)
 Config/GoogleService-Info.plist
 web/public/firebase-config.js
-web/.firebaserc
 web/.firebase/
 
 # Build output
