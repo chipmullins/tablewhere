@@ -5,6 +5,8 @@ import PickerCore
 /// toggles it. Used on Discover, Spin, and trips.
 struct CuisineChips: View {
     @Binding var selection: Set<CuisineFilter>
+    /// Optional dietary row (vegetarian / vegan / gluten-free), shown under the cuisines.
+    var diet: Binding<DietFilter>? = nil
     var showsFastFoodToggle = true
     @State private var bumpedLimit = 0
 
@@ -23,6 +25,21 @@ struct CuisineChips: View {
                 .padding(.horizontal, 16)
             }
             .padding(.horizontal, -16)
+
+            if let diet {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(DietFilter.specific) { option in
+                            Chip(label: option.label, isSelected: diet.wrappedValue == option) {
+                                diet.wrappedValue = diet.wrappedValue == option ? .none : option
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.horizontal, -16)
+                .accessibilityLabel("Dietary filter")
+            }
 
             if selection.count > 1 {
                 Text("Mixing \(CuisineFilter.summary(of: selection)) · up to \(CuisineFilter.maxSelection)")

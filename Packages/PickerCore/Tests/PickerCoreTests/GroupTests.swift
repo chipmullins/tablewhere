@@ -71,6 +71,13 @@ final class GroupTests: XCTestCase {
         XCTAssertFalse(CuisineFilter.specific.contains(.all))
     }
 
+    func testDietQueries() {
+        XCTAssertEqual(DietFilter.none.query(for: .mexican), "Mexican restaurant")
+        XCTAssertEqual(DietFilter.vegan.query(for: .mexican), "vegan Mexican restaurant")
+        XCTAssertEqual(DietFilter.glutenFree.query(for: .all), "gluten free restaurant")
+        XCTAssertFalse(DietFilter.specific.contains(.none))
+    }
+
     func testSessionCodableRoundTrip() throws {
         let session = GroupSession(id: "s", title: "Friday dinner", joinCode: "K7Q4MZ",
                                    createdBy: "u1", createdByName: "Chip", mode: .vote,

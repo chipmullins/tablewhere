@@ -7,7 +7,8 @@ import PickerCore
 protocol PlaceSearching: Sendable {
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
-                cuisine: CuisineFilter) async throws -> [Place]
+                cuisine: CuisineFilter,
+                diet: DietFilter) async throws -> [Place]
 
     /// Free-text search ("Sora Ramen", "tacos", "brunch") around a point.
     func search(text: String,
@@ -16,20 +17,28 @@ protocol PlaceSearching: Sendable {
 }
 
 extension PlaceSearching {
-    /// Searches several cuisines at once and merges the results (nearest first).
-    /// An empty selection means "All".
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
-                cuisines: Set<CuisineFilter>) async throws -> [Place] {
+                cuisine: CuisineFilter) async throws -> [Place] {
+        try await search(near: center, radiusMeters: radiusMeters, cuisine: cuisine, diet: .none)
+    }
+
+    /// Searches several cuisines at once and merges the results (nearest first).
+    /// An empty selection means "All". The diet applies to every cuisine.
+    func search(near center: CLLocationCoordinate2D,
+                radiusMeters: Double,
+                cuisines: Set<CuisineFilter>,
+                diet: DietFilter = .none) async throws -> [Place] {
         let list = CuisineFilter.ordered(cuisines)
         if list.count == 1 {
-            return try await search(near: center, radiusMeters: radiusMeters, cuisine: list[0])
+            return try await search(near: center, radiusMeters: radiusMeters, cuisine: list[0], diet: diet)
         }
         let batches = try await withThrowingTaskGroup(of: (Int, [Place]?).self) { group in
             for (index, cuisine) in list.enumerated() {
                 group.addTask {
                     // One cuisine failing shouldn't sink the others.
-                    let places = try? await self.search(near: center, radiusMeters: radiusMeters, cuisine: cuisine)
+                    let places = try? await self.search(near: center, radiusMeters: radiusMeters,
+                                                        cuisine: cuisine, diet: diet)
                     return (index, places)
                 }
             }
@@ -59,9 +68,10 @@ struct MapKitPlaceSearch: PlaceSearching {
 
     func search(near center: CLLocationCoordinate2D,
                 radiusMeters: Double,
-                cuisine: CuisineFilter) async throws -> [Place] {
-        try await run(query: cuisine.query, center: center, radiusMeters: radiusMeters,
-                      cuisine: cuisine, trimToRadius: true)
+                cuisine: CuisineFilter,
+                diet: DietFilter) async throws -> [Place] {
+        try await run(query: diet.query(for: cuisine), center: center, radiusMeters: radiusMeters,
+                      cuisine: cuisine, diet: diet, trimToRadius: true)
     }
 
     func search(text: String,
@@ -70,13 +80,14 @@ struct MapKitPlaceSearch: PlaceSearching {
         // A name search shouldn't miss a place just outside the circle,
         // so results aren't trimmed to the radius (MapKit still favors the area).
         try await run(query: text, center: center, radiusMeters: radiusMeters,
-                      cuisine: .all, trimToRadius: false)
+                      cuisine: .all, diet: .none, trimToRadius: false)
     }
 
     private func run(query: String,
                      center: CLLocationCoordinate2D,
                      radiusMeters: Double,
                      cuisine: CuisineFilter,
+                     diet: DietFilter,
                      trimToRadius: Bool) async throws -> [Place] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
@@ -102,7 +113,7 @@ struct MapKitPlaceSearch: PlaceSearching {
                 if trimToRadius && distance > radiusMeters { return nil }
                 return Place(
                     name: name,
-                    category: Self.categoryName(for: item, cuisine: cuisine),
+                    category: Self.categoryName(for: item, cuisine: cuisine, diet: diet),
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude,
                     distanceMeters: distance,
@@ -117,8 +128,9 @@ struct MapKitPlaceSearch: PlaceSearching {
 
     /// MapKit has no cuisine data, so when a cuisine chip is active we use its
     /// name; otherwise we fall back to MapKit's broad category.
-    private static func categoryName(for item: MKMapItem, cuisine: CuisineFilter) -> String {
+    private static func categoryName(for item: MKMapItem, cuisine: CuisineFilter, diet: DietFilter) -> String {
         if cuisine != .all { return cuisine.label }
+        if diet != .none { return diet.label }
         switch item.pointOfInterestCategory {
         case .cafe?: return "Café"
         case .bakery?: return "Bakery"

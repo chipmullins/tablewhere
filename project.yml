@@ -26,8 +26,8 @@ settingGroups:
   common:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "4"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: ""
@@ -65,7 +65,10 @@ targets:
         product: FirebaseAuth
       - package: Firebase
         product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseMessaging
       - target: ForkRoadMessages
+      - target: ForkRoadWidgets
     info:
       path: ForkRoad/Info.plist
       properties:
@@ -75,8 +78,10 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIUserInterfaceStyle: Dark
         UIBackgroundModes: [remote-notification]
+        CFBundleURLTypes:
+          - CFBundleURLName: com.chipmullins.forkroad
+            CFBundleURLSchemes: [forkroad]
         UIAppFonts: &appFonts
           - Outfit-SemiBold.ttf
           - Outfit-Bold.ttf
@@ -137,6 +142,33 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chipmullins.forkroad.messages
         ASSETCATALOG_COMPILER_APPICON_NAME: iMessage App Icon
+
+  ForkRoadWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ForkRoadWidgets
+      - path: Shared/UI
+      - path: Shared/Support
+      - path: Shared/Fonts
+      - path: Shared/Resources
+    dependencies:
+      - package: PickerCore
+    info:
+      path: ForkRoadWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: ForkRoad
+        UIAppFonts: *appFonts
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: ForkRoadWidgets/ForkRoadWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.chipmullins.forkroad]
+    settings:
+      groups: [common]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chipmullins.forkroad.widgets
 
 schemes:
   ForkRoad:

@@ -3,6 +3,7 @@ import PickerCore
 
 /// Group tab: start a pick, join with a code, or reopen a recent one.
 struct GroupHomeView: View {
+    @Environment(AppModel.self) private var model
     @State private var path: [String] = []
     @State private var showCreate = false
     @State private var showNamePrompt = false
@@ -16,6 +17,12 @@ struct GroupHomeView: View {
 
     var body: some View {
         NavigationStack(path: $path) { content }
+            // Open a group from a notification or link.
+            .onChange(of: model.pendingGroupSessionID, initial: true) {
+                guard let id = model.pendingGroupSessionID else { return }
+                model.pendingGroupSessionID = nil
+                if path.last != id { path = [id] }
+            }
     }
 
     private var content: some View {
@@ -51,6 +58,7 @@ struct GroupHomeView: View {
                 showCreate = false
                 recentIDs = SharedCache.recentSessionIDs()
                 path.append(session.id)
+                Task { await PushTokens.requestGroupAlerts() }
             }
         }
         // Continue only after the name sheet has fully closed; opening the
@@ -85,7 +93,7 @@ struct GroupHomeView: View {
             HStack(spacing: 14) {
                 Image(systemName: "person.2.fill")
                     .font(Theme.body(20, .semibold))
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
                     .frame(width: 48, height: 48)
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
@@ -170,6 +178,7 @@ struct GroupHomeView: View {
                 do {
                     let session = try await GroupService.shared.findSession(joinCode: joinCode)
                     try await GroupService.shared.join(sessionID: session.id, displayName: name)
+                    await PushTokens.requestGroupAlerts()
                     joinCode = ""
                     recentIDs = SharedCache.recentSessionIDs()
                     path.append(session.id)

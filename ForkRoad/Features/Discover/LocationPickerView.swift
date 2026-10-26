@@ -85,7 +85,7 @@ struct LocationPickerView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(Theme.body(17, .semibold))
-                .foregroundStyle(Theme.saffron)
+                .foregroundStyle(Theme.accentText)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
@@ -95,7 +95,7 @@ struct LocationPickerView: View {
             }
             Spacer()
             if selected {
-                Image(systemName: "checkmark").font(Theme.body(15, .bold)).foregroundStyle(Theme.saffron)
+                Image(systemName: "checkmark").font(Theme.body(15, .bold)).foregroundStyle(Theme.accentText)
             }
         }
         .contentShape(Rectangle())

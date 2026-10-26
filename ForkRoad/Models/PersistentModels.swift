@@ -43,6 +43,8 @@ final class SavedPlace {
     var city: String = ""
     /// Still on the list, but never picked by a spin (e.g. a favorite you're tired of for now).
     var skipInSpins: Bool = false
+    /// Your own note, like "get the spicy miso" or "cash only".
+    var note: String = ""
     var placeID: String = ""
     var name: String = ""
     var category: String = ""
@@ -115,5 +117,43 @@ final class SpinRecord {
     init(placeID: String) {
         self.placeID = placeID
         spunAt = .now
+    }
+}
+
+/// A place you got directions to. A while later ForkRoad asks "How was it?"
+/// and uses the answer to keep your lists accurate.
+@Model
+final class Visit {
+    var visitID: String = UUID().uuidString
+    var placeID: String = ""
+    var name: String = ""
+    var category: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var phoneNumber: String?
+    var websiteURL: URL?
+    var address: String?
+    var startedAt: Date = Date()
+    /// Set once the user answers (or dismisses) "How was it?".
+    var answeredAt: Date?
+    /// "loved", "fine", "never", or "skipped".
+    var answer: String = ""
+
+    init(place: Place) {
+        visitID = UUID().uuidString
+        placeID = place.id
+        name = place.name
+        category = place.category
+        latitude = place.latitude
+        longitude = place.longitude
+        phoneNumber = place.phoneNumber
+        websiteURL = place.websiteURL
+        address = place.address
+        startedAt = .now
+    }
+
+    var place: Place {
+        Place(id: placeID, name: name, category: category, latitude: latitude, longitude: longitude,
+              distanceMeters: 0, phoneNumber: phoneNumber, websiteURL: websiteURL, address: address)
     }
 }

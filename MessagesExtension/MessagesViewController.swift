@@ -21,7 +21,6 @@ final class MessagesViewController: MSMessagesAppViewController {
         let root = AnyView(
             MessagesRootView(state: state)
                 .font(Theme.body(15))
-                .preferredColorScheme(.dark)
                 .tint(Theme.saffron)
         )
         let host = UIHostingController(rootView: root)

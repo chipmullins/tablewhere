@@ -78,7 +78,7 @@ struct NewVoteView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "fork.knife")
                         .font(Theme.body(18, .bold))
-                        .foregroundStyle(Theme.saffron)
+                        .foregroundStyle(Theme.accentText)
                         .frame(width: 44, height: 44)
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
@@ -144,11 +144,11 @@ struct NewVoteView: View {
                         else if selected.count < maxOptions { selected.append(place) }
                     } label: {
                         HStack(spacing: 12) {
-                            MonogramTile(name: place.name, size: 34)
+                            MonogramTile(name: place.name, category: place.category, size: 34)
                             Text(place.name).foregroundStyle(Theme.text)
                             Spacer()
                             Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(isOn ? Theme.saffron : Theme.muted.opacity(0.5))
+                                .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
                         }
                     }
                     .disabled(!isOn && selected.count >= maxOptions)
@@ -206,7 +206,7 @@ struct MessageVoteView: View {
                         Spacer()
                         Button("New vote") { state.showNewVote() }
                             .font(Theme.body(13, .semibold))
-                            .foregroundStyle(Theme.saffron)
+                            .foregroundStyle(Theme.accentText)
                     }
 
                     if let winner = session.winner {

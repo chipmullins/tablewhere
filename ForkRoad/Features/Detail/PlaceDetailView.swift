@@ -37,14 +37,15 @@ struct PlaceDetailView: View {
                 .padding(.horizontal, 16)
 
                 HStack(spacing: 8) {
-                    ActionTile(title: "Call", systemImage: "phone", tint: Theme.saffron, background: Theme.surface) {
+                    ActionTile(title: "Call", systemImage: "phone", tint: Theme.accentText, background: Theme.surface) {
                         if let url = PlaceLinks.phoneURL(place) { openURL(url) }
                     }
                     .disabled(place.phoneNumber == nil)
                     .opacity(place.phoneNumber == nil ? 0.4 : 1)
 
-                    ActionTile(title: "Go", systemImage: "location.north.line", tint: Theme.saffron, background: Theme.surface) {
+                    ActionTile(title: "Go", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
                         PlaceLinks.openDirections(place)
+                        VisitFollowUp.record(place, in: context)
                     }
 
                     ActionTile(title: "Favorite",
@@ -88,6 +89,9 @@ struct PlaceDetailView: View {
                     .padding(14)
                     .card()
                     .padding(.horizontal, 16)
+
+                    NoteField(placeID: place.id)
+                        .padding(.horizontal, 16)
                 }
 
                 menuButton.padding(.horizontal, 16)
@@ -170,7 +174,7 @@ struct PlaceDetailView: View {
                 Image(systemName: "arrow.up.right").foregroundStyle(Theme.muted)
             }
             .padding(14)
-            .background(Color(hex: 0x1A1710), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
         }
         .buttonStyle(.plain)
@@ -181,5 +185,43 @@ struct PlaceDetailView: View {
     private func loadLookAround() async {
         let request = MKLookAroundSceneRequest(coordinate: place.coordinate)
         lookAround = try? await request.scene
+    }
+}
+
+/// Your own note on a saved place ("get the spicy miso", "cash only").
+private struct NoteField: View {
+    let placeID: String
+    @Query private var matches: [SavedPlace]
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    init(placeID: String) {
+        self.placeID = placeID
+        _matches = Query(filter: #Predicate<SavedPlace> { $0.placeID == placeID })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Your note", systemImage: "note.text")
+                .font(Theme.body(13, .semibold))
+                .foregroundStyle(Theme.muted)
+            TextField("Get the spicy miso, cash only…", text: $text, axis: .vertical)
+                .font(Theme.body(15))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1...5)
+                .focused($focused)
+                .onChange(of: focused) { if !focused { save() } }
+                .onSubmit(save)
+        }
+        .padding(14)
+        .card()
+        .onAppear { text = matches.first?.note ?? "" }
+        .onDisappear(perform: save)
+    }
+
+    private func save() {
+        guard let item = matches.first else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if item.note != trimmed { item.note = trimmed }
     }
 }

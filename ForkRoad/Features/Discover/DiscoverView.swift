@@ -9,6 +9,7 @@ struct DiscoverView: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
     @State private var showLocationPicker = false
+    @State private var showSettings = false
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
 
@@ -56,7 +57,7 @@ struct DiscoverView: View {
                     SectionLabel(text: model.isUsingCurrentLocation ? "Near you" : "Searching near")
                     HStack(spacing: 6) {
                         Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
-                            .foregroundStyle(Theme.saffron)
+                            .foregroundStyle(Theme.accentText)
                         Text(model.locationName)
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
@@ -72,13 +73,25 @@ struct DiscoverView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Searching near \(model.locationName). Change location")
             Spacer()
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(Theme.hairline))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
         .padding(.top, 8)
         .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
+        .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
     private var cuisineChips: some View {
-        CuisineChips(selection: Binding(get: { model.cuisines }, set: { model.cuisines = $0 }))
+        CuisineChips(selection: Binding(get: { model.cuisines }, set: { model.cuisines = $0 }),
+                     diet: Binding(get: { model.diet }, set: { model.diet = $0 }))
     }
 
     private var spinBanner: some View {
@@ -118,12 +131,23 @@ struct DiscoverView: View {
             if model.isLoading { ProgressView().tint(Theme.muted) }
         }
 
-        if let error = model.errorMessage {
-            Text(error).font(Theme.body(14)).foregroundStyle(Theme.danger)
-        } else if visiblePlaces.isEmpty && !model.isLoading {
-            Text("Nothing found within \(model.radiusLabel). Try a bigger radius.")
-                .font(Theme.body(14))
-                .foregroundStyle(Theme.muted)
+        if model.location.isDenied && model.isUsingCurrentLocation {
+            StateCard(icon: "location.slash",
+                      title: "Location is off",
+                      message: "Pick a city to search, or turn on location for ForkRoad in iPhone Settings.",
+                      action: ("Pick a city", { showLocationPicker = true }))
+        } else if model.errorMessage != nil && visiblePlaces.isEmpty {
+            StateCard(icon: "wifi.slash",
+                      title: "Can’t reach Apple Maps",
+                      message: "Check your connection and try again.",
+                      action: ("Try again", { Task { await model.search() } }))
+        } else if !model.hasSearched || (model.isLoading && visiblePlaces.isEmpty) {
+            ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
+        } else if visiblePlaces.isEmpty {
+            StateCard(icon: "fork.knife",
+                      title: "Nothing nearby yet",
+                      message: "No matches within \(model.radiusLabel). Try a bigger radius or fewer filters.",
+                      action: model.radiusMiles < 10 ? ("Search 10 mi", { model.radiusMiles = 10 }) : nil)
         }
 
         LazyVStack(spacing: 10) {
@@ -154,15 +178,5 @@ struct NoFastFoodChip: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(model.excludeFastFood ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: model.excludeFastFood)
-    }
-}
-
-/// Saffron icon, regular text.
-private struct TintedIconLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 6) {
-            configuration.icon.foregroundStyle(Theme.saffron)
-            configuration.title
-        }
     }
 }

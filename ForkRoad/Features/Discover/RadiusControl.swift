@@ -16,7 +16,7 @@ struct RadiusControl: View {
                 Spacer()
                 Text(model.radiusLabel)
                     .font(Theme.display(22))
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
                     .contentTransition(.numericText())
                     .animation(.snappy, value: model.radiusMiles)
             }

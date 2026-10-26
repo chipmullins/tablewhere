@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#0B0B0F"/>
+  <g transform="translate(100 100) scale(0.88) translate(-100 -102.0)">
+  <path d="M68.0 60 L68.0 96 C68.0 109.2 96.5 109.2 96.5 120 L103.5 120 C103.5 109.2 132.0 109.2 132.0 96 L132.0 60 L120.5 60 L120.5 88 A3.0 3.0 0 0 1 114.5 88 L114.5 60 L103.0 60 L103.0 88 A3.0 3.0 0 0 1 97.0 88 L97.0 60 L85.5 60 L85.5 88 A3.0 3.0 0 0 1 79.5 88 L79.5 60 Z" fill="#FFB23F"/>
+  <path d="M73.75 60 L73.75 62 Q73.75 46.425 67.75 39.75" stroke="#FFB23F" stroke-width="11.5" stroke-linecap="round" fill="none"/>
+  <path d="M91.25 60 L91.25 39.75" stroke="#FFB23F" stroke-width="11.5" stroke-linecap="round" fill="none"/>
+  <path d="M108.75 60 L108.75 39.75" stroke="#FFB23F" stroke-width="11.5" stroke-linecap="round" fill="none"/>
+  <path d="M126.25 60 L126.25 62 Q126.25 46.425 132.25 39.75" stroke="#FFB23F" stroke-width="11.5" stroke-linecap="round" fill="none"/>
+  <path d="M96.5 119 L103.5 119 L103.5 126 C103.5 138 108.5 140 108.5 150 L108.5 161.5 A8.5 8.5 0 0 1 91.5 161.5 L91.5 150 C91.5 140 96.5 138 96.5 126 Z" fill="#FFB23F"/>
+  <path d="M73.75 91 L73.75 62 Q73.75 47.125 68.05 40.75" stroke="#1B1306" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="4.5 5.5" fill="none"/>
+  <path d="M91.25 91 L91.25 40.75" stroke="#1B1306" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="4.5 5.5" fill="none"/>
+  <path d="M108.75 91 L108.75 40.75" stroke="#1B1306" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="4.5 5.5" fill="none"/>
+  <path d="M126.25 91 L126.25 62 Q126.25 47.125 131.95 40.75" stroke="#1B1306" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="4.5 5.5" fill="none"/>
+  <path d="M100 148 L100 164" stroke="#1B1306" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="4.5 5.5"/>
+  </g>
+</svg>

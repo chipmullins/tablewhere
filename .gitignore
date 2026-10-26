@@ -27,3 +27,7 @@ xcuserdata/
 
 # macOS
 .DS_Store
+ForkRoadWidgets/Info.plist
+ForkRoadWidgets/ForkRoadWidgets.entitlements
+web/functions/node_modules/
+web/functions/lib/

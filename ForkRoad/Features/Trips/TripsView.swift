@@ -38,9 +38,9 @@ struct TripsView: View {
                         NavigationLink(value: trip) {
                             HStack(spacing: 12) {
                                 Image(systemName: "suitcase.fill")
-                                    .foregroundStyle(Color(hex: 0x8FB4FF))
+                                    .foregroundStyle(Theme.trip)
                                     .frame(width: 44, height: 44)
-                                    .background(Color(hex: 0x1B2433), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .background(Theme.tripSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(trip.name).font(Theme.body(16, .semibold))
                                     Text("\((trip.places ?? []).count) spots saved")

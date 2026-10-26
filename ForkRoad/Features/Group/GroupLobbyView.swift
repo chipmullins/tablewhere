@@ -8,6 +8,7 @@ struct GroupLobbyView: View {
     let sessionID: String
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
     @State private var live: LiveSession
     @State private var showAddPlace = false
     @State private var browserURL: URL?
@@ -143,10 +144,10 @@ struct GroupLobbyView: View {
                 Label(remaining > 0 ? "Closes in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Voting closed",
                       systemImage: "timer")
                     .font(Theme.body(13, .bold))
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
-                    .background(Color(hex: 0x221C12), in: Capsule())
+                    .background(Theme.accentSoft, in: Capsule())
             }
         }
 
@@ -193,15 +194,16 @@ struct GroupLobbyView: View {
                    detail: session.mode == .vote ? "\(count) of \(live.tally.totalVotes) votes · \(winner.category)" : "Picked by the spin · \(winner.category)")
 
         HStack(spacing: 8) {
-            ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.saffron, background: Theme.surface) {
+            ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
                 PlaceLinks.openDirections(winner.place)
+                VisitFollowUp.record(winner.place, in: context)
             }
-            ActionTile(title: "Call", systemImage: "phone", tint: Theme.saffron, background: Theme.surface) {
+            ActionTile(title: "Call", systemImage: "phone", tint: Theme.accentText, background: Theme.surface) {
                 if let url = PlaceLinks.phoneURL(winner.place) { openURL(url) }
             }
             .disabled(winner.phoneNumber == nil)
             .opacity(winner.phoneNumber == nil ? 0.4 : 1)
-            ActionTile(title: "Menu", systemImage: "menucard", tint: Theme.saffron, background: Theme.surface) {
+            ActionTile(title: "Menu", systemImage: "menucard", tint: Theme.accentText, background: Theme.surface) {
                 browserURL = winner.place.websiteURL
             }
             .disabled(winner.websiteURL == nil)
@@ -370,14 +372,14 @@ private struct AddOptionView: View {
                 ForEach(candidates) { place in
                     Button { add(place) } label: {
                         HStack(spacing: 12) {
-                            MonogramTile(name: place.name, size: 36)
+                            MonogramTile(name: place.name, category: place.category, size: 36)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(place.name).foregroundStyle(Theme.text)
                                 Text("\(place.category) · \(place.distanceLabel)")
                                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
                             }
                             Spacer()
-                            Image(systemName: "plus.circle").foregroundStyle(Theme.saffron)
+                            Image(systemName: "plus.circle").foregroundStyle(Theme.accentText)
                         }
                     }
                 }

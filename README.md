@@ -6,14 +6,20 @@ Built with SwiftUI, SwiftData + CloudKit, MapKit, and Firebase. iOS 17+. Type is
 
 ## Features
 
-- **Discover:** search restaurants by name or craving, plus a live map with your search radius (0.5 to 10 mi), multi-select cuisine filters (mix up to 4), and a "No fast food" toggle
-- **Spin:** a slot-machine pick from Nearby, Favorites, or Interested that skips blacklisted places and avoids repeats from the past week
-- **Restaurant screen:** Look Around, call, directions, menu and hours (their website, in the app), save, block
-- **Lists:** Favorites (places you love), Interested (places to try), and Blacklisted (one place or a whole category). Any saved place can be left out of spins while staying on its list. Saved places are grouped into metro areas (cities within about 25 miles join the biggest one), so the lists and spins show the area you're in, any other area, or all of them. Syncs with iCloud.
-- **Group picks:** vote or spin together, with a live tally, fair tie-breaks, a meeting time, and "send everyone the plan"
+- **Onboarding:** a short welcome that explains location before asking (or lets you pick a city instead) and asks your name for group votes
+- **Discover:** search restaurants by name or craving, a live map with your search radius (0.5 to 10 mi), multi-select cuisine filters (mix up to 4), dietary filters (vegetarian, vegan, gluten-free), and a "No fast food" toggle
+- **Spin:** a slot-machine pick from Nearby, Favorites, or Interested with a landing burst, skipping blacklisted places and repeats from the past week
+- **Restaurant screen:** Look Around, call, directions, menu and hours (their website, in the app), Favorite, Try, Blacklist, and your own notes
+- **Lists:** Favorites (places you love), Interested (places to try), and Blacklisted (one place or a whole category). Any saved place can be left out of spins while staying on its list. Saved places are grouped into metro areas (cities within about 25 miles join the biggest one), so lists and spins show the area you're in, any other area, or all of them. Syncs with iCloud.
+- **"How was it?":** after you get directions somewhere, ForkRoad asks how it went (in the app and with a quiet notification). Loved it → Favorites, Never again → Blacklist.
+- **Group picks:** vote or spin together, with a live tally, fair tie-breaks, a meeting time, "send everyone the plan," and push alerts ("Maya voted," "It's decided")
 - **iMessage app:** start and vote on a dinner pick right in a group text
 - **Web voting:** friends without ForkRoad vote from a link in any browser
 - **Trips:** pick a city, browse its restaurants, and save spots for the trip
+- **Siri and Shortcuts:** "Pick dinner with ForkRoad" and "Spin ForkRoad"
+- **Widget:** "Tonight's Pick" on the Home Screen or Lock Screen, with a Spin again button
+- **Settings:** your name, search defaults, appearance (System, Light, Dark), notifications, clear spin history
+- **Looks:** dark and light mode, custom cuisine icons, Outfit and DM Sans type
 
 ## Run it
 
@@ -29,7 +35,7 @@ You need a Mac with a current version of Xcode.
    xcodegen generate
    open ForkRoad.xcodeproj
    ```
-3. Set signing for **both** targets (ForkRoad and ForkRoadMessages): **Signing & Capabilities** → Team.
+3. Set signing for **all three** targets (ForkRoad, ForkRoadMessages, ForkRoadWidgets): **Signing & Capabilities** → Team.
 4. Pick an iPhone simulator or your phone and press **Run**.
 
 The project file, Info.plists, and entitlements are generated from `project.yml`, so edit that instead of changing them in Xcode. Run `xcodegen generate` again after pulling changes.
@@ -60,6 +66,21 @@ Everything except group picks works without this, and the project builds without
 7. In `Shared/Support/AppConfig.swift`, set `webHost` to `<your-project-id>.web.app`.
 8. Run `xcodegen generate` again and rebuild.
 
+### Group push notifications (optional)
+
+"Maya voted" and "It's decided" alerts come from Cloud Functions in `web/functions/`.
+
+1. Upgrade the Firebase project to the **Blaze (pay-as-you-go) plan**. Cloud Functions require it, but the free monthly allowance covers light use, so this usually costs nothing. Set a budget alert in Google Cloud if you want peace of mind.
+2. In the Apple Developer site, create an **APNs Auth Key** (.p8). In Firebase console → **Project settings → Cloud Messaging → Apple app configuration**, upload it with its Key ID and your Team ID.
+3. Deploy:
+   ```sh
+   cd web/functions && npm install
+   cd .. && firebase deploy --only functions
+   ```
+4. Check delivery with `firebase functions:log`.
+
+Without this step, group picks still work. People just don't get alerts.
+
 ### How group picks work
 
 - Sessions live in Firestore (`sessions/{id}`, with `votes` and `members` subcollections). Everyone signs in anonymously, so there are no accounts.
@@ -89,8 +110,9 @@ Shared/                     Code and fonts compiled into both the app and the iM
   Support/                  App config, shared preferences and caches
   UI/                       Theme and shared components
 Packages/PickerCore/        Pure logic + tests: Place, randomizer, fast food, tally, join codes
-web/                        Firebase Hosting vote page and Firestore rules
-Design/                     Source artwork (app icon SVG)
+ForkRoadWidgets/            Home Screen and Lock Screen widget
+web/                        Firebase Hosting vote page, Firestore rules, Cloud Functions (pushes)
+Design/                     Source artwork (app icon SVG, plus an alternate fork icon)
 Licenses/                   Font licenses (SIL OFL)
 Config/                     Your GoogleService-Info.plist (not committed)
 ```
@@ -109,6 +131,9 @@ Config/                     Your GoogleService-Info.plist (not committed)
 - [x] Phase 3: Trips
 - [x] iCloud sync of lists and trips
 - [x] Outfit + DM Sans type
-- [ ] Light mode
-- [ ] Push notifications when a group pick is decided
+- [x] Push notifications for group picks
+- [x] Onboarding, settings, light mode, cuisine icons, spin animation
+- [x] Siri, Shortcuts, and a Home Screen widget
+- [x] "How was it?" follow-ups, notes, dietary filters
+- [ ] Hours and "Open now" (needs Google Places)
 - [ ] Universal links, so vote links open the app when it's installed

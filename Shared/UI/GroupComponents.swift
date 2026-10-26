@@ -60,7 +60,7 @@ struct VoteOptionRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                    MonogramTile(name: option.name, size: 44)
+                    MonogramTile(name: option.name, category: option.category, size: 44)
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(option.name)
@@ -85,14 +85,14 @@ struct VoteOptionRow: View {
                     Spacer(minLength: 0)
                     Text("\(votes)")
                         .font(Theme.display(22))
-                        .foregroundStyle(isLeading ? Theme.saffron : Theme.text)
+                        .foregroundStyle(isLeading ? Theme.accentText : Theme.text)
                         .contentTransition(.numericText())
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0x23232E))
+                        Capsule().fill(Theme.track)
                         Capsule()
-                            .fill(isLeading ? Theme.saffron : Color(hex: 0x5C5A66))
+                            .fill(isLeading ? Theme.saffron : Theme.trackFill)
                             .frame(width: geo.size.width * fraction)
                     }
                 }

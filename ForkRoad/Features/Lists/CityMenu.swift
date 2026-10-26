@@ -129,7 +129,7 @@ struct CityMenu: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: model.listCity == .all ? "globe.americas" : "mappin")
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
                 Text(title).lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(Theme.body(11, .bold))

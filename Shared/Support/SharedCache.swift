@@ -7,6 +7,8 @@ enum SharedCache {
     private static let nearbyKey = "cache.nearby"
     private static let interestedKey = "cache.interested"
     private static let favoritesKey = "cache.favorites"
+    private static let blockedKey = "cache.blockedIDs"
+    private static let blockedCategoriesKey = "cache.blockedCategories"
     private static let sessionsKey = "cache.recentSessions"
 
     static func saveNearby(_ places: [Place]) { save(Array(places.prefix(25)), key: nearbyKey) }
@@ -17,6 +19,21 @@ enum SharedCache {
 
     static func saveFavorites(_ places: [Place]) { save(places, key: favoritesKey) }
     static func loadFavorites() -> [Place] { load(key: favoritesKey) }
+
+    /// Blacklist, so the widget and Siri never suggest a blacklisted place.
+    static func saveBlocked(placeIDs: [String], categories: [String]) {
+        SharedDefaults.store.set(placeIDs, forKey: blockedKey)
+        SharedDefaults.store.set(categories, forKey: blockedCategoriesKey)
+    }
+
+    /// The widget/Siri rules: blacklist plus the "No fast food" setting.
+    static func pickRules() -> Randomizer.Rules {
+        Randomizer.Rules(
+            blockedPlaceIDs: Set(SharedDefaults.store.stringArray(forKey: blockedKey) ?? []),
+            blockedCategories: Set(SharedDefaults.store.stringArray(forKey: blockedCategoriesKey) ?? []),
+            excludeFastFood: Preferences.excludeFastFood
+        )
+    }
 
     // MARK: Recent group sessions (newest first)
 

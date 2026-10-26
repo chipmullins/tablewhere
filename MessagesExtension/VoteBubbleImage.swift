@@ -6,7 +6,9 @@ import PickerCore
 enum VoteBubbleImage {
     @MainActor
     static func render(session: GroupSession, tally: Tally) -> UIImage? {
-        let renderer = ImageRenderer(content: VoteBubbleCard(session: session, tally: tally))
+        // Always the dark ForkRoad look, whatever mode the phone is in.
+        let renderer = ImageRenderer(content: VoteBubbleCard(session: session, tally: tally)
+            .environment(\.colorScheme, .dark))
         renderer.scale = 3
         return renderer.uiImage
     }
@@ -27,7 +29,7 @@ private struct VoteBubbleCard: View {
                 Text(session.winner == nil ? "FORKROAD · VOTE" : "FORKROAD · DECIDED")
                     .font(Theme.body(11, .bold))
                     .tracking(0.8)
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
             }
 
             if let winner = session.winner {
@@ -47,15 +49,15 @@ private struct VoteBubbleCard: View {
                         HStack {
                             Text(option.name).lineLimit(1)
                             Spacer()
-                            Text("\(count)").foregroundStyle(leading ? Theme.saffron : Theme.muted)
+                            Text("\(count)").foregroundStyle(leading ? Theme.accentText : Theme.muted)
                         }
                         .font(Theme.body(13, .semibold))
                         .foregroundStyle(Theme.text)
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
-                                Capsule().fill(Color(hex: 0x2A2A34))
+                                Capsule().fill(Theme.track)
                                 Capsule()
-                                    .fill(leading ? Theme.saffron : Color(hex: 0x5C5A66))
+                                    .fill(leading ? Theme.saffron : Theme.trackFill)
                                     .frame(width: geo.size.width * CGFloat(count) / CGFloat(maxVotes))
                             }
                         }
@@ -71,6 +73,6 @@ private struct VoteBubbleCard: View {
         }
         .padding(16)
         .frame(width: 300, alignment: .leading)
-        .background(Color(hex: 0x1A1710))
+        .background(Theme.accentSoft)
     }
 }

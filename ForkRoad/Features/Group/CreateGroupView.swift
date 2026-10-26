@@ -115,7 +115,7 @@ struct CreateGroupView: View {
                         toggle(place)
                     } label: {
                         HStack(spacing: 12) {
-                            MonogramTile(name: place.name, size: 36)
+                            MonogramTile(name: place.name, category: place.category, size: 36)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(place.name).foregroundStyle(Theme.text)
                                 Text("\(place.category) · \(place.distanceLabel)")
@@ -125,7 +125,7 @@ struct CreateGroupView: View {
                             Spacer()
                             Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                                 .font(Theme.body(22))
-                                .foregroundStyle(isOn ? Theme.saffron : Theme.muted.opacity(0.5))
+                                .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
                         }
                     }
                     .disabled(!isOn && selected.count >= Self.maxOptions)

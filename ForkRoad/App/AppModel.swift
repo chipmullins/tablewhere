@@ -34,8 +34,25 @@ final class AppModel {
     var selectedTab: AppTab = .discover
     var spinSource: SpinSource = .nearby
 
-    var radiusMiles: Double = 2 {
-        didSet { if radiusMiles != oldValue { scheduleSearch() } }
+    /// Remembered between launches (also settable in Settings).
+    var radiusMiles: Double = AppModel.savedRadius {
+        didSet {
+            guard radiusMiles != oldValue else { return }
+            UserDefaults.standard.set(radiusMiles, forKey: "radiusMiles")
+            scheduleSearch()
+        }
+    }
+    private static var savedRadius: Double {
+        let value = UserDefaults.standard.double(forKey: "radiusMiles")
+        return value >= 0.5 ? value : 2
+    }
+    /// Vegetarian / vegan / gluten-free. Remembered between launches.
+    var diet: DietFilter = DietFilter(rawValue: UserDefaults.standard.string(forKey: "diet") ?? "") ?? .none {
+        didSet {
+            guard diet != oldValue else { return }
+            UserDefaults.standard.set(diet.rawValue, forKey: "diet")
+            scheduleSearch()
+        }
     }
     /// Selected cuisines. Empty means "All".
     var cuisines: Set<CuisineFilter> = [] {
@@ -49,6 +66,10 @@ final class AppModel {
     private(set) var places: [Place] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    /// True after the first search finishes (so empty states don't flash at launch).
+    private(set) var hasSearched = false
+    /// A group to open (from a notification or link); GroupHomeView pushes it.
+    var pendingGroupSessionID: String?
 
     /// The city you're searching in ("Lexington, KY"), looked up from `center`.
     private(set) var currentCity: String?
@@ -123,8 +144,14 @@ final class AppModel {
     /// Call once when the app appears. The first search runs when a location
     /// arrives (or we learn there won't be one), so fallback results don't flash first.
     func start() {
-        location.start()
-        if location.isDenied || chosenLocation != nil { scheduleSearch() }
+        // Before onboarding, don't trigger the permission prompt; onboarding asks
+        // with context (or the user picks a city instead).
+        let onboarded = UserDefaults.standard.bool(forKey: "didOnboard")
+        if onboarded && chosenLocation == nil { location.start() }
+        if !onboarded || location.isDenied || chosenLocation != nil
+            || location.authorization == .authorizedWhenInUse || location.authorization == .authorizedAlways {
+            scheduleSearch()
+        }
     }
 
     /// Searches restaurants by name or craving around the current area
@@ -157,7 +184,8 @@ final class AppModel {
             let results = try await searchService.search(
                 near: center,
                 radiusMeters: radiusMeters,
-                cuisines: cuisines
+                cuisines: cuisines,
+                diet: diet
             )
             guard generation == searchGeneration else { return }  // a newer search took over
             places = results
@@ -170,5 +198,6 @@ final class AppModel {
             }
         }
         isLoading = false
+        hasSearched = true
     }
 }

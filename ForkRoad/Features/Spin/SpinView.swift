@@ -19,6 +19,9 @@ struct SpinView: View {
     @State private var isSpinning = false
     @State private var winner: Place?
     @State private var showDetail = false
+    /// Increments each time a spin lands; drives the bounce and burst.
+    @State private var landCount = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var actions: ListActions { ListActions(context: context) }
 
@@ -66,7 +69,7 @@ struct SpinView: View {
                 .onChange(of: model.listCity) { reset() }
 
                 if model.spinSource == .nearby {
-                    CuisineChips(selection: $model.cuisines)
+                    CuisineChips(selection: $model.cuisines, diet: $model.diet)
                 } else {
                     HStack(spacing: 8) {
                         CityMenu(metros: saved.filter { $0.list == model.spinSource.savedList }.metros)
@@ -77,6 +80,13 @@ struct SpinView: View {
                 rulesSummary(count: pool.count)
 
                 reel(shown)
+                    .keyframeAnimator(initialValue: 1.0, trigger: landCount) { content, scale in
+                        content.scaleEffect(reduceMotion ? 1 : scale)
+                    } keyframes: { _ in
+                        SpringKeyframe(1.06, duration: 0.18, spring: .snappy)
+                        SpringKeyframe(1.0, duration: 0.35, spring: .bouncy)
+                    }
+                    .overlay { LandingBurst(trigger: landCount).allowsHitTesting(false) }
 
                 HStack {
                     Spacer()
@@ -86,12 +96,15 @@ struct SpinView: View {
 
                 if let winner, !isSpinning {
                     resultCard(winner)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .asymmetric(
+                            insertion: .modifier(active: FlipIn(angle: -70, opacity: 0),
+                                                 identity: FlipIn(angle: 0, opacity: 1)),
+                            removal: .opacity))
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
-            .animation(.spring(duration: 0.4), value: winner)
+            .animation(.spring(duration: 0.55, bounce: 0.35), value: winner)
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
@@ -143,7 +156,7 @@ struct SpinView: View {
             Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
             HStack(spacing: 12) {
                 if let current {
-                    MonogramTile(name: current.name, size: 40)
+                    MonogramTile(name: current.name, category: current.category, size: 40)
                     Text(current.name)
                         .font(Theme.display(24))
                         .foregroundStyle(Theme.text)
@@ -206,7 +219,7 @@ struct SpinView: View {
                 .foregroundStyle(Theme.onSaffron)
                 .frame(width: 104, height: 104)
                 .background(Theme.saffron, in: Circle())
-                .overlay(Circle().strokeBorder(Color(hex: 0x2A2214), lineWidth: 6))
+                .overlay(Circle().strokeBorder(Theme.saffron.opacity(0.25), lineWidth: 6))
                 .shadow(color: Theme.saffron.opacity(0.28), radius: 20, y: 12)
         }
         .buttonStyle(.plain)
@@ -217,7 +230,7 @@ struct SpinView: View {
 
     private func resultCard(_ place: Place) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(text: "Tonight’s pick", color: Theme.saffron)
+            SectionLabel(text: "Tonight’s pick", color: Theme.accentText)
             VStack(alignment: .leading, spacing: 4) {
                 Text(place.name).font(Theme.display(24)).foregroundStyle(Theme.text)
                 Text("\(place.category) · \(place.distanceLabel)")
@@ -231,16 +244,17 @@ struct SpinView: View {
                 .disabled(place.phoneNumber == nil)
                 ActionTile(title: "Go", systemImage: "location.north.line") {
                     PlaceLinks.openDirections(place)
+                    VisitFollowUp.record(place, in: context)
                 }
                 let onList = actions.list(for: place)
                 ActionTile(title: "Favorite",
                            systemImage: onList == .favorites ? "heart.fill" : "heart",
-                           tint: onList == .favorites ? Theme.saffron : Theme.text) {
+                           tint: onList == .favorites ? Theme.accentText : Theme.text) {
                     actions.toggle(place, in: .favorites)
                 }
                 ActionTile(title: "Try",
                            systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
-                           tint: onList == .interested ? Theme.saffron : Theme.text) {
+                           tint: onList == .interested ? Theme.accentText : Theme.text) {
                     actions.toggle(place, in: .interested)
                 }
                 ActionTile(title: "Nope", systemImage: "nosign") {
@@ -288,6 +302,7 @@ struct SpinView: View {
             }
             reelIndex = target
             winner = pick
+            landCount += 1
             isSpinning = false
             actions.recordSpin(pick)
         }
@@ -298,5 +313,58 @@ struct SpinView: View {
         reelIndex = 0
         winner = nil
         reelPool = []
+    }
+}
+
+/// The result card flips up into place.
+private struct FlipIn: ViewModifier {
+    let angle: Double
+    let opacity: Double
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(angle), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.6)
+            .opacity(opacity)
+    }
+}
+
+/// A quick saffron burst from the reel when a spin lands.
+private struct LandingBurst: View {
+    let trigger: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var startedAt: Date?
+    private let duration: TimeInterval = 0.8
+
+    var body: some View {
+        TimelineView(.animation(paused: startedAt == nil)) { timeline in
+            Canvas { context, size in
+                guard let startedAt else { return }
+                let t = timeline.date.timeIntervalSince(startedAt) / duration
+                guard t < 1 else { return }
+                let progress = CGFloat(1 - pow(1 - t, 3))  // ease out
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let count = 18
+                for i in 0..<count {
+                    let angle = Double(i) / Double(count) * 2 * .pi + Double(i % 3) * 0.17
+                    let distance = (60 + CGFloat(i % 4) * 22) * progress + 30
+                    let point = CGPoint(x: center.x + cos(angle) * distance * 1.6,
+                                        y: center.y + sin(angle) * distance * 0.8)
+                    let radius = (i % 3 == 0 ? 5.0 : 3.5) * (1 - progress * 0.6)
+                    let color = i % 4 == 0 ? Color.white : Color(hex: 0xFFB23F)
+                    context.opacity = Double(1 - progress)
+                    context.fill(Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius,
+                                                        width: radius * 2, height: radius * 2)),
+                                 with: .color(color))
+                }
+            }
+        }
+        .onChange(of: trigger) {
+            guard !reduceMotion else { return }
+            startedAt = .now
+            Task {
+                try? await Task.sleep(for: .seconds(duration))
+                startedAt = nil
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

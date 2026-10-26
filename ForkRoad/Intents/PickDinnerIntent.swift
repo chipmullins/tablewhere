@@ -1,0 +1,67 @@
+import AppIntents
+import Foundation
+import PickerCore
+
+/// Which saved list Siri picks from.
+enum DinnerSource: String, AppEnum {
+    case favorites, wantToTry, nearby
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "List"
+    static var caseDisplayRepresentations: [DinnerSource: DisplayRepresentation] = [
+        .favorites: "Favorites",
+        .wantToTry: "Want to Try",
+        .nearby: "Nearby"
+    ]
+
+    func load() -> [Place] {
+        switch self {
+        case .favorites: return SharedCache.loadFavorites()
+        case .wantToTry: return SharedCache.loadInterested()
+        case .nearby: return SharedCache.loadNearby()
+        }
+    }
+}
+
+/// "Pick dinner": answers with a random place from the shared caches without opening the app.
+struct PickDinnerIntent: AppIntent {
+    static var title: LocalizedStringResource = "Pick dinner"
+    static var description = IntentDescription(
+        "Picks a random restaurant from your Favorites, Want to Try, or nearby places."
+    )
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(
+        title: "From",
+        description: "Leave empty to try Favorites, then Want to Try, then Nearby."
+    )
+    var source: DinnerSource?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Pick dinner from \(\.$source)")
+    }
+
+    init() {}
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let rules = SharedCache.pickRules()
+        let order: [DinnerSource] = source.map { [$0] } ?? [.favorites, .wantToTry, .nearby]
+
+        for list in order {
+            if let place = Randomizer.pick(from: list.load(), rules: rules) {
+                return .result(dialog: "How about \(place.name)? It's \(place.category), \(place.distanceLabel) away.")
+            }
+        }
+
+        let message: String
+        if let source {
+            switch source {
+            case .favorites: message = "You don't have any Favorites to pick from yet. Open ForkRoad and save a few first."
+            case .wantToTry: message = "Your Want to Try list is empty. Open ForkRoad and add a few places first."
+            case .nearby: message = "I don't have any nearby places yet. Open ForkRoad first so it can find restaurants near you."
+            }
+        } else {
+            message = "I don't have any places yet. Open ForkRoad first so it can find restaurants near you."
+        }
+        return .result(dialog: "\(message)")
+    }
+}

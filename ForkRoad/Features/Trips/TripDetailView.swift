@@ -13,6 +13,7 @@ struct TripDetailView: View {
     @Query private var blockedCategories: [BlockedCategory]
 
     @State private var cuisines: Set<CuisineFilter> = []
+    @State private var diet: DietFilter = .none
     @State private var results: [Place] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -45,7 +46,7 @@ struct TripDetailView: View {
                                                                 longitudinalMeters: radiusMeters * 2.2))) {
                     ForEach(saved) { place in
                         Marker(place.name, systemImage: "suitcase.fill", coordinate: place.coordinate)
-                            .tint(Color(hex: 0x8FB4FF))
+                            .tint(Theme.trip)
                     }
                     ForEach(visibleResults.filter { !trip.contains($0) }) { place in
                         Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
@@ -72,7 +73,7 @@ struct TripDetailView: View {
                     }
                 }
 
-                CuisineChips(selection: $cuisines)
+                CuisineChips(selection: $cuisines, diet: $diet)
 
                 HStack {
                     Text("Worth the trip").font(Theme.display(22)).foregroundStyle(Theme.text)
@@ -92,7 +93,7 @@ struct TripDetailView: View {
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
-        .task(id: cuisines) { await load() }
+        .task(id: "\(cuisines.map(\.rawValue).sorted())|\(diet.rawValue)") { await load() }
         .alert("How about…", isPresented: Binding(get: { pick != nil }, set: { if !$0 { pick = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -104,7 +105,7 @@ struct TripDetailView: View {
         HStack(spacing: 12) {
             NavigationLink(value: place) {
                 HStack(spacing: 12) {
-                    MonogramTile(name: place.name, size: 50)
+                    MonogramTile(name: place.name, category: place.category, size: 50)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(place.name)
                             .font(Theme.body(15, .semibold))
@@ -122,11 +123,11 @@ struct TripDetailView: View {
             Button { toggle(place) } label: {
                 Text(isOnTrip ? "On trip" : "+ Trip")
                     .font(Theme.body(13, .bold))
-                    .foregroundStyle(isOnTrip ? Color(hex: 0x8FB4FF) : Theme.text)
+                    .foregroundStyle(isOnTrip ? Theme.trip : Theme.text)
                     .padding(.horizontal, 12)
                     .frame(height: 40)
-                    .background(isOnTrip ? Color(hex: 0x1B2433) : .clear, in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isOnTrip ? Color(hex: 0x8FB4FF) : Theme.muted.opacity(0.4)))
+                    .background(isOnTrip ? Theme.tripSoft : .clear, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isOnTrip ? Theme.trip : Theme.muted.opacity(0.4)))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isOnTrip ? "Remove \(place.name) from trip" : "Add \(place.name) to trip")
@@ -150,7 +151,7 @@ struct TripDetailView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let found = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisines: cuisines)
+            let found = try await search.search(near: trip.coordinate, radiusMeters: radiusMeters, cuisines: cuisines, diet: diet)
             // A newer cuisine selection may have replaced this search.
             guard !Task.isCancelled else { return }
             results = found

@@ -98,12 +98,26 @@ final class GroupService {
 
     func join(sessionID: String, displayName: String) async throws {
         let uid = try await userID()
-        try await sessionRef(sessionID).collection("members").document(uid).setData([
+        var data: [String: Any] = [
             "id": uid,
             "name": displayName,
             "joinedAt": FieldValue.serverTimestamp()
-        ])
+        ]
+        // The app saves this device's push token here (also readable by the iMessage extension).
+        if let token = SharedDefaults.store.string(forKey: "fcmToken") { data["fcmToken"] = token }
+        // Merge, so joining again never wipes a saved push token.
+        try await sessionRef(sessionID).collection("members").document(uid).setData(data, merge: true)
         SharedCache.rememberSession(sessionID)
+    }
+
+    /// Saves a new push token on every group this device is in, so the server
+    /// can notify it ("Maya voted", "It's decided").
+    func updatePushToken(_ token: String) async {
+        guard let uid = try? await userID() else { return }
+        for sessionID in SharedCache.recentSessionIDs() {
+            try? await sessionRef(sessionID).collection("members").document(uid)
+                .setData(["fcmToken": token], merge: true)
+        }
     }
 
     // MARK: Taking part
@@ -157,6 +171,11 @@ final class GroupService {
 
     func setMeetTime(sessionID: String, date: Date) async throws {
         _ = try await userID()
-        try await sessionRef(sessionID).updateData(["meetTime": Timestamp(date: date)])
+        // The label ("7:00 PM") is formatted here because the server doesn't
+        // know anyone's time zone; it's used in the "Meet at…" push.
+        try await sessionRef(sessionID).updateData([
+            "meetTime": Timestamp(date: date),
+            "meetTimeLabel": date.formatted(date: .omitted, time: .shortened)
+        ])
     }
 }

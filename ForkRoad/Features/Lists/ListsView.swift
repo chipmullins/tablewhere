@@ -104,7 +104,7 @@ struct ListsView: View {
                     .foregroundStyle(Theme.muted)
                 Button("Show all areas") { model.listCity = .all }
                     .font(Theme.body(15, .semibold))
-                    .foregroundStyle(Theme.saffron)
+                    .foregroundStyle(Theme.accentText)
             }
             .listRowBackground(Color.clear)
         } else {
@@ -168,13 +168,19 @@ struct ListsView: View {
         ForEach(rows) { item in
             NavigationLink(value: item.asPlace(from: model.center)) {
                 HStack(spacing: 12) {
-                    MonogramTile(name: item.name, size: 44)
+                    MonogramTile(name: item.name, category: item.category, size: 44)
                         .opacity(item.skipInSpins ? 0.45 : 1)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(Theme.body(16, .semibold))
                         Text(item.skipInSpins ? "\(item.category) · left out of spins" : item.category)
                             .font(Theme.body(13))
                             .foregroundStyle(Theme.muted)
+                        if !item.note.isEmpty {
+                            Label(item.note, systemImage: "note.text")
+                                .font(Theme.body(12))
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer(minLength: 0)
                     if item.skipInSpins {
@@ -190,7 +196,7 @@ struct ListsView: View {
                        systemImage: item.skipInSpins ? "dice" : "pause.circle") {
                     item.skipInSpins.toggle()
                 }
-                .tint(Color(hex: 0x5C5A66))
+                .tint(Theme.trackFill)
             }
             .contextMenu {
                 Button(item.skipInSpins ? "Include in spins" : "Leave out of spins",
@@ -204,7 +210,7 @@ struct ListsView: View {
                         .tint(Theme.saffron)
                 } else {
                     Button("Try later", systemImage: "bookmark.fill") { actions.move(item, to: .interested) }
-                        .tint(Color(hex: 0x5C5A66))
+                        .tint(Theme.trackFill)
                 }
             }
         }

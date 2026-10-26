@@ -16,7 +16,8 @@ enum ForkRoadStore {
         BlockedCategory.self,
         SpinRecord.self,
         Trip.self,
-        TripPlace.self
+        TripPlace.self,
+        Visit.self
     ])
 
     static let container: ModelContainer = {
