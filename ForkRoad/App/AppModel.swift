@@ -52,17 +52,8 @@ final class AppModel {
 
     /// The city you're searching in ("Lexington, KY"), looked up from `center`.
     private(set) var currentCity: String?
-    /// Which city the Favorites/Interested lists (and spins from them) show.
+    /// Which metro area the Favorites/Interested lists (and spins from them) show.
     var listCity: CityFilter = .here
-
-    /// The city name the saved lists should be filtered to, or nil for all cities.
-    var effectiveListCity: String? {
-        switch listCity {
-        case .here: return currentCity
-        case .all: return nil
-        case .city(let name): return name
-        }
-    }
 
     let location = LocationManager()
 

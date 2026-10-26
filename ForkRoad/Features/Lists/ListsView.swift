@@ -66,8 +66,8 @@ struct ListsView: View {
 
     private func label(for tab: Tab) -> String {
         switch tab {
-        case .favorites: return "Favorites \(items(in: .favorites).inCity(model.effectiveListCity).count)"
-        case .interested: return "Interested \(items(in: .interested).inCity(model.effectiveListCity).count)"
+        case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center).count)"
+        case .interested: return "Interested \(items(in: .interested).filtered(by: model.listCity, near: model.center).count)"
         case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
         }
     }
@@ -77,12 +77,13 @@ struct ListsView: View {
     @ViewBuilder
     private func savedSections(_ list: SavedList) -> some View {
         let all = items(in: list)
-        let city = model.effectiveListCity
-        let rows = all.inCity(city)
+        let metros = all.metros
+        let rows = all.filtered(by: model.listCity, near: model.center)
+        let areaName = areaLabel(metros)
 
         if !all.isEmpty {
             Section {
-                CityMenu(cityCounts: all.cityCounts)
+                CityMenu(metros: metros)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .listRowBackground(Color.clear)
@@ -98,10 +99,10 @@ struct ListsView: View {
                 .listRowBackground(Color.clear)
         } else if rows.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("No \(list == .favorites ? "favorites" : "saved places") in \(city ?? "this city") yet.")
+                Text("No \(list == .favorites ? "favorites" : "saved places") \(areaName.map { "in \($0)" } ?? "around here") yet.")
                     .font(Theme.body(15))
                     .foregroundStyle(Theme.muted)
-                Button("Show all cities") { model.listCity = .all }
+                Button("Show all areas") { model.listCity = .all }
                     .font(Theme.body(15, .semibold))
                     .foregroundStyle(Theme.saffron)
             }
@@ -112,7 +113,7 @@ struct ListsView: View {
                     model.spinSource = SpinSource(list)
                     model.selectedTab = .spin
                 } label: {
-                    Label(spinTitle(list, city: city), systemImage: "dice")
+                    Label(spinTitle(list, area: areaName), systemImage: "dice")
                         .font(Theme.display(17))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 50)
@@ -120,13 +121,13 @@ struct ListsView: View {
                 .listRowBackground(Theme.saffron)
             }
 
-            if city == nil {
-                // All cities: one section per city, like a drop-down per city.
-                ForEach(rows.groupedByCity, id: \.city) { group in
+            if model.listCity == .all {
+                // All areas: one section per metro area.
+                ForEach(metros) { metro in
                     Section {
-                        savedRows(group.items, list: list)
+                        savedRows(metro.items, list: list)
                     } header: {
-                        Text("\(group.city) · \(group.items.count)")
+                        Text("\(metro.label) · \(metro.items.count)")
                     }
                     .listRowBackground(Theme.surface)
                 }
@@ -147,10 +148,19 @@ struct ListsView: View {
         }
     }
 
-    private func spinTitle(_ list: SavedList, city: String?) -> String {
+    private func spinTitle(_ list: SavedList, area: String?) -> String {
         let base = list == .favorites ? "Spin my favorites" : "Spin something new"
-        guard let city, let short = city.split(separator: ",").first else { return base }
+        guard let area, let short = area.split(separator: ",").first else { return base }
         return "\(base) in \(short)"
+    }
+
+    /// Name of the metro the filter points at, or nil for "All areas" / nowhere.
+    private func areaLabel(_ metros: [Metro]) -> String? {
+        switch model.listCity {
+        case .all: return nil
+        case .metro(let name): return metros.first { $0.name == name }?.label ?? name
+        case .here: return metros.first { $0.contains(model.center) }?.label ?? model.currentCity
+        }
     }
 
     @ViewBuilder
