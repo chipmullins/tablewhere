@@ -52,6 +52,8 @@ struct VoteOptionRow: View {
     let totalSlots: Int
     let voters: [String]
     let isMine: Bool
+    /// False in spin mode, where nobody votes: hides the count and bar.
+    var showsVotes: Bool = true
     let isLeading: Bool
     let isEnabled: Bool
     let action: () -> Void
@@ -67,7 +69,15 @@ struct VoteOptionRow: View {
                                 .font(Theme.body(16, .semibold))
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
-                            if isLeading {
+                            if isMine && showsVotes {
+                                Text("YOUR VOTE")
+                                    .font(Theme.body(10, .heavy))
+                                    .tracking(0.6)
+                                    .foregroundStyle(Theme.accentText)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
+                            } else if isLeading {
                                 Text("LEADING")
                                     .font(Theme.body(10, .heavy))
                                     .tracking(0.6)
@@ -83,12 +93,14 @@ struct VoteOptionRow: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    Text("\(votes)")
-                        .font(Theme.display(22))
-                        .foregroundStyle(isLeading ? Theme.accentText : Theme.text)
-                        .contentTransition(.numericText())
+                    if showsVotes {
+                        Text("\(votes)")
+                            .font(Theme.display(22))
+                            .foregroundStyle(isLeading ? Theme.accentText : Theme.text)
+                            .contentTransition(.numericText())
+                    }
                 }
-                GeometryReader { geo in
+                if showsVotes { GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Theme.track)
                         Capsule()
@@ -96,7 +108,7 @@ struct VoteOptionRow: View {
                             .frame(width: geo.size.width * fraction)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 8) }
             }
             .padding(14)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))

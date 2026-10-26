@@ -188,6 +188,8 @@ struct MessageVoteView: View {
     @State private var live: LiveSession
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var showAdd = false
+    @State private var confirmEnd = false
 
     init(sessionID: String, state: MessagesState) {
         self.sessionID = sessionID
@@ -232,10 +234,20 @@ struct MessageVoteView: View {
                                           voters: tally.votersByOption[option.id] ?? [],
                                           isMine: live.myVote == option.id,
                                           isLeading: tally.leader == option.id,
-                                          isEnabled: !isWorking) {
+                                          isEnabled: !isWorking && session.mode == .vote,
+                                showsVotes: session.mode == .vote) {
                                 vote(option, session: session)
                             }
                         }
+                        Button { state.expand(); showAdd = true } label: {
+                            Label(session.mode == .spin ? "Add your pick" : "Suggest a place", systemImage: "plus.circle.fill")
+                                .font(Theme.body(15, .bold))
+                                .foregroundStyle(Theme.accentText)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(session.options.count >= 12)
                         if live.isOwner {
                             Button { lockIn(session) } label: {
                                 Text("Lock it in")
@@ -245,14 +257,24 @@ struct MessageVoteView: View {
                                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .disabled(isWorking || tally.totalVotes == 0)
+                            .disabled(isWorking || (session.mode == .vote && tally.totalVotes == 0))
                         }
                     }
+                    Button(live.isOwner ? "End group for everyone" : "Leave group", role: .destructive) {
+                        if live.isOwner { confirmEnd = true } else { leave() }
+                    }
+                    .font(Theme.body(13, .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     if let errorMessage {
                         Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
                     }
-                } else if let error = live.errorMessage {
-                    Text(error).foregroundStyle(Theme.danger)
+                } else if live.errorMessage != nil {
+                    Text("This group pick has ended.")
+                        .font(Theme.body(15, .semibold))
+                        .foregroundStyle(Theme.muted)
+                    Button("Start a new vote") { state.showNewVote() }
+                        .font(Theme.body(15, .bold))
+                        .foregroundStyle(Theme.accentText)
                 } else {
                     ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 30)
                 }
@@ -268,10 +290,42 @@ struct MessageVoteView: View {
         .onChange(of: live.session?.status) {
             if live.session?.status == .decided { state.expand() }
         }
+        .sheet(isPresented: $showAdd) {
+            if let session = live.session { MessageAddPlaceView(session: session) }
+        }
+        .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
+            Button("End for everyone", role: .destructive) { end() }
+        }
+    }
+
+    private func end() {
+        guard let session = live.session else { return }
+        Task {
+            do {
+                live.stop()
+                try await GroupService.shared.endSession(session)
+                state.showNewVote()
+            } catch {
+                errorMessage = error.localizedDescription
+                await live.start()
+            }
+        }
+    }
+
+    private func leave() {
+        Task {
+            do {
+                try await GroupService.shared.leaveSession(sessionID)
+                state.showNewVote()
+            } catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private func vote(_ option: GroupOption, session: GroupSession) {
-        guard let name = Identity.displayName else { return }
+        guard let name = Identity.displayName else {
+            errorMessage = "Open ForkRoad and add your name to vote."
+            return
+        }
         if !state.isExpanded { state.expand() }
         isWorking = true
         Task {
@@ -309,5 +363,78 @@ struct MessageVoteView: View {
     private func directionsURL(_ option: GroupOption) -> URL? {
         let name = option.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         return URL(string: "https://maps.apple.com/?daddr=\(option.latitude),\(option.longitude)&q=\(name)")
+    }
+}
+
+/// Add a place to a vote from the iMessage app (your saved places and last nearby search).
+struct MessageAddPlaceView: View {
+    let session: GroupSession
+    @Environment(\.dismiss) private var dismiss
+    @State private var adding: String?
+    @State private var errorMessage: String?
+
+    private var candidates: [(String, [Place])] {
+        let taken = Set(session.options.map(\.id))
+        let rules = SharedCache.pickRules()
+        func clean(_ places: [Place]) -> [Place] {
+            Randomizer.eligible(places, rules: rules).filter { !taken.contains($0.id) }
+        }
+        let favorites = clean(SharedCache.loadFavorites())
+        let interested = clean(SharedCache.loadInterested())
+        let savedIDs = Set((favorites + interested).map(\.id))
+        let nearby = clean(SharedCache.loadNearby()).filter { !savedIDs.contains($0.id) }
+        return [("Favorites", favorites), ("Want to try", interested), ("Nearby", nearby)].filter { !$0.1.isEmpty }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
+                }
+                if candidates.isEmpty {
+                    Text("Open ForkRoad and look around nearby (or search) first. Places you see there show up here.")
+                        .foregroundStyle(Theme.muted)
+                        .listRowBackground(Color.clear)
+                }
+                ForEach(candidates, id: \.0) { group in
+                    Section(group.0) {
+                        ForEach(group.1) { place in
+                            Button { add(place) } label: {
+                                HStack(spacing: 12) {
+                                    MonogramTile(name: place.name, category: place.category, size: 34)
+                                    Text(place.name).foregroundStyle(Theme.text)
+                                    Spacer()
+                                    if adding == place.id { ProgressView() }
+                                    else { Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText) }
+                                }
+                            }
+                            .disabled(adding != nil)
+                        }
+                    }
+                    .listRowBackground(Theme.surface)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.night)
+            .navigationTitle("Add a place")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func add(_ place: Place) {
+        adding = place.id
+        Task {
+            defer { adding = nil }
+            do {
+                try await GroupService.shared.addOption(
+                    sessionID: session.id,
+                    option: GroupOption(place: place, addedBy: Identity.displayName ?? "Someone"))
+                dismiss()
+            } catch {
+                errorMessage = "Couldn’t add it. Voting may have closed, or the list is full."
+            }
+        }
     }
 }

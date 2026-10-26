@@ -11,7 +11,7 @@ enum GroupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "Group voting isn’t set up yet. Add Firebase (see the README)."
-        case .sessionNotFound: return "No group found with that code."
+        case .sessionNotFound: return "This group pick has ended or doesn’t exist."
         case .notOwner: return "Only the person who started this pick can lock it in."
         }
     }
@@ -167,6 +167,29 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         try await sessionRef(session.id).updateData(["status": GroupStatus.open.rawValue, "winnerID": FieldValue.delete()])
+    }
+
+    /// Ends a group for everyone: deletes its votes, members, join code, and the session.
+    func endSession(_ session: GroupSession) async throws {
+        let uid = try await userID()
+        guard session.isOwned(by: uid) else { throw GroupError.notOwner }
+        let ref = sessionRef(session.id)
+        for name in ["votes", "members"] {
+            let docs = try await ref.collection(name).getDocuments().documents
+            for doc in docs { try await doc.reference.delete() }
+        }
+        try? await joinCodeRef(session.joinCode).delete()
+        try await ref.delete()
+        SharedCache.forgetSession(session.id)
+    }
+
+    /// Leaves a group: removes your vote and membership, and forgets it on this device.
+    func leaveSession(_ sessionID: String) async throws {
+        let uid = try await userID()
+        let ref = sessionRef(sessionID)
+        try? await ref.collection("votes").document(uid).delete()
+        try await ref.collection("members").document(uid).delete()
+        SharedCache.forgetSession(sessionID)
     }
 
     func setMeetTime(sessionID: String, date: Date) async throws {

@@ -9,6 +9,9 @@ struct GroupLobbyView: View {
 
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmEnd = false
+    @State private var confirmLeave = false
     @State private var live: LiveSession
     @State private var showAddPlace = false
     @State private var browserURL: URL?
@@ -30,11 +33,12 @@ struct GroupLobbyView: View {
                     } else {
                         deciding(session)
                     }
-                    if let errorMessage {
-                        Text(errorMessage).font(Theme.body(14)).foregroundStyle(Theme.danger)
-                    }
-                } else if let error = live.errorMessage {
-                    Text(error).foregroundStyle(Theme.danger).padding(.top, 40)
+                } else if live.errorMessage != nil {
+                    StateCard(icon: "flag.checkered",
+                              title: "This group pick has ended",
+                              message: "The person who started it ended it, or it no longer exists.",
+                              action: ("Back to Group", { SharedCache.forgetSession(sessionID); dismiss() }))
+                        .padding(.top, 40)
                 } else {
                     ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 80)
                 }
@@ -44,6 +48,45 @@ struct GroupLobbyView: View {
         }
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let session = live.session {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if live.isOwner {
+                            Button("End group for everyone", systemImage: "xmark.circle", role: .destructive) {
+                                confirmEnd = true
+                            }
+                        } else {
+                            Button("Leave group", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                                confirmLeave = true
+                            }
+                        }
+                        if session.status == .decided && live.isOwner {
+                            Button("Reopen voting", systemImage: "arrow.uturn.backward") { reopen(session) }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Group options")
+                }
+            }
+        }
+        .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
+            Button("End for everyone", role: .destructive) { endGroup() }
+        } message: {
+            Text("Votes and the join code are deleted, and everyone’s told it has ended.")
+        }
+        .confirmationDialog("Leave this group pick?", isPresented: $confirmLeave, titleVisibility: .visible) {
+            Button("Leave", role: .destructive) { leaveGroup() }
+        } message: {
+            Text("Your vote is removed. You can rejoin with the code.")
+        }
+        .alert("Something went wrong", isPresented: Binding(get: { errorMessage != nil },
+                                                             set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .task { await live.start() }
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
@@ -153,6 +196,12 @@ struct GroupLobbyView: View {
 
         let tally = live.tally
         let slots = max(live.members.count, tally.totalVotes, 1)
+        Label(session.mode == .vote
+              ? (live.myVote == nil ? "Tap a place to cast your vote" : "Tap another place to change your vote")
+              : "Everyone adds places, then \(live.isOwner ? "you spin" : "\(session.createdByName) spins")",
+              systemImage: session.mode == .vote ? "hand.tap" : "dice")
+            .font(Theme.body(14, .semibold))
+            .foregroundStyle(Theme.accentText)
         VStack(spacing: 10) {
             ForEach(session.options) { option in
                 VoteOptionRow(
@@ -162,7 +211,8 @@ struct GroupLobbyView: View {
                     voters: session.mode == .vote ? (tally.votersByOption[option.id] ?? []) : [],
                     isMine: live.myVote == option.id,
                     isLeading: session.mode == .vote && tally.leader == option.id,
-                    isEnabled: session.mode == .vote && !isWorking
+                    isEnabled: session.mode == .vote && !isWorking,
+                    showsVotes: session.mode == .vote
                 ) {
                     vote(for: option, in: session)
                 }
@@ -170,13 +220,15 @@ struct GroupLobbyView: View {
         }
 
         Button { showAddPlace = true } label: {
-            Label("Add a place", systemImage: "plus")
-                .font(Theme.body(14, .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5])).foregroundStyle(Theme.muted.opacity(0.4)))
+            Label(session.mode == .spin ? "Add your pick to the wheel" : "Suggest another place", systemImage: "plus.circle.fill")
+                .font(Theme.body(15, .bold))
+                .foregroundStyle(Theme.accentText)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
         }
         .buttonStyle(.plain)
+        .disabled(session.options.count >= 12)
 
         if session.mode == .vote {
             Label("If it ends in a tie, the app picks fairly between the tied places.", systemImage: "shuffle")
@@ -273,7 +325,10 @@ struct GroupLobbyView: View {
     // MARK: Actions
 
     private func vote(for option: GroupOption, in session: GroupSession) {
-        guard let name = Identity.displayName else { return }
+        guard let name = Identity.displayName else {
+            errorMessage = "Add your name in Settings so friends can see your vote."
+            return
+        }
         isWorking = true
         Task {
             defer { isWorking = false }
@@ -284,6 +339,38 @@ struct GroupLobbyView: View {
                     try await GroupService.shared.vote(sessionID: session.id, optionID: option.id, displayName: name)
                 }
             } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func endGroup() {
+        guard let session = live.session else { return }
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            do {
+                live.stop()
+                try await GroupService.shared.endSession(session)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+                await live.start()
+            }
+        }
+    }
+
+    private func leaveGroup() {
+        Task {
+            do {
+                try await GroupService.shared.leaveSession(sessionID)
+                dismiss()
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func reopen(_ session: GroupSession) {
+        Task {
+            do { try await GroupService.shared.reopen(session: session) }
+            catch { errorMessage = error.localizedDescription }
         }
     }
 
@@ -343,7 +430,8 @@ struct GroupLobbyView: View {
     }
 }
 
-/// Sheet for adding another place to an open session.
+/// Sheet for adding a place to an open session: search, or pick from your
+/// Favorites, Interested list, or what's nearby.
 private struct AddOptionView: View {
     let session: GroupSession
 
@@ -352,24 +440,63 @@ private struct AddOptionView: View {
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
+    @State private var query = ""
+    @State private var searchResults: [Place] = []
+    @State private var isSearching = false
     @State private var errorMessage: String?
+    @State private var adding: String?
 
-    private var candidates: [Place] {
-        let taken = Set(session.options.map(\.id))
-        let rules = model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
-        var seen = Set<String>()
-        let all = saved.map { $0.asPlace(from: model.center) } + model.places
-        return Randomizer.eligible(all, rules: rules)
-            .filter { !taken.contains($0.id) && seen.insert($0.id).inserted }
+    private var taken: Set<String> { Set(session.options.map(\.id)) }
+    private var rules: Randomizer.Rules {
+        model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
+    }
+    private func available(_ places: [Place]) -> [Place] {
+        Randomizer.eligible(places, rules: rules).filter { !taken.contains($0.id) }
+    }
+    private func savedPlaces(_ list: SavedList) -> [Place] {
+        available(saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) })
+    }
+    private var nearby: [Place] {
+        let savedIDs = Set(saved.map(\.placeID))
+        return available(model.places).filter { !savedIDs.contains($0.id) }
     }
 
     var body: some View {
         NavigationStack {
             List {
                 if let errorMessage {
-                    Text(errorMessage).foregroundStyle(Theme.danger)
+                    Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
                 }
-                ForEach(candidates) { place in
+                if query.trimmingCharacters(in: .whitespaces).count >= 2 {
+                    section(isSearching ? "Searching…" : "Results", available(searchResults))
+                } else {
+                    section("Your favorites", savedPlaces(.favorites))
+                    section("Want to try", savedPlaces(.interested))
+                    section("Nearby", nearby)
+                    if savedPlaces(.favorites).isEmpty && savedPlaces(.interested).isEmpty && nearby.isEmpty {
+                        Text("Search for a restaurant above.")
+                            .foregroundStyle(Theme.muted)
+                            .listRowBackground(Color.clear)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.night)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search restaurants")
+            .task(id: query) { await search() }
+            .navigationTitle(session.mode == .spin ? "Add your pick" : "Suggest a place")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationBackground(Theme.night)
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, _ places: [Place]) -> some View {
+        if !places.isEmpty {
+            Section(title) {
+                ForEach(places) { place in
                     Button { add(place) } label: {
                         HStack(spacing: 12) {
                             MonogramTile(name: place.name, category: place.category, size: 36)
@@ -379,28 +506,44 @@ private struct AddOptionView: View {
                                     .font(Theme.body(12)).foregroundStyle(Theme.muted)
                             }
                             Spacer()
-                            Image(systemName: "plus.circle").foregroundStyle(Theme.accentText)
+                            if adding == place.id {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText)
+                            }
                         }
                     }
+                    .disabled(adding != nil)
                 }
-                .listRowBackground(Theme.surface)
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.night)
-            .navigationTitle("Add a place")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .listRowBackground(Theme.surface)
         }
-        .presentationBackground(Theme.night)
+    }
+
+    private func search() async {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        guard text.count >= 2 else { searchResults = []; return }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+        isSearching = true
+        defer { isSearching = false }
+        if let found = try? await model.searchRestaurants(text), !Task.isCancelled {
+            searchResults = found
+        }
     }
 
     private func add(_ place: Place) {
         let name = Identity.displayName ?? "Someone"
+        adding = place.id
+        errorMessage = nil
         Task {
+            defer { adding = nil }
             do {
                 try await GroupService.shared.addOption(sessionID: session.id, option: GroupOption(place: place, addedBy: name))
                 dismiss()
-            } catch { errorMessage = error.localizedDescription }
+            } catch {
+                errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
+            }
         }
     }
 }

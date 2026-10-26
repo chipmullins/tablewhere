@@ -49,13 +49,23 @@ service cloud.firestore {
       // One vote per person, written only by that person, only while voting is open.
       match /votes/{userId} {
         allow read: if signedIn();
-        allow write: if signedIn() && request.auth.uid == userId && votingOpen(sessionId);
+        allow create, update: if signedIn() && request.auth.uid == userId && votingOpen(sessionId);
+        // Take back your own vote while voting's open; the creator can clear
+        // any vote when ending the group.
+        allow delete: if signedIn() && (
+          (request.auth.uid == userId && votingOpen(sessionId))
+          || session(sessionId).createdBy == request.auth.uid
+        );
       }
 
       // Members list: you can only add or edit yourself.
       match /members/{userId} {
         allow read: if signedIn();
-        allow write: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn() && request.auth.uid == userId;
+        // Leave a group yourself; the creator can remove everyone when ending it.
+        allow delete: if signedIn() && (
+          request.auth.uid == userId || session(sessionId).createdBy == request.auth.uid
+        );
       }
     }
 
