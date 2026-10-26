@@ -50,11 +50,11 @@ iCloud sync, the shared sign-in between the app and the iMessage extension, and 
 
 Everything except group picks works without this, and the project builds without it (you'll see a warning). It takes about 10 minutes and is free on Firebase's Spark plan.
 
-1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Add project** (e.g. `forkroad-app`). Analytics is optional.
-2. **Build → Authentication → Get started → Sign-in method →** enable **Anonymous**.
-3. **Build → Firestore Database → Create database →** production mode, pick a nearby region.
-4. **Project settings → Your apps → Add app → iOS.** Bundle ID: `com.chipmullins.forkroad`. Download **GoogleService-Info.plist** and put it in `Config/`. (It's ignored by Git.)
-5. **Add app → Web.** Copy the `firebaseConfig` it shows into `web/public/firebase-config.js` (start from `firebase-config.example.js`).
+1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Create a project** (e.g. `forkroad-app`). Analytics is optional. The free **Spark plan** is all you need here.
+2. **Turn on anonymous sign-in:** left sidebar → **Authentication** (also under **Security**) → **Get started** if shown → **Sign-in method** tab → **Anonymous** → **Enable** → **Save**.
+3. **Create the database:** left sidebar → **Databases & Storage → Firestore Database** → **Create database**. Pick the **Standard** edition if asked, a US location (can't be changed later), and **production mode**. ForkRoad's rules replace the defaults when you deploy in step 6.
+4. **Add the iPhone app:** **Project Overview → + Add app → Apple (iOS)**. Bundle ID: `com.chipmullins.forkroad`. Download **GoogleService-Info.plist** and put it in `Config/` (it's ignored by Git). Skip the "Add Firebase SDK" and "initialization code" steps; the app already does both.
+5. **Add the web app** (for the voting page): **Project Overview → + Add app → Web (`</>`)**. Copy the `firebaseConfig` it shows into `web/public/firebase-config.js` (start from `firebase-config.example.js`). You don't need Firebase Hosting setup from that screen; step 6 handles it.
 6. Deploy the web page and security rules:
    ```sh
    npm install -g firebase-tools
