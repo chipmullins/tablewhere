@@ -150,32 +150,17 @@ struct OnboardingView: View {
     }
 }
 
-/// The ForkRoad mark (fork whose tines split like roads), drawn in SwiftUI.
+/// The ForkRoad mark: the app icon (Design/AppIcon.svg), with icon-style corners.
 struct ForkMark: View {
     var body: some View {
-        Canvas { context, size in
-            let s = min(size.width, size.height) / 200
-            func line(_ build: (inout Path) -> Void, width: CGFloat, color: Color, dash: [CGFloat] = []) {
-                var path = Path()
-                build(&path)
-                let transform = CGAffineTransform(translationX: 20 * s, y: 12 * s).scaledBy(x: 0.8 * s, y: 0.8 * s)
-                context.stroke(path.applying(transform), with: .color(color),
-                               style: StrokeStyle(lineWidth: width * s * 0.8, lineCap: .round, dash: dash.map { $0 * s * 0.8 }))
-            }
-            context.fill(Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 45 * s),
-                         with: .color(Color(hex: 0x0B0B0F)))
-            let saffron = Color(hex: 0xFFB23F), ink = Color(hex: 0x1B1306)
-            line({ $0.move(to: CGPoint(x: 100, y: 122)); $0.addLine(to: CGPoint(x: 100, y: 178)) }, width: 30, color: saffron)
-            line({ $0.move(to: CGPoint(x: 100, y: 124)); $0.addLine(to: CGPoint(x: 100, y: 40)) }, width: 24, color: saffron)
-            line({ $0.move(to: CGPoint(x: 100, y: 124))
-                   $0.addCurve(to: CGPoint(x: 60, y: 48), control1: CGPoint(x: 100, y: 96), control2: CGPoint(x: 60, y: 88)) },
-                 width: 24, color: saffron)
-            line({ $0.move(to: CGPoint(x: 100, y: 124))
-                   $0.addCurve(to: CGPoint(x: 140, y: 48), control1: CGPoint(x: 100, y: 96), control2: CGPoint(x: 140, y: 88)) },
-                 width: 24, color: saffron)
-            line({ $0.move(to: CGPoint(x: 100, y: 172)); $0.addLine(to: CGPoint(x: 100, y: 128)) }, width: 3.5, color: ink, dash: [7, 8])
-            line({ $0.move(to: CGPoint(x: 100, y: 112)); $0.addLine(to: CGPoint(x: 100, y: 46)) }, width: 3, color: ink, dash: [6, 7])
+        GeometryReader { geo in
+            Image("ForkRoadLogo")
+                .resizable()
+                .interpolation(.high)
+                .clipShape(RoundedRectangle(cornerRadius: min(geo.size.width, geo.size.height) * 0.225,
+                                            style: .continuous))
         }
+        .aspectRatio(1, contentMode: .fit)
         .accessibilityLabel("ForkRoad logo")
     }
 }
