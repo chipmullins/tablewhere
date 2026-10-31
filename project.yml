@@ -30,7 +30,7 @@ settingGroups:
     CURRENT_PROJECT_VERSION: "15"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "4XK3F69URN"
     OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
     # The Firebase-config copy script reads Config/, outside the build sandbox.
     ENABLE_USER_SCRIPT_SANDBOXING: NO
