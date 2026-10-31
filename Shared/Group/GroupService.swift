@@ -11,6 +11,7 @@ enum GroupError: LocalizedError {
     case alreadyAdded
     case optionsFull
     case alreadyPicked
+    case closed
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +21,7 @@ enum GroupError: LocalizedError {
         case .alreadyAdded: return "That place is already in the vote."
         case .optionsFull: return "This pick already has 12 places, the most it can hold."
         case .alreadyPicked: return "You’ve already added your pick. Everyone gets one."
+        case .closed: return "This pick is locked in, so places can’t be added or changed."
         }
     }
 }
@@ -119,9 +121,19 @@ final class GroupService {
         ]
         // The app saves this device's push token here (also readable by the iMessage extension).
         if let token = SharedDefaults.store.string(forKey: "fcmToken") { data["fcmToken"] = token }
+        // Your blacklist, scrambled for this group, so blocked places can't win.
+        data["blockedHashes"] = GroupBlacklist.hashes(placeIDs: SharedCache.blockedPlaceIDs(), sessionID: sessionID)
         // Merge, so joining again never wipes a saved push token.
         try await sessionRef(sessionID).collection("members").document(uid).setData(data, merge: true)
         SharedCache.rememberSession(sessionID)
+    }
+
+    /// Re-shares your blacklist with a group you're already in (it may have
+    /// changed since you joined). Quietly does nothing if you're not a member.
+    func shareBlacklist(sessionID: String) async {
+        guard let uid = try? await userID() else { return }
+        let hashes = GroupBlacklist.hashes(placeIDs: SharedCache.blockedPlaceIDs(), sessionID: sessionID)
+        try? await sessionRef(sessionID).collection("members").document(uid).updateData(["blockedHashes": hashes])
     }
 
     /// Saves a new push token on every group this device is in, so the server
@@ -151,10 +163,11 @@ final class GroupService {
         try await sessionRef(sessionID).collection("votes").document(uid).delete()
     }
 
-    /// Adds a place unless it's already there, or this person has used their
-    /// pick. A transaction, so two people adding at once can't break the limits.
-    /// One pick each (creator too) in a spin; in a vote, the creator can add up
-    /// to 12 and everyone else can suggest one.
+    /// Adds a place, following the group's limits. One pick each (creator too)
+    /// in a spin; in a vote, the creator can add up to 12 and everyone else
+    /// can suggest one. If you've already used your pick, this swaps it for
+    /// the new place (in the same spot in the list). A transaction, so two
+    /// people adding at once can't break the limits.
     func addOption(sessionID: String, option: GroupOption) async throws {
         let uid = try await userID()
         let ref = sessionRef(sessionID)
@@ -167,14 +180,26 @@ final class GroupService {
             do {
                 let snapshot = try transaction.getDocument(ref)
                 guard snapshot.exists, let fields = snapshot.data() else { throw GroupError.sessionNotFound }
+                guard fields["status"] as? String == GroupStatus.open.rawValue else { throw GroupError.closed }
                 let existing = fields["options"] as? [[String: Any]] ?? []
                 let picks = fields["picksBy"] as? [String: String] ?? [:]
                 let isOwner = fields["createdBy"] as? String == uid
                 let isSpin = fields["mode"] as? String == GroupMode.spin.rawValue
                 let usesPick = isSpin || !isOwner
-                if usesPick && picks[uid] != nil { throw GroupError.alreadyPicked }
-                if existing.contains(where: { Self.isSamePlace($0, id: optionID, name: name, latitude: lat, longitude: lon) }) {
+                let oldPick = usesPick ? picks[uid] : nil
+
+                let others = existing.filter { oldPick == nil || $0["id"] as? String != oldPick }
+                if others.contains(where: { Self.isSamePlace($0, id: optionID, name: name, latitude: lat, longitude: lon) }) {
                     throw GroupError.alreadyAdded
+                }
+
+                if let oldPick, let index = existing.firstIndex(where: { $0["id"] as? String == oldPick }) {
+                    // Change my pick: replace it where it was (the rules check
+                    // that only your own pick was swapped).
+                    var options = existing
+                    options[index] = data
+                    transaction.updateData(["options": options, "picksBy.\(uid)": optionID], forDocument: ref)
+                    return nil
                 }
                 if existing.count >= GroupSession.maxOptions { throw GroupError.optionsFull }
                 var update: [String: Any] = ["options": FieldValue.arrayUnion([data])]
@@ -191,18 +216,11 @@ final class GroupService {
 
     /// Locks in the result. Votes: most votes wins, with a fair tie-break.
     /// Spin: a fair random pick among all options.
-    func decide(session: GroupSession, votes: [GroupVote]) async throws -> String? {
+    /// Places someone in the group blacklisted (`ruledOut`) can't win.
+    func decide(session: GroupSession, votes: [GroupVote], ruledOut: Set<String> = []) async throws -> String? {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
-        let winner: String?
-        switch session.mode {
-        case .vote:
-            winner = Tally(options: session.options, votes: votes).voteWinner(sessionID: session.id)
-                ?? Tally.spinWinner(options: session.options, sessionID: session.id)
-        case .spin:
-            winner = Tally.spinWinner(options: session.options, sessionID: session.id)
-        }
-        guard let winner else { return nil }
+        guard let winner = session.pickWinner(votes: votes, ruledOut: ruledOut) else { return nil }
         try await sessionRef(session.id).updateData(["status": GroupStatus.decided.rawValue, "winnerID": winner])
         return winner
     }

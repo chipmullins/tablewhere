@@ -222,6 +222,10 @@ struct MessageVoteView: View {
                     } else {
                         let tally = live.tally
                         let slots = max(live.members.count, tally.totalVotes, 1)
+                        let ruledOut = live.ruledOutIDs
+                        if session.mode == .spin {
+                            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
+                        }
                         ForEach(session.options) { option in
                             VoteOptionRow(option: option,
                                           votes: tally.count(for: option.id),
@@ -229,8 +233,9 @@ struct MessageVoteView: View {
                                           voters: tally.votersByOption[option.id] ?? [],
                                           isMine: live.myVote == option.id,
                                           isLeading: tally.leader == option.id,
-                                          isEnabled: !isWorking && session.mode == .vote,
-                                showsVotes: session.mode == .vote) {
+                                          isEnabled: !isWorking && session.mode == .vote && !ruledOut.contains(option.id),
+                                          showsVotes: session.mode == .vote,
+                                          isRuledOut: ruledOut.contains(option.id)) {
                                 vote(option, session: session)
                             }
                         }
@@ -280,7 +285,9 @@ struct MessageVoteView: View {
             if live.session?.status == .decided { state.expand() }
         }
         .sheet(isPresented: $showAdd) {
-            if let session = live.session { MessageAddPlaceView(session: session) }
+            if let session = live.session {
+                MessageAddPlaceView(session: session, groupBlockedHashes: live.groupBlockedHashes)
+            }
         }
         .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End for everyone", role: .destructive) { end() }
@@ -337,7 +344,8 @@ struct MessageVoteView: View {
         Task {
             defer { isWorking = false }
             do {
-                if let winnerID = try await GroupService.shared.decide(session: session, votes: live.votes) {
+                if let winnerID = try await GroupService.shared.decide(session: session, votes: live.votes,
+                                                                       ruledOut: live.ruledOutIDs) {
                     // Send right away (still part of the tap) rather than waiting
                     // for the listener, so Messages treats it as a user action.
                     var decided = session
@@ -358,11 +366,18 @@ struct MessageVoteView: View {
 /// Add a place to a vote from the iMessage app, with Discover's filters and search.
 struct MessageAddPlaceView: View {
     let session: GroupSession
+    var groupBlockedHashes: Set<String> = []
     @Environment(\.dismiss) private var dismiss
     @State private var adding: String?
     @State private var errorMessage: String?
     @State private var query = ""
     @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
+
+    /// You already picked, so choosing a place swaps it.
+    private var isChanging: Bool {
+        guard let uid = GroupService.shared.currentUserID else { return false }
+        return session.pick(of: uid) != nil && !(session.mode == .vote && session.isOwned(by: uid))
+    }
 
     var body: some View {
         NavigationStack {
@@ -372,6 +387,8 @@ struct MessageAddPlaceView: View {
                 }
                 MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
                                    excludedIDs: Set(session.options.map(\.id)),
+                                   groupBlockedHashes: groupBlockedHashes,
+                                   sessionID: session.id,
                                    accessory: { .add(isBusy: adding == $0.id) },
                                    isDisabled: { _ in adding != nil },
                                    onTap: add)
@@ -380,7 +397,7 @@ struct MessageAddPlaceView: View {
             .background(Theme.night)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants or cravings")
-            .navigationTitle("Add a place")
+            .navigationTitle(isChanging ? "Change your pick" : "Add a place")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
         }
@@ -410,6 +427,8 @@ struct MessagePlacePicker: View {
     let query: String
     let excludeFastFood: Bool
     var excludedIDs: Set<String> = []
+    var groupBlockedHashes: Set<String> = []
+    var sessionID: String?
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
     let onTap: (Place) -> Void
@@ -436,6 +455,8 @@ struct MessagePlacePicker: View {
             startingNearby: nearby,
             rules: rules,
             excludedIDs: excludedIDs,
+            groupBlockedHashes: groupBlockedHashes,
+            sessionID: sessionID,
             accessory: accessory,
             isDisabled: isDisabled,
             onTap: onTap

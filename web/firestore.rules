@@ -50,13 +50,37 @@ service cloud.firestore {
           && picksAfter[request.auth.uid] == after.options[before.options.size()].id;
       }
 
+      // Swap your one pick for a different place while it's open: exactly
+      // one place leaves (the one recorded as yours in picksBy) and exactly
+      // one new place of yours takes its spot.
+      function changesMyPick() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let picksBefore = before.get('picksBy', {});
+        let picksAfter = after.get('picksBy', {});
+        let removed = before.options.removeAll(after.options);
+        let added = after.options.removeAll(before.options);
+        return before.status == 'open'
+          && request.auth.uid in picksBefore
+          && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
+          && after.options.size() == before.options.size()
+          && removed.size() == 1
+          && added.size() == 1
+          && removed[0].id == picksBefore[request.auth.uid]
+          && added[0].get('addedByID', '') == request.auth.uid
+          && picksAfter.diff(picksBefore).affectedKeys().hasOnly([request.auth.uid])
+          && picksAfter[request.auth.uid] == added[0].id;
+      }
+
       // The creator can change anything (lock in, meeting time, reopen, and
       // add up to 12 places to a vote).
       // Everyone else gets ONE pick per group, while it's open: they add one
-      // place and record it under their own ID in picksBy. A second add fails.
+      // place and record it under their own ID in picksBy. A second add fails,
+      // but they can swap their pick for another place.
       allow update: if signedIn() && (
         resource.data.createdBy == request.auth.uid
         || addsMyOnePick()
+        || changesMyPick()
       );
 
       allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;

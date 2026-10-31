@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 // Group decisions (Phase 2). These types are plain Codable values with no
 // Firebase dependency, so the app, the iMessage extension, and the tests can
@@ -134,6 +135,61 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
 
     /// Most places a group can hold.
     public static let maxOptions = 12
+
+    // MARK: Group blacklist
+
+    /// Places someone in the group has blacklisted. They stay visible but
+    /// can't win; nobody is told who blocked them.
+    public func ruledOutIDs(members: [GroupMember]) -> Set<String> {
+        let blocked = Set(members.flatMap { $0.blockedHashes ?? [] })
+        guard !blocked.isEmpty else { return [] }
+        return Set(options.map(\.id).filter { blocked.contains(GroupBlacklist.hash(placeID: $0, sessionID: id)) })
+    }
+
+    /// The places that can win: everything not ruled out (or everything, if
+    /// the whole list is ruled out, so there's always an answer).
+    public func eligibleOptions(ruledOut: Set<String>) -> [GroupOption] {
+        let eligible = options.filter { !ruledOut.contains($0.id) }
+        return eligible.isEmpty ? options : eligible
+    }
+
+    /// The winner: most votes (fair tie-break) or a fair spin, skipping
+    /// ruled-out places. A vote with no votes falls back to a spin.
+    public func pickWinner(votes: [GroupVote], ruledOut: Set<String> = []) -> String? {
+        let eligible = eligibleOptions(ruledOut: ruledOut)
+        switch mode {
+        case .vote:
+            return Tally(options: eligible, votes: votes).voteWinner(sessionID: id)
+                ?? Tally.spinWinner(options: eligible, sessionID: id)
+        case .spin:
+            return Tally.spinWinner(options: eligible, sessionID: id)
+        }
+    }
+
+    // MARK: Spin progress
+
+    /// In a spin, the members who haven't added their pick yet.
+    public func waitingOnPicks(members: [GroupMember]) -> [GroupMember] {
+        guard mode == .spin else { return [] }
+        return members.filter { pick(of: $0.id) == nil }
+    }
+}
+
+/// Shares blacklists with a group without listing them in the open: each
+/// blacklisted place ID is hashed together with the session ID, so the same
+/// place looks different in every group. It keeps lists from being read at a
+/// glance; it isn't strong secrecy (someone could hash nearby places to guess).
+/// Must match `blockedHash` in web/public/app.js.
+public enum GroupBlacklist {
+    public static func hash(placeID: String, sessionID: String) -> String {
+        let digest = SHA256.hash(data: Data("\(sessionID)|\(placeID)".utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// A member's hashes for this group, capped so the document stays small.
+    public static func hashes(placeIDs: [String], sessionID: String, limit: Int = 300) -> [String] {
+        Array(placeIDs.prefix(limit)).map { hash(placeID: $0, sessionID: sessionID) }
+    }
 }
 
 /// One person's vote. Stored one per person, so voting again replaces it.
@@ -155,10 +211,14 @@ public struct GroupMember: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
     public var joinedAt: Date?
+    /// This person's blacklisted places, scrambled per group (see
+    /// `GroupBlacklist`). Nil for web voters and older app versions.
+    public var blockedHashes: [String]?
 
-    public init(id: String, name: String, joinedAt: Date? = nil) {
+    public init(id: String, name: String, joinedAt: Date? = nil, blockedHashes: [String]? = nil) {
         self.id = id
         self.name = name
         self.joinedAt = joinedAt
+        self.blockedHashes = blockedHashes
     }
 }

@@ -91,10 +91,14 @@ struct GroupLobbyView: View {
             Text(errorMessage ?? "")
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        .task { await live.start() }
+        .task {
+            await live.start()
+            // Your blacklist may have changed since you joined.
+            await GroupService.shared.shareBlacklist(sessionID: sessionID)
+        }
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
         .sheet(isPresented: $showAddPlace) {
-            if let session = live.session { AddOptionView(session: session) }
+            if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
         }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
         .sensoryFeedback(.success, trigger: live.session?.winnerID)
@@ -199,6 +203,10 @@ struct GroupLobbyView: View {
 
         let tally = live.tally
         let slots = max(live.members.count, tally.totalVotes, 1)
+        let ruledOut = live.ruledOutIDs
+        if session.mode == .spin {
+            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
+        }
         Label(session.mode == .vote
               ? (live.myVote == nil ? "Tap a place to cast your vote" : "Tap another place to change your vote")
               : "Everyone adds places, then \(live.isOwner ? "you spin" : "\(session.createdByName) spins")",
@@ -214,8 +222,9 @@ struct GroupLobbyView: View {
                     voters: session.mode == .vote ? (tally.votersByOption[option.id] ?? []) : [],
                     isMine: live.myVote == option.id,
                     isLeading: session.mode == .vote && tally.leader == option.id,
-                    isEnabled: session.mode == .vote && !isWorking,
-                    showsVotes: session.mode == .vote
+                    isEnabled: session.mode == .vote && !isWorking && !ruledOut.contains(option.id),
+                    showsVotes: session.mode == .vote,
+                    isRuledOut: ruledOut.contains(option.id)
                 ) {
                     vote(for: option, in: session)
                 }
@@ -465,7 +474,7 @@ struct GroupLobbyView: View {
         isWorking = true
         Task {
             defer { isWorking = false }
-            do { _ = try await GroupService.shared.decide(session: session, votes: live.votes) }
+            do { _ = try await GroupService.shared.decide(session: session, votes: live.votes, ruledOut: live.ruledOutIDs) }
             catch { errorMessage = error.localizedDescription }
         }
     }
@@ -493,7 +502,7 @@ struct GroupLobbyView: View {
         let wait = closesAt.timeIntervalSinceNow
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
         guard !Task.isCancelled, let current = live.session, current.status == .open else { return }
-        _ = try? await GroupService.shared.decide(session: current, votes: live.votes)
+        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs)
     }
 
     // MARK: Helpers
@@ -522,6 +531,7 @@ struct GroupLobbyView: View {
 /// Discover: radius, cuisines, diet, no fast food, and a name search.
 private struct AddOptionView: View {
     let session: GroupSession
+    var groupBlockedHashes: Set<String> = []
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -531,6 +541,12 @@ private struct AddOptionView: View {
     @State private var query = ""
     @State private var errorMessage: String?
     @State private var adding: String?
+
+    /// You already picked, so choosing a place swaps it.
+    private var isChanging: Bool {
+        guard let uid = GroupService.shared.currentUserID else { return false }
+        return session.pick(of: uid) != nil && !(session.mode == .vote && session.isOwned(by: uid))
+    }
 
     private func savedPlaces(_ list: SavedList) -> [Place] {
         saved.filter { $0.list == list && $0.isShareable }.map { $0.asPlace(from: model.center) }
@@ -551,6 +567,8 @@ private struct AddOptionView: View {
                     startingNearby: model.places,
                     rules: model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories),
                     excludedIDs: Set(session.options.map(\.id)),
+                    groupBlockedHashes: groupBlockedHashes,
+                    sessionID: session.id,
                     search: model.placeSearch,
                     accessory: { .add(isBusy: adding == $0.id) },
                     isDisabled: { _ in adding != nil },
@@ -561,7 +579,7 @@ private struct AddOptionView: View {
             .background(Theme.night)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants or cravings")
-            .navigationTitle(session.mode == .spin ? "Add your pick" : "Suggest a place")
+            .navigationTitle(isChanging ? "Change your pick" : (session.mode == .spin ? "Add your pick" : "Suggest a place"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
         }

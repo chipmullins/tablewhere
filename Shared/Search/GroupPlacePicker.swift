@@ -47,6 +47,10 @@ struct GroupPlacePicker: View {
     let rules: Randomizer.Rules
     /// Places already in the vote; hidden.
     var excludedIDs: Set<String> = []
+    /// The group's scrambled blacklists (and its session ID to scramble with):
+    /// places anyone in the group blacklisted are hidden.
+    var groupBlockedHashes: Set<String> = []
+    var sessionID: String?
     var search: PlaceSearching = MapKitPlaceSearch()
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
@@ -69,7 +73,12 @@ struct GroupPlacePicker: View {
     }
 
     private func available(_ places: [Place]) -> [Place] {
-        Randomizer.eligible(places, rules: rules).filter { !excludedIDs.contains($0.id) }
+        Randomizer.eligible(places, rules: rules).filter { place in
+            if excludedIDs.contains(place.id) { return false }
+            if let sessionID, !groupBlockedHashes.isEmpty,
+               groupBlockedHashes.contains(GroupBlacklist.hash(placeID: place.id, sessionID: sessionID)) { return false }
+            return true
+        }
     }
 
     /// Saved places have no cuisine data, so the chips match on name and category.
@@ -87,6 +96,10 @@ struct GroupPlacePicker: View {
                 .listRowBackground(Color.clear)
         } header: {
             Text(isTextSearch ? "Filters (apply when the search is cleared)" : "Filters")
+        } footer: {
+            if !groupBlockedHashes.isEmpty {
+                Text("Places anyone in the group has blacklisted are hidden.")
+            }
         }
         .task(id: current) { await loadNearby() }
         .task(id: trimmedQuery) { await runTextSearch() }

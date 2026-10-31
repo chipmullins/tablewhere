@@ -28,6 +28,15 @@ final class LiveSession {
 
     var tally: Tally { Tally(options: session?.options ?? [], votes: votes) }
 
+    /// Places someone in the group blacklisted (they can't win).
+    var ruledOutIDs: Set<String> { session?.ruledOutIDs(members: members) ?? [] }
+
+    /// Everyone's scrambled blacklists, to hide those places when adding.
+    var groupBlockedHashes: Set<String> { Set(members.flatMap { $0.blockedHashes ?? [] }) }
+
+    /// In a spin, who hasn't added their pick yet.
+    var waitingOnPicks: [GroupMember] { session?.waitingOnPicks(members: members) ?? [] }
+
     /// Names of members who haven't voted.
     var nonVoterNames: [String] {
         let voted = Set(votes.map(\.voterID))

@@ -56,6 +56,8 @@ struct VoteOptionRow: View {
     let isLeading: Bool
     let isEnabled: Bool
     var showsVotes: Bool = true
+    /// Someone in the group blacklisted it: shown, but it can't win.
+    var isRuledOut: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -77,6 +79,14 @@ struct VoteOptionRow: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
+                            } else if isRuledOut {
+                                Text("RULED OUT")
+                                    .font(Theme.body(10, .heavy))
+                                    .tracking(0.6)
+                                    .foregroundStyle(Theme.muted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Theme.track, in: RoundedRectangle(cornerRadius: 5))
                             } else if isLeading {
                                 Text("LEADING")
                                     .font(Theme.body(10, .heavy))
@@ -87,7 +97,8 @@ struct VoteOptionRow: View {
                                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 5))
                             }
                         }
-                        Text(voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : voters.joined(separator: ", "))
+                        Text(isRuledOut ? "Someone in the group blacklisted it, so it can’t win"
+                             : voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : voters.joined(separator: ", "))
                             .font(Theme.body(12))
                             .foregroundStyle(Theme.muted)
                             .lineLimit(1)
@@ -116,11 +127,12 @@ struct VoteOptionRow: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(isMine ? Theme.saffron : Theme.hairline, lineWidth: isMine ? 1.5 : 1)
             )
+            .opacity(isRuledOut ? 0.6 : 1)
             .animation(.snappy, value: votes)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .accessibilityLabel("\(option.name), \(votes) votes\(isMine ? ", your vote" : "")")
+        .accessibilityLabel("\(option.name), \(votes) votes\(isMine ? ", your vote" : "")\(isRuledOut ? ", ruled out" : "")")
     }
 
     private var fraction: CGFloat {
@@ -267,7 +279,8 @@ struct PlanNoteCard: View {
 
 /// "Add your pick" / "Suggest a place", following the group's limits: one
 /// place each in a spin (creator too); in a vote, the creator can add up to
-/// 12 and everyone else can suggest one. Once your pick is in, it says so.
+/// 12 and everyone else can suggest one. Once your pick is in, it shows it,
+/// with Change to swap it for another place.
 struct AddPlaceButton: View {
     let session: GroupSession
     let userID: String?
@@ -275,10 +288,22 @@ struct AddPlaceButton: View {
 
     var body: some View {
         if let userID, let mine = session.pick(of: userID), !(session.mode == .vote && session.isOwned(by: userID)) {
-            Label("Your pick: \(mine.name)", systemImage: "checkmark.circle.fill")
-                .font(Theme.body(14, .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 44)
+            HStack(spacing: 10) {
+                Label("Your pick: \(mine.name)", systemImage: "checkmark.circle.fill")
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if session.status == .open {
+                    Button("Change", action: action)
+                        .font(Theme.body(14, .bold))
+                        .foregroundStyle(Theme.accentText)
+                        .accessibilityLabel("Change your pick")
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         } else {
             let full = session.options.count >= GroupSession.maxOptions
             Button(action: action) {
@@ -301,5 +326,24 @@ struct AddPlaceButton: View {
             if let userID, session.isOwned(by: userID) { return "Add another place" }
             return "Suggest a place (one each)"
         }
+    }
+}
+
+/// "Waiting on picks from Amy, Ben" / "Everyone’s in", for a spin.
+struct SpinProgressLine: View {
+    let waiting: [GroupMember]
+    let memberCount: Int
+
+    var body: some View {
+        Label(text, systemImage: waiting.isEmpty ? "checkmark.circle.fill" : "hourglass")
+            .font(Theme.body(13, .semibold))
+            .foregroundStyle(waiting.isEmpty ? Theme.accentText : Theme.muted)
+    }
+
+    private var text: String {
+        if waiting.isEmpty { return memberCount > 1 ? "Everyone’s pick is in. Ready to spin!" : "Your pick is in. Invite friends to add theirs." }
+        let names = waiting.map(\.name)
+        let list = names.count <= 3 ? names.joined(separator: ", ") : "\(names.prefix(3).joined(separator: ", ")) + \(names.count - 3) more"
+        return "Waiting on picks from \(list)"
     }
 }

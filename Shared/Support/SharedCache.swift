@@ -61,6 +61,11 @@ enum SharedCache {
         SharedDefaults.store.set(categories, forKey: blockedCategoriesKey)
     }
 
+    /// Your blacklisted place IDs (shared, scrambled, with groups you join).
+    static func blockedPlaceIDs() -> [String] {
+        SharedDefaults.store.stringArray(forKey: blockedKey) ?? []
+    }
+
     /// The widget/Siri rules: blacklist plus the "No fast food" setting.
     static func pickRules() -> Randomizer.Rules {
         Randomizer.Rules(

@@ -39,6 +39,38 @@ function formatTime(ts) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+// ---------------------------------------------------------------------------
+// Group blacklist: app users share their blacklisted places, scrambled per
+// group (SHA-256 of "<sessionId>|<placeId>", first 8 bytes as hex; same as
+// GroupBlacklist.hash in the app). Places anyone blocked are "ruled out":
+// shown, but they can't win and can't be voted for or added.
+const hashCache = new Map();
+async function blockedHash(placeId) {
+  const key = `${sessionId}|${placeId}`;
+  if (!hashCache.has(key)) {
+    const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)));
+    hashCache.set(key, [...bytes.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join(""));
+  }
+  return hashCache.get(key);
+}
+function groupBlocked() {
+  return new Set(members.flatMap((m) => Array.isArray(m.blockedHashes) ? m.blockedHashes : []));
+}
+let ruledOut = new Set();
+async function refreshRuledOut() {
+  if (!globalThis.crypto?.subtle) return;  // only on https; the live page always is
+  const blocked = groupBlocked();
+  const next = new Set();
+  if (blocked.size && session) {
+    for (const o of session.options || []) {
+      if (blocked.has(await blockedHash(o.id))) next.add(o.id);
+    }
+  }
+  const changed = next.size !== ruledOut.size || [...next].some((id) => !ruledOut.has(id));
+  ruledOut = next;
+  if (changed) render();
+}
+
 const sessionId = (location.pathname.match(/^\/v\/([^/]+)/) || [])[1];
 if (!sessionId) {
   fail("This link is missing its vote ID. Ask whoever sent it to share it again.");
@@ -87,6 +119,7 @@ function start() {
     if (!snap.exists()) return fail("This vote doesn’t exist anymore.");
     session = snap.data();
     render();
+    refreshRuledOut();
   }, () => fail("Couldn’t load this vote."));
 
   onSnapshot(collection(sessionRef, "votes"), (snap) => {
@@ -97,6 +130,7 @@ function start() {
   onSnapshot(collection(sessionRef, "members"), (snap) => {
     members = snap.docs.map((d) => d.data());
     render();
+    refreshRuledOut();
   });
 
   $("name-form").addEventListener("submit", async (event) => {
@@ -162,7 +196,12 @@ function isSpin() { return session.mode === "spin"; }
 function statusText() {
   if (isSpin()) {
     const n = (session.options || []).length;
-    return `${members.length} in the group · ${n} place${n === 1 ? "" : "s"} in the wheel`;
+    const picks = session.picksBy || {};
+    const waiting = members.filter((m) => !picks[m.id] && !(session.options || []).some((o) => o.addedByID === m.id));
+    const names = waiting.map((m) => m.name);
+    const tail = !waiting.length ? "everyone’s pick is in"
+      : `waiting on picks from ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`;
+    return `${n} place${n === 1 ? "" : "s"} in the wheel · ${tail}`;
   }
   const waiting = Math.max(0, members.length - votes.length);
   let text = `${members.length} in the group · ` +
@@ -197,8 +236,9 @@ function renderVote() {
     const lead = t.leader === option.id;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "option" + (mine === option.id ? " mine" : "") + (lead ? " lead" : "");
-    button.disabled = busy;
+    const out = ruledOut.has(option.id);
+    button.className = "option" + (mine === option.id ? " mine" : "") + (lead && !out ? " lead" : "") + (out ? " ruled-out" : "");
+    button.disabled = busy || (out && mine !== option.id);
     button.setAttribute("aria-pressed", mine === option.id ? "true" : "false");
     button.setAttribute("aria-label", `${option.name}, ${count} vote${count === 1 ? "" : "s"}${mine === option.id ? ", your vote" : ""}`);
 
@@ -214,15 +254,16 @@ function renderVote() {
     const nameEl = document.createElement("div");
     nameEl.className = "name";
     nameEl.textContent = option.name;
-    if (lead) {
+    if (out || lead) {
       const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.textContent = "LEADING";
+      pill.className = out ? "pill muted-pill" : "pill";
+      pill.textContent = out ? "RULED OUT" : "LEADING";
       nameEl.append(pill);
     }
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = (t.voters[option.id] || []).join(", ") || `${option.category} · added by ${option.addedBy}`;
+    sub.textContent = out ? "Someone in the group blacklisted it, so it can’t win"
+      : (t.voters[option.id] || []).join(", ") || `${option.category} · added by ${option.addedBy}`;
     text.append(nameEl, sub);
     const countEl = document.createElement("div");
     countEl.className = "count";
@@ -284,15 +325,18 @@ function renderSpin() {
     const nameEl = document.createElement("div");
     nameEl.className = "name";
     nameEl.textContent = option.name;
-    if (mine) {
+    const out = ruledOut.has(option.id);
+    if (mine || out) {
       const pill = document.createElement("span");
-      pill.className = "pill soft";
-      pill.textContent = "YOUR PICK";
+      pill.className = out ? "pill muted-pill" : "pill soft";
+      pill.textContent = out ? "RULED OUT" : "YOUR PICK";
       nameEl.append(pill);
     }
+    if (out) card.classList.add("ruled-out");
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = `${option.category} · added by ${option.addedBy}`;
+    sub.textContent = out ? `Added by ${option.addedBy} · someone in the group blacklisted it, so the spin skips it`
+      : `${option.category} · added by ${option.addedBy}`;
     text.append(nameEl, sub);
     row.append(tile, text);
     card.append(row);
@@ -430,12 +474,10 @@ function updateSuggest() {
   const button = $("suggest-open");
   button.style.width = "100%";
   if (mine) {
-    // One pick each: once yours is in, the button becomes a label.
+    // One pick each: once yours is in, the button shows it and lets you swap it.
     button.className = "btn ghost wide";
-    button.textContent = `✓ Your pick: ${mine.name}`;
-    button.disabled = true;
-    $("suggest-panel").hidden = true;
-    button.hidden = false;
+    button.textContent = `✓ Your pick: ${mine.name} · Change`;
+    button.disabled = false;
   } else {
     button.className = isSpin() && !full ? "btn primary wide" : "btn ghost wide";
     button.textContent = full
@@ -450,6 +492,7 @@ function updateSuggest() {
 function wireSuggest() {
   suggestWired = true;
   $("suggest-open").addEventListener("click", async () => {
+    $("suggest-input").placeholder = myPick() ? "Search for a place to swap in" : "A name or a craving, like “tacos”";
     $("suggest-panel").hidden = false;
     $("suggest-open").hidden = true;
     $("suggest-input").focus();
@@ -559,7 +602,15 @@ async function runSearch() {
   }, { region });
 }
 
-function renderResults(places, query) {
+async function renderResults(places, query) {
+  const blocked = globalThis.crypto?.subtle ? groupBlocked() : new Set();
+  const outIDs = new Set();
+  if (blocked.size) {
+    for (const { p } of places) {
+      const id = toOption(p).id;
+      if (blocked.has(await blockedHash(id))) outIDs.add(id);
+    }
+  }
   const list = $("suggest-results");
   list.replaceChildren();
   if (!places.length) {
@@ -569,7 +620,8 @@ function renderResults(places, query) {
   setStatus("");
   for (const { p, miles } of places) {
     const option = toOption(p);
-    const taken = isTaken(option);
+    const out = outIDs.has(option.id);
+    const taken = isTaken(option) || out;
     const button = document.createElement("button");
     button.type = "button";
     button.className = "result";
@@ -592,7 +644,10 @@ function renderResults(places, query) {
     text.append(name, sub);
     const add = document.createElement("span");
     add.className = "add";
-    add.textContent = taken ? (isSpin() ? "In the wheel" : "In the vote") : "Add";
+    const mine = myPick();
+    add.textContent = out ? "Ruled out"
+      : taken ? (isSpin() ? "In the wheel" : "In the vote")
+      : mine ? "Swap" : "Add";
     button.append(tile, text, add);
     button.addEventListener("click", () => addOption(option));
     list.append(button);
@@ -656,7 +711,7 @@ function isTaken(option) {
 async function addOption(option) {
   if (adding) return;
   adding = true;
-  setStatus(`Adding ${option.name}…`);
+  setStatus(myPick() ? `Swapping your pick for ${option.name}…` : `Adding ${option.name}…`);
   [...$("suggest-results").children].forEach((b) => { b.disabled = true; });
   try {
     await runTransaction(db, async (tx) => {
@@ -665,8 +720,17 @@ async function addOption(option) {
       const data = snap.data();
       const options = data.options || [];
       if (data.status !== "open") throw new Error("closed");
-      if ((data.picksBy || {})[uid]) throw new Error("picked");
-      if (options.some((o) => sameOption(o, option))) throw new Error("duplicate");
+      const oldPick = (data.picksBy || {})[uid];
+      const others = options.filter((o) => !oldPick || o.id !== oldPick);
+      if (others.some((o) => sameOption(o, option))) throw new Error("duplicate");
+      const index = oldPick ? options.findIndex((o) => o.id === oldPick) : -1;
+      if (index >= 0) {
+        // Change my pick: swap it in place (the rules check only yours moved).
+        const next = options.slice();
+        next[index] = option;
+        tx.update(sessionRef, { options: next, [`picksBy.${uid}`]: option.id });
+        return;
+      }
       if (options.length >= MAX_OPTIONS) throw new Error("full");
       // Everyone gets one pick; it's recorded under your ID (the rules check it).
       tx.update(sessionRef, { options: [...options, option], [`picksBy.${uid}`]: option.id });
