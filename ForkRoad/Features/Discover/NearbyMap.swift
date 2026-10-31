@@ -22,6 +22,12 @@ struct NearbyMap: View {
     /// Full map: the marker you tapped, shown as a card.
     @State private var selected: Place?
 
+    /// Pins to draw: the nearest 40 on the small map (100+ pins there is one
+    /// orange blob), up to 150 on the full map. `places` is nearest first.
+    private var markerPlaces: [Place] {
+        Array(places.prefix(isExpanded ? 150 : 40))
+    }
+
     /// Show "Search this area" once the map has moved well away from the search center.
     private var movedAway: Bool {
         guard let viewCenter else { return false }
@@ -44,7 +50,7 @@ struct NearbyMap: View {
                 MapCircle(center: model.center, radius: model.radiusMeters)
                     .foregroundStyle(Theme.saffron.opacity(0.08))
                     .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
-                ForEach(places) { place in
+                ForEach(markerPlaces) { place in
                     Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
                         .tint(selected?.id == place.id ? Theme.text : Theme.saffron)
                 }
@@ -154,7 +160,7 @@ struct NearbyMap: View {
     /// balloon sits just above its coordinate.
     private func marker(near point: CGPoint, proxy: MapProxy) -> Place? {
         var best: (place: Place, distance: CGFloat)?
-        for place in places {
+        for place in markerPlaces {
             guard let pin = proxy.convert(place.coordinate, to: .local) else { continue }
             let dx = point.x - pin.x
             let dy = point.y - (pin.y - 18)
