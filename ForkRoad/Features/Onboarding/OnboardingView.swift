@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// First launch: what ForkRoad is, location (or pick a city), and your name.
+/// First launch: what ForkRoad is, a quick tour of how it works, then
+/// location (or pick a city) and your name. Settings can show it again.
 struct OnboardingView: View {
     var onFinish: () -> Void
 
@@ -14,14 +15,26 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             TabView(selection: $page) {
                 welcome.tag(0)
-                location.tag(1)
-                nameStep.tag(2)
+                ForEach(Array(Self.tour.enumerated()), id: \.offset) { index, stop in
+                    tourPage(stop, next: index + 2).tag(index + 1)
+                }
+                location.tag(locationPage)
+                nameStep.tag(namePage)
+            }
+            .overlay(alignment: .topTrailing) {
+                if page >= 1 && page < locationPage {
+                    Button("Skip tour") { page = locationPage }
+                        .font(Theme.body(15, .semibold))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.snappy, value: page)
 
             HStack(spacing: 8) {
-                ForEach(0..<3) { index in
+                ForEach(0..<pageCount, id: \.self) { index in
                     Capsule()
                         .fill(index == page ? Theme.saffron : Theme.track)
                         .frame(width: index == page ? 22 : 8, height: 8)
@@ -30,12 +43,98 @@ struct OnboardingView: View {
             .animation(.snappy, value: page)
             .padding(.bottom, 24)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Step \(page + 1) of 3")
+            .accessibilityLabel("Step \(page + 1) of \(pageCount)")
         }
         .background(Theme.night.ignoresSafeArea())
-        .sheet(isPresented: $showCityPicker, onDismiss: { if !model.isUsingCurrentLocation { page = 2 } }) {
+        .sheet(isPresented: $showCityPicker, onDismiss: { if !model.isUsingCurrentLocation { page = namePage } }) {
             LocationPickerView()
         }
+    }
+
+    // MARK: The tour
+
+    struct TourStop {
+        let icon: String
+        let eyebrow: String
+        let title: String
+        let points: [TourPoint]
+    }
+
+    struct TourPoint: Hashable {
+        let icon: String
+        let text: String
+        init(_ icon: String, _ text: String) { self.icon = icon; self.text = text }
+    }
+
+    static let tour: [TourStop] = [
+        TourStop(icon: "map.fill", eyebrow: "Discover", title: "See what’s around you",
+                 points: [
+                    TourPoint("slider.horizontal.3", "Set how far to look, then filter by cuisine, diet, or no fast food."),
+                    TourPoint("hand.tap", "Tap the map to open it big, then tap anywhere to search the other side of town."),
+                    TourPoint("magnifyingglass", "Search any restaurant or craving by name.")
+                 ]),
+        TourStop(icon: "dice.fill", eyebrow: "Spin", title: "Can’t decide? Spin.",
+                 points: [
+                    TourPoint("dice", "Spin from what’s nearby, your Favorites, or places you want to try."),
+                    TourPoint("arrow.triangle.2.circlepath", "It won’t repeat places you landed on this week."),
+                    TourPoint("pause.circle", "Tired of a place? Leave it out of spins without removing it.")
+                 ]),
+        TourStop(icon: "heart.fill", eyebrow: "Lists", title: "Keep your places",
+                 points: [
+                    TourPoint("heart", "Heart places you love, bookmark ones you want to try, and blacklist ones you never want to see."),
+                    TourPoint("plus.circle", "Not on Apple Maps? Add it yourself with a name, type, and notes."),
+                    TourPoint("mappin.and.ellipse", "Add areas, like a city you’re visiting, to sort your lists by place.")
+                 ]),
+        TourStop(icon: "person.3.fill", eyebrow: "Group picks", title: "Decide together",
+                 points: [
+                    TourPoint("checkmark.circle", "Vote: you pick the options, friends suggest one each, and most votes wins."),
+                    TourPoint("dice", "Spin: everyone adds one place, then you spin the wheel."),
+                    TourPoint("message", "Friends join from iMessage, or a web link if they don’t have ForkRoad."),
+                    TourPoint("clock", "Lock it in, set a time, add a note, and send everyone the plan.")
+                 ])
+    ]
+
+    private var locationPage: Int { Self.tour.count + 1 }
+    private var namePage: Int { Self.tour.count + 2 }
+    private var pageCount: Int { Self.tour.count + 3 }
+
+    private func tourPage(_ stop: TourStop, next: Int) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Spacer(minLength: 40)
+            symbolArt(stop.icon)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(stop.eyebrow.uppercased())
+                    .font(Theme.body(12, .heavy))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.accentText)
+                Text(stop.title)
+                    .font(Theme.display(30))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(stop.points, id: \.self) { point in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: point.icon)
+                            .font(Theme.body(16, .semibold))
+                            .foregroundStyle(Theme.accentText)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
+                        Text(point.text)
+                            .font(Theme.body(16))
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(16)
+            .card(radius: 20)
+            Spacer()
+            primaryButton(next == locationPage ? "Got it" : "Next") { page = next }
+            Color.clear.frame(height: 44)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
     }
 
     // MARK: Pages
@@ -45,7 +144,7 @@ struct OnboardingView: View {
             art: AnyView(ForkMark().frame(width: 140, height: 140)),
             title: "Every dinner is a\nfork in the road.",
             text: "Browse what’s nearby, spin when you can’t decide, and pick with friends right in your group chat.",
-            primary: ("Let’s go", { page = 1 }),
+            primary: ("Show me around", { page = 1 }),
             secondary: nil
         )
     }
@@ -57,7 +156,7 @@ struct OnboardingView: View {
             text: "ForkRoad uses your location only while you’re using the app, to find restaurants around you. You can also pick any city instead.",
             primary: ("Use my location", {
                 model.useCurrentLocation()
-                page = 2
+                page = namePage
             }),
             secondary: ("Pick a city instead", { showCityPicker = true })
         )
@@ -88,6 +187,10 @@ struct OnboardingView: View {
                 .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 44)
+            Text("ForkRoad · Created by Chip Mullins")
+                .font(Theme.body(12))
+                .foregroundStyle(Theme.muted.opacity(0.7))
+                .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
