@@ -11,6 +11,8 @@ struct CustomPlaceForm: View {
     /// Nil to add a new place.
     var existing: SavedPlace?
     var startingList: SavedList = .interested
+    /// Pre-fills the name (e.g. what you searched for and didn't find).
+    var startingName: String = ""
     /// Called after saving or deleting (e.g. so a detail screen can close).
     var onFinish: () -> Void = {}
 
@@ -171,6 +173,7 @@ struct CustomPlaceForm: View {
         guard !loaded else { return }
         loaded = true
         list = startingList
+        if existing == nil { name = startingName }
         // Start in the area the Lists tab is filtered to.
         switch model.listCity {
         case .metro(let name): areaKey = "metro|\(name)"

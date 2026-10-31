@@ -59,15 +59,13 @@ struct ListsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAddPlace = true } label: {
-                    Label("Add a restaurant", systemImage: "plus")
+                    Label("Add a place", systemImage: "plus")
                 }
-                .accessibilityHint("Add a place that isn’t on Apple Maps")
+                .accessibilityHint("Search for a restaurant, or add one yourself")
             }
         }
         .sheet(isPresented: $showAddPlace) {
-            CustomPlaceForm(startingList: tab == .favorites ? .favorites : .interested) {
-                if tab == .blocked { tab = .interested }
-            }
+            AddToListSheet(startingList: tab == .favorites ? .favorites : .interested)
         }
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
         .animation(.snappy, value: saved.map(\.listRaw))
@@ -170,7 +168,7 @@ struct ListsView: View {
 
     private var addPlaceLink: some View {
         Button { showAddPlace = true } label: {
-            Label("Add one yourself", systemImage: "plus.circle")
+            Label("Add a place", systemImage: "plus.circle")
                 .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.accentText)
         }
