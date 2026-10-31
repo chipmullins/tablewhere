@@ -3,7 +3,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, runTransaction
+  getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, runTransaction, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -110,10 +110,26 @@ onAuthStateChanged(auth, (user) => {
 });
 signInAnonymously(auth).catch(() => fail("Couldn’t connect. Check your connection and reload."));
 
+// Anonymous daily counts for the stats page (stats/{yyyy-mm-dd}, UTC): one
+// number per thing per day, nothing about who. Same as UsageStats in the app.
+function bumpStat(field) {
+  const day = new Date().toISOString().slice(0, 10);
+  setDoc(doc(db, "stats", day), { [field]: increment(1) }, { merge: true }).catch(() => {});
+}
+function countVisitOncePerDay() {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    if (localStorage.getItem("forkroad.visitDay") === day) return;
+    localStorage.setItem("forkroad.visitDay", day);
+  } catch { /* private mode: count anyway */ }
+  bumpStat("webVisitors");
+}
+
 let started = false;
 function start() {
   if (started) return;
   started = true;
+  countVisitOncePerDay();
 
   onSnapshot(sessionRef, (snap) => {
     if (!snap.exists()) return fail("This vote doesn’t exist anymore.");
@@ -357,6 +373,7 @@ async function vote(optionId, currentVote) {
       await deleteDoc(ref);
     } else {
       await setDoc(ref, { voterID: uid, voterName: myName(), optionID: optionId, votedAt: serverTimestamp() });
+      bumpStat("webVotes");
     }
   } catch {
     alert("Couldn’t save your vote. The vote may have closed.");
@@ -735,6 +752,7 @@ async function addOption(option) {
       // Everyone gets one pick; it's recorded under your ID (the rules check it).
       tx.update(sessionRef, { options: [...options, option], [`picksBy.${uid}`]: option.id });
     });
+    bumpStat("webPicks");
     closeSuggest();
   } catch (error) {
     const messages = {

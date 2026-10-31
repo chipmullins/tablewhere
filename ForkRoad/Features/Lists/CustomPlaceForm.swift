@@ -233,6 +233,7 @@ struct CustomPlaceForm: View {
                                   latitude: spot.latitude, longitude: spot.longitude,
                                   address: addressText, hasExactLocation: exact)
                 context.insert(item)
+                UsageStats.record(.customPlaces)
             }
             item.skipInSpins = skipInSpins
             item.note = note.trimmingCharacters(in: .whitespacesAndNewlines)

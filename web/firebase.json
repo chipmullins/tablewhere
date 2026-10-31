@@ -10,6 +10,10 @@
       {
         "source": "/v/**",
         "destination": "/index.html"
+      },
+      {
+        "source": "/stats",
+        "destination": "/stats.html"
       }
     ],
     "headers": [

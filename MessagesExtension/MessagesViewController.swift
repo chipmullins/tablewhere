@@ -52,6 +52,7 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     override func willBecomeActive(with conversation: MSConversation) {
         super.willBecomeActive(with: conversation)
+        UsageStats.recordActiveDevice()
         messagesLog.notice("willBecomeActive, style \(self.presentationStyle.rawValue, privacy: .public)")
         state.style = presentationStyle
         state.open(message: conversation.selectedMessage)

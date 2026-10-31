@@ -53,6 +53,7 @@ struct RootTabView: View {
         .onChange(of: scenePhase, initial: true) {
             guard scenePhase == .active else { return }
             if let link = DeepLink.take() { handle(link) }
+            UsageStats.recordActiveDevice()
             // Keep "time to leave" reminders right for decided groups.
             Task { await LeaveBy.refreshAll(model) }
             if followUp == nil, VisitFollowUp.remindersOn, UserDefaults.standard.bool(forKey: "didOnboard") {

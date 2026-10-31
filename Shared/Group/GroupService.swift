@@ -84,6 +84,7 @@ final class GroupService {
         // letting anyone list every session.
         try await joinCodeRef(code).setData(["sessionId": session.id, "createdBy": uid])
         try await join(sessionID: session.id, displayName: displayName)
+        UsageStats.record(mode == .spin ? .groupsSpin : .groupsVote)
         return session
     }
 
@@ -210,6 +211,7 @@ final class GroupService {
             }
             return nil
         }
+        UsageStats.record(.groupPicks)
     }
 
     // MARK: Owner actions

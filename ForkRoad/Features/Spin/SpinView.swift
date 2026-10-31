@@ -310,6 +310,7 @@ struct SpinView: View {
             landCount += 1
             isSpinning = false
             actions.recordSpin(pick)
+            UsageStats.record(.spins)
         }
     }
 

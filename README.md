@@ -76,6 +76,18 @@ Friends without ForkRoad can suggest places on the vote page, using Apple Maps s
 
 The token is safe to commit (it's origin-restricted, and MapKit JS tokens are meant to sit in web pages). Without it, the page still works for voting; the Suggest button just doesn't appear.
 
+### Usage stats (private)
+
+ForkRoad counts a few anonymous daily totals (active devices, new devices, spins, groups started, places added, web visitors, votes, and picks) in `stats/{yyyy-mm-dd}` (UTC). Nothing about who, where, or which places. Users can turn it off in Settings.
+
+See them at **https://forkroad-app.web.app/stats**. One-time setup:
+
+1. Firebase console → **Authentication → Sign-in method → Add new provider → Google** → Enable → Save.
+2. Open the stats page and sign in with Google. It shows your user ID.
+3. Firebase console → **Firestore** → start a collection **`admins`** → add a document whose **ID is that user ID** (any field, e.g. `name` = `Chip`). Reload the page.
+
+Downloads, retention, and crashes come from App Store Connect → Analytics.
+
 ### Group push notifications (optional)
 
 "Maya voted" and "It's decided" alerts come from Cloud Functions in `web/functions/`.

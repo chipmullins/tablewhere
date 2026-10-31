@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var confirmClear = false
     @State private var clearedHistory = false
     @State private var replayWelcome = false
+    @State private var shareStats = UsageStats.isOn
 
     private let radiusOptions: [Double] = [0.5, 1, 2, 3, 5, 10]
 
@@ -82,6 +83,14 @@ struct SettingsView: View {
                     Text("Notifications")
                 } footer: {
                     Text("After you get directions somewhere, ForkRoad asks how it went and files your answer: Loved it adds it to Favorites, Never again blacklists it.")
+                }
+
+                Section {
+                    Toggle("Share anonymous usage counts", isOn: $shareStats)
+                        .tint(Theme.saffron)
+                        .onChange(of: shareStats) { UsageStats.isOn = shareStats }
+                } footer: {
+                    Text("Daily totals only, like how many spins happened today. Nothing about you, your places, or your location is included.")
                 }
 
                 Section("Your data") {
