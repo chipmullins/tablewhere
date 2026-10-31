@@ -51,8 +51,9 @@ struct OnboardingView: View {
     private var welcome: some View {
         stepPage(
             art: AnyView(ForkMark().frame(width: 140, height: 140)),
-            title: "Every dinner is a\nfork in the road.",
-            text: "Browse what’s nearby, spin when you can’t decide, and pick with friends right in your group chat.",
+            title: "Every meal was a fork in the road.",
+            titleView: AnyView(WelcomeTitle()),
+            text: "Not anymore! Browse what’s nearby, spin when you can’t decide, and pick with friends right in your group chat.",
             primary: ("Get started", { page = 1 }),
             secondary: nil,
             footer: AnyView(
@@ -87,16 +88,20 @@ struct OnboardingView: View {
 
     // MARK: Building blocks
 
-    private func stepPage(art: AnyView, title: String, text: String,
+    private func stepPage(art: AnyView, title: String, titleView: AnyView? = nil, text: String,
                           primary: (String, () -> Void), secondary: (String, () -> Void)?,
                           footer: AnyView) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             Spacer()
             art
-            Text(title)
-                .font(Theme.display(32))
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
+            if let titleView {
+                titleView
+            } else {
+                Text(title)
+                    .font(Theme.display(32))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(text)
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.muted)
@@ -161,6 +166,55 @@ struct OnboardingView: View {
         model.selectedTab = .spin
         Hint.spinFirst.show()
         onFinish()
+    }
+}
+
+/// "Every meal *was* a fork in the road." — with a hand-drawn saffron
+/// underline under "was" that draws itself in.
+private struct WelcomeTitle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drawn: CGFloat = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("Every meal ")
+                Text("was")
+                    .overlay(alignment: .bottom) {
+                        Swoosh()
+                            .trim(from: 0, to: drawn)
+                            .stroke(Theme.saffron, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+                            .frame(height: 12)
+                            .padding(.horizontal, -4)
+                            .offset(y: 10)
+                    }
+            }
+            Text("a fork in the road.")
+        }
+        .font(Theme.display(32))
+        .foregroundStyle(Theme.text)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Every meal was a fork in the road.")
+        .accessibilityAddTraits(.isHeader)
+        .task {
+            if reduceMotion { drawn = 1; return }
+            try? await Task.sleep(for: .milliseconds(450))
+            withAnimation(.easeOut(duration: 0.6)) { drawn = 1 }
+        }
+    }
+}
+
+/// A loose, slightly tilted brush stroke, like an underline drawn by hand.
+private struct Swoosh: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.15))
+        path.addCurve(to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.2),
+                      control1: CGPoint(x: rect.width * 0.3, y: rect.maxY),
+                      control2: CGPoint(x: rect.width * 0.7, y: rect.midY))
+        return path
     }
 }
 

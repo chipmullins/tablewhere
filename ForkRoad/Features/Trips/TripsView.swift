@@ -17,7 +17,8 @@ struct TripsView: View {
                         .foregroundStyle(Theme.text)
                 }
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                // A little leading room so the first letter isn't clipped at the row's edge.
+                .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4))
 
                 Button { showNewTrip = true } label: {
                     Label("Plan a trip", systemImage: "plus")

@@ -18,9 +18,9 @@ enum SpinSource: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .nearby: return "Nearby"
-        case .picked: return "My wheel"
+        case .picked: return "Custom"
         case .favorites: return "Favorites"
-        case .interested: return "To try"
+        case .interested: return "Want to try"
         }
     }
 

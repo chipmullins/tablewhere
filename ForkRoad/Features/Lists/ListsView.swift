@@ -91,7 +91,7 @@ struct ListsView: View {
     private func label(for tab: Tab) -> String {
         switch tab {
         case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center, areas: areas).count)"
-        case .interested: return "To try \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
+        case .interested: return "Want to try \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
         case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
         }
     }

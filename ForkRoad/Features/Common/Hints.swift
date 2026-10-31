@@ -25,7 +25,7 @@ enum Hint: String, CaseIterable {
         switch self {
         case .spinFirst: return "Tap Spin for tonight’s pick"
         case .discoverMap: return "Look somewhere else"
-        case .myWheel: return "Build your own wheel"
+        case .myWheel: return "Make a custom spin"
         case .listsAdd: return "Add any place"
         case .groupStart: return "Pick with friends"
         }
@@ -38,7 +38,7 @@ enum Hint: String, CaseIterable {
         case .discoverMap:
             return "Open the map and tap anywhere to search there, like the other side of town."
         case .myWheel:
-            return "Choose My wheel to spin just a few places you pick, even ones that aren’t on a list."
+            return "Choose Custom to spin just the places you pick, even ones that aren’t on a list."
         case .listsAdd:
             return "Tap + to search for a restaurant, or add one that isn’t on Apple Maps with your own notes."
         case .groupStart:

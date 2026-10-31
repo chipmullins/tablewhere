@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Spin → My wheel: the places on your hand-picked wheel, with Add and Clear.
+/// Spin → Custom: the places on your hand-picked wheel, with Add and Clear.
 struct PickedWheelEditor: View {
     @Binding var showPicker: Bool
     @Environment(AppModel.self) private var model
