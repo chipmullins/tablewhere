@@ -67,7 +67,7 @@ struct VoteCountdown: View {
                 .font(Theme.body(13, .bold))
                 .foregroundStyle(Theme.accentText)
                 .padding(.horizontal, 12)
-                .frame(height: 32)
+                .frame(minHeight: 32)
                 .background(Theme.accentSoft, in: Capsule())
                 .monospacedDigit()
         }

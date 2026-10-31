@@ -48,6 +48,13 @@ final class LiveSession {
         return members.filter { !voted.contains($0.id) }.map(\.name)
     }
 
+    /// Same, for the status line: you show as "you".
+    var waitingNames: [String] {
+        let voted = Set(votes.map(\.voterID))
+        let me = GroupService.shared.currentUserID
+        return members.filter { !voted.contains($0.id) }.map { $0.id == me ? "you" : $0.name }
+    }
+
     var isOwner: Bool {
         guard let session, let uid = GroupService.shared.currentUserID else { return false }
         return session.isOwned(by: uid)

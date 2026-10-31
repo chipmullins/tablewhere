@@ -80,7 +80,7 @@ struct NearbyMap: View {
             if isExpanded, let selected {
                 MapPlaceCard(place: selected) { self.selected = nil }
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 40)  // clear of the home indicator (the map ignores the bottom safe area)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

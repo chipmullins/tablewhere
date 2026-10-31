@@ -157,7 +157,7 @@ struct SpinView: View {
         } else {
             parts = [
             model.spinSource == .nearby ? "Within \(model.radiusLabel)"
-                : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
+                : (model.spinSource == .favorites ? "From your favorites" : "From Want to try"),
             model.spinSource != .nearby ? areaChip : nil,
             skippedCount > 0 ? "Skipping \(skippedCount) you left out" : nil,
             model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
@@ -294,6 +294,8 @@ private struct SpinStage: View {
         .onChange(of: model.pendingSpin) { consumePendingSpin() }
         .onChange(of: pool.count) { consumePendingSpin() }
         .onChange(of: model.isLoading) { consumePendingSpin() }
+        // Asked for while a spin was still running: go once it lands.
+        .onChange(of: isSpinning) { if !isSpinning { consumePendingSpin() } }
     }
 
     private func consumePendingSpin() {
@@ -424,7 +426,10 @@ private struct SpinStage: View {
         let appModel: AppModel = model
         var putBack: (@MainActor () -> Void)? = nil
         if isPickedWheel {
-            putBack = { appModel.togglePicked(place) }
+            // Only put it back if it's still off (toggling again would remove it).
+            putBack = {
+                if !appModel.pickedWheel.contains(where: { $0.id == place.id }) { appModel.togglePicked(place) }
+            }
             appModel.togglePicked(place)
         }
         actions.block(place, extraUndo: putBack)

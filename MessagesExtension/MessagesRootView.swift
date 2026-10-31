@@ -257,7 +257,7 @@ struct MessageVoteView: View {
                                 .foregroundStyle(Theme.accentText)
                         }
                     }
-                    Text("\(live.members.count) in the group · \(GroupWording.line(session, nonVoterNames: live.nonVoterNames))")
+                    Text("\(live.members.count) in the group · \(GroupWording.line(session, nonVoterNames: live.waitingNames))")
                         .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
 
@@ -275,7 +275,7 @@ struct MessageVoteView: View {
                             }
                             .disabled(phoneURL(winner) == nil)
                             .opacity(phoneURL(winner) == nil ? 0.4 : 1)
-                            ActionTile(title: "Menu", systemImage: "menucard",
+                            ActionTile(title: "Website", systemImage: "safari",
                                        tint: Theme.accentText, background: Theme.surface) {
                                 if let url = winner.place.websiteURL { state.open(url: url) }
                             }
@@ -475,7 +475,7 @@ struct MessageVoteView: View {
         .confirmationDialog("Leave this group pick?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { leave() }
         } message: {
-            Text("Your vote is removed. You can come back by tapping the bubble.")
+            Text("Your vote is removed. You can rejoin anytime by voting again.")
         }
         .confirmationDialog(lockInWarning.title, isPresented: $confirmLockIn, titleVisibility: .visible) {
             if let session = live.session {
@@ -487,8 +487,11 @@ struct MessageVoteView: View {
     }
 
     private var lockInWarning: (title: String, message: String) {
-        guard let session = live.session else { return ("", "") }
-        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes) ?? ("", "")
+        // Never an empty title: a vote can land between the tap and the dialog
+        // (or while it animates away), which clears the warning.
+        guard let session = live.session else { return ("Lock it in?", "") }
+        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes)
+            ?? (session.mode == .vote ? "Lock it in now?" : "Spin now?", "")
     }
 
     /// While nobody else has joined: friends tap the bubble, or use the link.
@@ -509,7 +512,7 @@ struct MessageVoteView: View {
                         .font(Theme.body(14, .bold))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14)
-                        .frame(height: 40)
+                        .frame(minHeight: 40)
                         .background(Theme.accentSoft, in: Capsule())
                 }
                 .buttonStyle(.plain)

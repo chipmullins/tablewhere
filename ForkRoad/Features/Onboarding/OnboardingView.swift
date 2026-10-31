@@ -39,8 +39,8 @@ struct OnboardingView: View {
         }
         .background(Theme.night.ignoresSafeArea())
         .sheet(isPresented: $showCityPicker, onDismiss: {
-            // Picked a city: done. Backed out: stay here.
-            if model.hasLocation && !model.isUsingCurrentLocation { finish() }
+            // Picked a city (or "Current location" in the picker): done. Backed out: stay here.
+            if model.hasLocation { finish() }
         }) {
             LocationPickerView()
         }

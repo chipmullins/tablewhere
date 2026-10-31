@@ -232,7 +232,7 @@ struct GroupLobbyView: View {
     }
 
     private func statusLine(_ session: GroupSession) -> String {
-        GroupWording.line(session, nonVoterNames: live.nonVoterNames)
+        GroupWording.line(session, nonVoterNames: live.waitingNames)
     }
 
     // MARK: Deciding
@@ -328,8 +328,11 @@ struct GroupLobbyView: View {
     }
 
     private var lockInWarning: (title: String, message: String) {
-        guard let session = live.session else { return ("", "") }
-        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes) ?? ("", "")
+        // Never an empty title: a vote can land between the tap and the dialog
+        // (or while it animates away), which clears the warning.
+        guard let session = live.session else { return ("Lock it in?", "") }
+        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes)
+            ?? (session.mode == .vote ? "Lock it in now?" : "Spin now?", "")
     }
 
     // MARK: Decided
@@ -350,7 +353,7 @@ struct GroupLobbyView: View {
             }
             .disabled(winner.phoneNumber == nil)
             .opacity(winner.phoneNumber == nil ? 0.4 : 1)
-            ActionTile(title: "Menu", systemImage: "menucard", tint: Theme.accentText, background: Theme.surface) {
+            ActionTile(title: "Website", systemImage: "safari", tint: Theme.accentText, background: Theme.surface) {
                 browserURL = winner.place.websiteURL
             }
             .disabled(winner.websiteURL == nil)

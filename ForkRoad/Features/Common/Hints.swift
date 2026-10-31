@@ -34,7 +34,7 @@ enum Hint: String, CaseIterable {
     var text: String {
         switch self {
         case .spinFirst:
-            return "It picks from what’s open nearby, and won’t repeat a place you landed on this week."
+            return "It picks from places near you, and skips ones you landed on this week when it can."
         case .discoverMap:
             return "Open the map and tap anywhere to search there, like the other side of town."
         case .myWheel:
