@@ -94,7 +94,7 @@ Without this step, group picks still work. People just don't get alerts.
 ### How group picks work
 
 - Sessions live in Firestore (`sessions/{id}`, with `votes` and `members` subcollections). Everyone signs in anonymously, so there are no accounts.
-- `web/firestore.rules` lets anyone with the link see a session, but nobody can list sessions. Join codes are looked up one at a time through `joinCodes/{code}`. Only you can write your own vote, and only until the timer runs out. Only the creator can lock in the result or set the meeting time. Other people can only add places while the vote is open.
+- `web/firestore.rules` lets anyone with the link see a session, but nobody can list sessions. Join codes are looked up one at a time through `joinCodes/{code}`. Only you can write your own vote, and only until the timer runs out. Only the creator can lock in the result or set the meeting time. Other people get **one pick each** while it's open (recorded in `picksBy`): in a Spin everyone, creator included, adds one place; in a Vote the creator can add up to 12 and everyone else can suggest one. After changing the rules, deploy them with `firebase deploy --only firestore`.
 - Ties and spins are decided by a fair, repeatable pick seeded by the session ID, so every device agrees.
 
 ## Run the tests
