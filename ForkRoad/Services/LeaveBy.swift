@@ -85,13 +85,17 @@ enum LeaveBy {
     private static func requestID(_ sessionID: String) -> String { "leaveby.\(sessionID)" }
 
     /// Schedules (or replaces) the "Time to head out" reminder for a group.
-    static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption) async {
+    /// `mayAsk`: whether this may show the notification permission prompt.
+    /// Only the leave-by card asks (where it's clear why); the background
+    /// refresh when the app opens never does.
+    static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption, mayAsk: Bool = true) async {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
         guard remindersOn, plan.leaveAt > Date.now.addingTimeInterval(60) else { return }
 
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
+            guard mayAsk else { return }
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
 
@@ -128,7 +132,7 @@ enum LeaveBy {
             let from = origin(model)
             if let plan = await plan(to: CLLocationCoordinate2D(latitude: winner.latitude, longitude: winner.longitude),
                                      meetTime: meet, from: from.coordinate, isGPS: from.isGPS) {
-                await schedule(plan, sessionID: id, winner: winner)
+                await schedule(plan, sessionID: id, winner: winner, mayAsk: false)
             }
         }
     }
