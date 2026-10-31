@@ -406,12 +406,7 @@ private struct SpinStage: View {
                            tint: onList == .interested ? Theme.accentText : Theme.text) {
                     actions.toggle(place, in: .interested)
                 }
-                ActionTile(title: "Blacklist", systemImage: "nosign") {
-                    let wasOnWheel = isPickedWheel
-                    actions.block(place, extraUndo: wasOnWheel ? { [model] in model.togglePicked(place) } : nil)
-                    if wasOnWheel { model.togglePicked(place) }
-                    winner = nil
-                }
+                ActionTile(title: "Blacklist", systemImage: "nosign") { blacklist(place) }
             }
             Button("See details") { showDetail = true }
                 .font(Theme.body(15, .bold))
@@ -422,6 +417,19 @@ private struct SpinStage: View {
     }
 
     // MARK: Logic
+
+    /// Blacklists the result (with Undo). On your own wheel it also comes off
+    /// the wheel, and Undo puts it back.
+    private func blacklist(_ place: Place) {
+        let appModel: AppModel = model
+        var putBack: (@MainActor () -> Void)? = nil
+        if isPickedWheel {
+            putBack = { appModel.togglePicked(place) }
+            appModel.togglePicked(place)
+        }
+        actions.block(place, extraUndo: putBack)
+        winner = nil
+    }
 
     /// Decide the winner up front, then animate the reel slowing down onto it.
     private func spin(_ pool: [Place]) {
