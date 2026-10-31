@@ -15,7 +15,7 @@ enum GroupError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Group voting isn’t set up yet. Add Firebase (see the README)."
+        case .notConfigured: return "Group picks aren’t available right now."
         case .sessionNotFound: return "This group pick has ended or doesn’t exist."
         case .notOwner: return "Only the person who started this pick can lock it in."
         case .alreadyAdded: return "That place is already in the vote."
@@ -258,7 +258,31 @@ final class GroupService {
     func reopen(session: GroupSession) async throws {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
-        try await sessionRef(session.id).updateData(["status": GroupStatus.open.rawValue, "winnerID": FieldValue.delete()])
+        // Reopening also clears the timer, so a vote whose time ran out isn't
+        // stuck refusing every vote.
+        try await sessionRef(session.id).updateData([
+            "status": GroupStatus.open.rawValue,
+            "winnerID": FieldValue.delete(),
+            "closesAt": FieldValue.delete()
+        ])
+    }
+
+    /// A message people can act on, instead of Firebase's raw error text.
+    nonisolated static func message(for error: Error) -> String {
+        if let groupError = error as? GroupError, let text = groupError.errorDescription { return text }
+        let nsError = error as NSError
+        if nsError.domain == FirestoreErrorDomain {
+            switch FirestoreErrorCode.Code(rawValue: nsError.code) {
+            case .permissionDenied:
+                return "That didn’t go through. Voting may have closed, or the group changed. Pull down to refresh."
+            case .unavailable, .deadlineExceeded:
+                return "You’re offline. Check your connection and try again."
+            case .notFound:
+                return GroupError.sessionNotFound.errorDescription ?? "This group pick has ended."
+            default: break
+            }
+        }
+        return "Something went wrong. Try again in a moment."
     }
 
     /// Same ID, or the same name within about 150 m. Apple Maps on the web

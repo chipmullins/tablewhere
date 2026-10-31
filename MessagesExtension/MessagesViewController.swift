@@ -32,7 +32,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         let root = AnyView(
             MessagesRootView(state: state)
                 .font(Theme.body(15))
-                .tint(Theme.saffron)
+                .tint(Theme.accentText)
         )
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = UIColor(Theme.night)
@@ -110,6 +110,7 @@ final class MessagesState {
         let message = MSMessage(session: MSSession())
         configure(message, session: session, tally: Tally(options: session.options, votes: []))
         conversation.insert(message) { @Sendable _ in }
+        Self.rememberPosted(session)
         if includeWebLink, let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
             conversation.insertText("No ForkRoad? Vote here: \(url.absoluteString)") { @Sendable _ in }
         }
@@ -122,6 +123,24 @@ final class MessagesState {
         let message = MSMessage(session: conversation.selectedMessage?.session ?? MSSession())
         configure(message, session: session, tally: tally, memberCount: memberCount)
         conversation.send(message) { @Sendable _ in }
+        Self.rememberPosted(session)
+    }
+
+    // MARK: Is the chat's bubble up to date?
+
+    /// What the bubble shows: open or decided, the winner, and the time.
+    private static func bubbleKey(_ session: GroupSession) -> String {
+        "\(session.status.rawValue)|\(session.winnerID ?? "")|\(Int(session.meetTime?.timeIntervalSince1970 ?? 0))"
+    }
+
+    private static func rememberPosted(_ session: GroupSession) {
+        SharedDefaults.store.set(bubbleKey(session), forKey: "bubble.\(session.id)")
+    }
+
+    /// True when the group changed (decided in the app, new time…) since this
+    /// phone last posted a bubble, so the creator should post the plan.
+    static func bubbleIsOutdated(_ session: GroupSession) -> Bool {
+        SharedDefaults.store.string(forKey: "bubble.\(session.id)") != bubbleKey(session)
     }
 
     private func configure(_ message: MSMessage, session: GroupSession, tally: Tally, memberCount: Int = 0) {

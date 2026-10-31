@@ -86,10 +86,10 @@ enum PushTokens {
     /// Asks for notification permission (for group picks) and registers for pushes.
     @MainActor
     static func requestGroupAlerts() async {
-        guard FirebaseSetup.isConfigured else { return }
+        // Asked even without group pushes: leave-by reminders are local.
         let granted = (try? await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        if granted { UIApplication.shared.registerForRemoteNotifications() }
+        if granted && FirebaseSetup.isConfigured { UIApplication.shared.registerForRemoteNotifications() }
     }
 }
 

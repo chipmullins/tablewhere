@@ -63,12 +63,12 @@ struct SettingsView: View {
                     Toggle("Ask “How was it?”", isOn: $visitReminders)
                         .onChange(of: visitReminders) { VisitFollowUp.remindersOn = visitReminders }
                     HStack {
-                        Text("Group pick alerts")
+                        Text("Alerts")
                         Spacer()
                         Text(notificationLabel).foregroundStyle(Theme.muted)
                     }
-                    if notificationStatus == .notDetermined && FirebaseSetup.isConfigured {
-                        Button("Turn on group alerts") {
+                    if notificationStatus == .notDetermined || notificationStatus == .provisional {
+                        Button(notificationStatus == .provisional ? "Turn on sounds and banners" : "Turn on alerts") {
                             Task {
                                 await PushTokens.requestGroupAlerts()
                                 await refreshNotificationStatus()
@@ -82,7 +82,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("After you get directions somewhere, ForkRoad asks how it went and files your answer: Loved it adds it to Favorites, Never again blacklists it.")
+                    Text("Alerts remind you when it’s time to leave for a group plan and keep you posted on group picks. After you get directions somewhere, ForkRoad also asks how it went: Loved it adds it to Favorites, Never again blacklists it.")
                 }
 
                 Section {
@@ -109,6 +109,13 @@ struct SettingsView: View {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Restaurant data", value: "Apple Maps")
                     NavigationLink("Credits") { AcknowledgementsView() }
+                    Link(destination: URL(string: "https://\(AppConfig.webHost)/privacy")!) {
+                        HStack {
+                            Text("Privacy Policy").foregroundStyle(Theme.text)
+                            Spacer()
+                            Image(systemName: "arrow.up.right").foregroundStyle(Theme.muted)
+                        }
+                    }
                 } header: {
                     Text("About")
                 } footer: {
@@ -139,12 +146,11 @@ struct SettingsView: View {
     }
 
     private var notificationLabel: String {
-        guard FirebaseSetup.isConfigured else { return "Needs Firebase setup" }
         switch notificationStatus {
         case .authorized, .ephemeral: return "On"
         case .provisional: return "Quiet"
         case .denied: return "Off"
-        default: return "Not set up"
+        default: return "Off"
         }
     }
 

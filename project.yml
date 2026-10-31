@@ -27,7 +27,7 @@ settingGroups:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "13"
+    CURRENT_PROJECT_VERSION: "14"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: ""
@@ -60,6 +60,10 @@ targets:
           if [ -f "$PLIST" ]; then
             mkdir -p "$DEST"
             cp "$PLIST" "$DEST/"
+          elif [ "$CONFIGURATION" = "Release" ]; then
+            # Never ship (TestFlight/App Store) without group picks working.
+            echo "error: Config/GoogleService-Info.plist is missing. Add it before archiving (see README → Firebase setup)."
+            exit 1
           else
             echo "Firebase config not found; group voting is off until you add Config/GoogleService-Info.plist (see README)."
           fi
@@ -98,7 +102,7 @@ targets:
           - DMSans-Medium.ttf
           - DMSans-SemiBold.ttf
           - DMSans-Bold.ttf
-        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you."
+        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
         NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s dinner plan to your calendar when you ask."
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:

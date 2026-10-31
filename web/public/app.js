@@ -57,6 +57,14 @@ function groupBlocked() {
   return new Set(members.flatMap((m) => Array.isArray(m.blockedHashes) ? m.blockedHashes : []));
 }
 let ruledOut = new Set();
+let everythingRuledOut = false;
+
+// A timed vote whose time is up (it stays "open" until the creator locks it in).
+function isTimeUp() {
+  const closes = session?.closesAt?.toDate ? session.closesAt.toDate() : null;
+  return !!closes && session.status === "open" && closes <= Date.now();
+}
+function acceptsChanges() { return session.status === "open" && !isTimeUp(); }
 async function refreshRuledOut() {
   if (!globalThis.crypto?.subtle) return;  // only on https; the live page always is
   const blocked = groupBlocked();
@@ -66,8 +74,13 @@ async function refreshRuledOut() {
       if (blocked.has(await blockedHash(o.id))) next.add(o.id);
     }
   }
-  const changed = next.size !== ruledOut.size || [...next].some((id) => !ruledOut.has(id));
-  ruledOut = next;
+  // If someone has every place blacklisted, they all count again.
+  const all = next.size > 0 && next.size === (session.options || []).length;
+  const effective = all ? new Set() : next;
+  const changed = all !== everythingRuledOut || effective.size !== ruledOut.size
+    || [...effective].some((id) => !ruledOut.has(id));
+  ruledOut = effective;
+  everythingRuledOut = all;
   if (changed) render();
 }
 
@@ -202,8 +215,10 @@ function tally() {
     counts[v.optionID] = (counts[v.optionID] || 0) + 1;
     (voters[v.optionID] = voters[v.optionID] || []).push(v.voterName);
   }
-  const top = Math.max(0, ...Object.values(counts));
-  const leaders = top === 0 ? [] : Object.keys(counts).filter((id) => counts[id] === top);
+  // The leader only counts places that can still win.
+  const eligible = Object.keys(counts).filter((id) => !ruledOut.has(id));
+  const top = Math.max(0, ...eligible.map((id) => counts[id]));
+  const leaders = top === 0 ? [] : eligible.filter((id) => counts[id] === top);
   return { counts, voters, leader: leaders.length === 1 ? leaders[0] : null, total: Object.values(counts).reduce((a, b) => a + b, 0) };
 }
 
@@ -231,8 +246,12 @@ function statusText() {
 }
 
 // Keep the countdown ticking without rebuilding the buttons.
+let wasTimeUp = false;
 setInterval(() => {
-  if (session && !$("vote-step").hidden) $("status").textContent = statusText();
+  if (!session || $("vote-step").hidden) return;
+  $("status").textContent = statusText();
+  const up = isTimeUp();
+  if (up !== wasTimeUp) { wasTimeUp = up; render(); }  // lock the buttons when time runs out
 }, 1000);
 
 function renderVote() {
@@ -243,7 +262,13 @@ function renderVote() {
 
   $("title").textContent = session.title;
   $("status").textContent = statusText();
-  $("vote-help").textContent = "Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.";
+  const closed = !acceptsChanges();
+  const notes = [];
+  if (isTimeUp()) notes.push(`Time’s up! ${session.createdByName || "The organizer"} will lock it in.`);
+  if (everythingRuledOut) notes.push("Someone has every place here blacklisted, so they’re all back in.");
+  if (mine && ruledOut.has(mine) && !closed) notes.push("Your vote is on a place someone ruled out, so it can’t win. Tap another place.");
+  if (!closed) notes.push("Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.");
+  $("vote-help").textContent = notes.join(" ");
 
   const list = $("options");
   list.replaceChildren();
@@ -254,7 +279,7 @@ function renderVote() {
     button.type = "button";
     const out = ruledOut.has(option.id);
     button.className = "option" + (mine === option.id ? " mine" : "") + (lead && !out ? " lead" : "") + (out ? " ruled-out" : "");
-    button.disabled = busy || (out && mine !== option.id);
+    button.disabled = busy || closed || (out && mine !== option.id);
     button.setAttribute("aria-pressed", mine === option.id ? "true" : "false");
     button.setAttribute("aria-label", `${option.name}, ${count} vote${count === 1 ? "" : "s"}${mine === option.id ? ", your vote" : ""}`);
 
@@ -376,7 +401,9 @@ async function vote(optionId, currentVote) {
       bumpStat("webVotes");
     }
   } catch {
-    alert("Couldn’t save your vote. The vote may have closed.");
+    $("vote-help").textContent = navigator.onLine === false
+      ? "You’re offline. Check your connection and try again."
+      : "That didn’t go through. Voting may have closed. Reload to see the latest.";
   } finally {
     busy = false;
     render();
@@ -484,7 +511,7 @@ let searchSeq = 0;
 let adding = false;
 
 function updateSuggest() {
-  const open = session.status === "open";
+  const open = acceptsChanges();
   const full = (session.options || []).length >= MAX_OPTIONS;
   const mine = myPick();
   $("suggest").hidden = !mapkitToken || !open;
@@ -736,7 +763,8 @@ async function addOption(option) {
       if (!snap.exists()) throw new Error("ended");
       const data = snap.data();
       const options = data.options || [];
-      if (data.status !== "open") throw new Error("closed");
+      const closes = data.closesAt?.toDate ? data.closesAt.toDate() : null;
+      if (data.status !== "open" || (closes && closes <= Date.now())) throw new Error("closed");
       const oldPick = (data.picksBy || {})[uid];
       const others = options.filter((o) => !oldPick || o.id !== oldPick);
       if (others.some((o) => sameOption(o, option))) throw new Error("duplicate");

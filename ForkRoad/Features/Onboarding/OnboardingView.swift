@@ -8,6 +8,7 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var page = 0
     @State private var showCityPicker = false
+    @State private var locationDenied = false
     @State private var name = Identity.displayName ?? ""
     @FocusState private var nameFocused: Bool
 
@@ -152,12 +153,11 @@ struct OnboardingView: View {
     private var location: some View {
         stepPage(
             art: AnyView(symbolArt("location.fill")),
-            title: "Find food near you",
-            text: "ForkRoad uses your location only while you’re using the app, to find restaurants around you. You can also pick any city instead.",
-            primary: ("Use my location", {
-                model.useCurrentLocation()
-                page = namePage
-            }),
+            title: locationDenied ? "No problem" : "Find food near you",
+            text: locationDenied
+                ? "Location is off, so pick a city or neighborhood to search instead. You can turn location on later in Settings."
+                : "ForkRoad uses your location only while you’re using the app, to find restaurants around you and work out when to leave for group plans. You can also pick any city instead.",
+            primary: ("Use my location", askForLocation),
             secondary: ("Pick a city instead", { showCityPicker = true })
         )
     }
@@ -187,6 +187,11 @@ struct OnboardingView: View {
                 .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 44)
+            Text("ForkRoad counts anonymous daily totals (like spins) to get better. Turn it off anytime in Settings.")
+                .font(Theme.body(12))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
             Text("ForkRoad · Created by Chip Mullins")
                 .font(Theme.body(12))
                 .foregroundStyle(Theme.muted.opacity(0.7))
@@ -240,10 +245,26 @@ struct OnboardingView: View {
     private func symbolArt(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 34, weight: .semibold))
-            .foregroundStyle(Theme.saffron)
+            .foregroundStyle(Theme.accentText)
             .frame(width: 84, height: 84)
             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .accessibilityHidden(true)
+    }
+
+    /// Shows the system prompt and waits for the answer before moving on.
+    /// If location is off, stays here so "Pick a city instead" is the next step.
+    private func askForLocation() {
+        model.useCurrentLocation()
+        Task {
+            for _ in 0..<300 where model.location.authorization == .notDetermined {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            if model.location.isDenied {
+                locationDenied = true
+            } else {
+                page = namePage
+            }
+        }
     }
 
     private func finish() {

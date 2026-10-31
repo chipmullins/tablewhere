@@ -160,9 +160,9 @@ struct TonightsPickView: View {
 
     private var header: some View {
         Text("FORKROAD · TONIGHT'S PICK")
-            .font(Theme.body(9, .bold))
+            .font(Theme.body(10, .bold))
             .tracking(0.8)
-            .foregroundStyle(Theme.saffron)
+            .foregroundStyle(Theme.accentText)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
     }

@@ -103,10 +103,12 @@ enum LeaveBy {
         center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
         guard remindersOn, plan.leaveAt.timeIntervalSinceNow > 60 else { return }
 
+        // "Provisional" (quiet) permission from "How was it?" would deliver
+        // this silently, so ask for the real thing then too.
         let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            guard mayAsk else { return }
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        if settings.authorizationStatus == .notDetermined || settings.authorizationStatus == .provisional {
+            if mayAsk { _ = try? await center.requestAuthorization(options: [.alert, .sound]) }
+            else if settings.authorizationStatus == .notDetermined { return }
         }
 
         let content = UNMutableNotificationContent()

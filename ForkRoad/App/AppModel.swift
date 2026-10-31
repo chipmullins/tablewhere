@@ -131,6 +131,10 @@ final class AppModel {
     private(set) var chosenLocation: ChosenLocation? = ChosenLocation.saved
 
     /// Where searches are centered: the chosen place, else GPS, else Lexington.
+    /// True once we know where to look: your location, or a place you picked.
+    /// Until then nothing is searched (no quietly showing Lexington, KY).
+    var hasLocation: Bool { chosenLocation != nil || location.coordinate != nil }
+
     var center: CLLocationCoordinate2D {
         chosenLocation?.coordinate ?? location.coordinate ?? LocationManager.fallback
     }
@@ -205,10 +209,9 @@ final class AppModel {
         // with context (or the user picks a city instead).
         let onboarded = UserDefaults.standard.bool(forKey: "didOnboard")
         if onboarded && chosenLocation == nil { location.start() }
-        if !onboarded || location.isDenied || chosenLocation != nil
-            || location.authorization == .authorizedWhenInUse || location.authorization == .authorizedAlways {
-            scheduleSearch()
-        }
+        // The first search runs once there's somewhere to look (a GPS fix or
+        // a chosen place); the location callback schedules it.
+        if hasLocation { scheduleSearch() }
     }
 
     /// Runs a filtered nearby search without touching Discover's results
@@ -242,6 +245,11 @@ final class AppModel {
     }
 
     func search() async {
+        guard hasLocation else {
+            places = []
+            hasSearched = true
+            return
+        }
         searchGeneration += 1
         let generation = searchGeneration
         isLoading = true

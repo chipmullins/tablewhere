@@ -71,6 +71,15 @@ struct VoteOptionRow: View {
                                 .font(Theme.body(16, .semibold))
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
+                            if isRuledOut {
+                                Text("RULED OUT")
+                                    .font(Theme.body(10, .heavy))
+                                    .tracking(0.6)
+                                    .foregroundStyle(Theme.muted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Theme.track, in: RoundedRectangle(cornerRadius: 5))
+                            }
                             if isMine && showsVotes {
                                 Text("YOUR VOTE")
                                     .font(Theme.body(10, .heavy))
@@ -79,15 +88,7 @@ struct VoteOptionRow: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
-                            } else if isRuledOut {
-                                Text("RULED OUT")
-                                    .font(Theme.body(10, .heavy))
-                                    .tracking(0.6)
-                                    .foregroundStyle(Theme.muted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(Theme.track, in: RoundedRectangle(cornerRadius: 5))
-                            } else if isLeading {
+                            } else if isLeading && !isRuledOut {
                                 Text("LEADING")
                                     .font(Theme.body(10, .heavy))
                                     .tracking(0.6)
@@ -345,5 +346,40 @@ struct SpinProgressLine: View {
         let names = waiting.map(\.name)
         let list = names.count <= 3 ? names.joined(separator: ", ") : "\(names.prefix(3).joined(separator: ", ")) + \(names.count - 3) more"
         return "Waiting on picks from \(list)"
+    }
+}
+
+/// Notes under a vote's heading: time's up, everything ruled out, or your
+/// vote being on a place that can't win.
+struct VoteNotices: View {
+    let session: GroupSession
+    let isOwner: Bool
+    let everythingRuledOut: Bool
+    let myVoteIsRuledOut: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if session.isTimeUp {
+                notice(isOwner ? "Time’s up! Lock it in to see what won." : "Time’s up! \(session.createdByName) will lock it in.",
+                       systemImage: "timer")
+            }
+            if everythingRuledOut {
+                notice("Someone has every place here blacklisted, so they’re all back in.", systemImage: "arrow.uturn.backward")
+            }
+            if myVoteIsRuledOut && session.acceptsChanges {
+                notice("Your vote is on a place someone ruled out, so it can’t win. Tap another place.",
+                       systemImage: "exclamationmark.circle")
+            }
+        }
+    }
+
+    private func notice(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(Theme.body(13, .semibold))
+            .foregroundStyle(Theme.accentText)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

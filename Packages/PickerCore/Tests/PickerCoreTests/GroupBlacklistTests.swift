@@ -49,4 +49,38 @@ final class GroupBlacklistTests: XCTestCase {
         XCTAssertEqual(s.waitingOnPicks(members: members).map(\.name), ["Amy"])
         XCTAssertTrue(session(.vote, []).waitingOnPicks(members: members).isEmpty)
     }
+
+    func testSpinningAgainCanLandSomewhereElse() {
+        let s = session(.spin, [option("A"), option("B"), option("C")])
+        let results = Set((0..<60).compactMap { _ in s.pickWinner(votes: []) })
+        XCTAssertGreaterThan(results.count, 1)
+    }
+
+    func testTiedVoteCanGoEitherWay() {
+        let a = option("A"), b = option("B")
+        let s = session(.vote, [a, b])
+        let votes = [GroupVote(voterID: "1", voterName: "1", optionID: a.id),
+                     GroupVote(voterID: "2", voterName: "2", optionID: b.id)]
+        let results = Set((0..<60).compactMap { _ in s.pickWinner(votes: votes) })
+        XCTAssertEqual(results, [a.id, b.id])
+    }
+
+    func testEverythingRuledOutMeansNothingIs() {
+        let a = option("A"), b = option("B")
+        let s = session(.vote, [a, b])
+        let picky = GroupMember(id: "p", name: "P", blockedHashes: [
+            GroupBlacklist.hash(placeID: a.id, sessionID: "s1"),
+            GroupBlacklist.hash(placeID: b.id, sessionID: "s1")])
+        XCTAssertTrue(s.ruledOutIDs(members: [picky]).isEmpty)
+        XCTAssertTrue(s.everythingRuledOut(members: [picky]))
+    }
+
+    func testLeaderIgnoresRuledOutPlaces() {
+        let a = option("A"), b = option("B")
+        let s = session(.vote, [a, b])
+        let votes = [GroupVote(voterID: "1", voterName: "1", optionID: a.id),
+                     GroupVote(voterID: "2", voterName: "2", optionID: a.id),
+                     GroupVote(voterID: "3", voterName: "3", optionID: b.id)]
+        XCTAssertEqual(s.eligibleLeader(votes: votes, ruledOut: [a.id]), b.id)
+    }
 }

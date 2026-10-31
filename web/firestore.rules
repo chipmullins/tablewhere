@@ -20,6 +20,12 @@ service cloud.firestore {
         && (!('closesAt' in s) || s.closesAt == null || request.time < s.closesAt);
     }
 
+    // Still taking picks: open, and a vote's timer (if any) hasn't run out.
+    function acceptsPicks(data) {
+      return data.status == 'open'
+        && (!('closesAt' in data) || data.closesAt == null || request.time < data.closesAt);
+    }
+
     match /sessions/{sessionId} {
       // Anyone with the link (the session ID) can see a session...
       allow get: if signedIn();
@@ -37,7 +43,7 @@ service cloud.firestore {
         let after = request.resource.data;
         let picksBefore = before.get('picksBy', {});
         let picksAfter = after.get('picksBy', {});
-        return before.status == 'open'
+        return acceptsPicks(before)
           && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
           // exactly one new place, nothing removed, still 12 or fewer
           && after.options.size() == before.options.size() + 1
@@ -60,7 +66,7 @@ service cloud.firestore {
         let picksAfter = after.get('picksBy', {});
         let removed = before.options.removeAll(after.options);
         let added = after.options.removeAll(before.options);
-        return before.status == 'open'
+        return acceptsPicks(before)
           && request.auth.uid in picksBefore
           && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
           && after.options.size() == before.options.size()

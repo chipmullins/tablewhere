@@ -15,6 +15,8 @@ final class LiveSession {
     private(set) var members: [GroupMember] = []
     private(set) var errorMessage: String?
     private(set) var isLoaded = false
+    /// The group was ended (its document is gone), as opposed to a network hiccup.
+    private(set) var isGone = false
 
     @ObservationIgnored nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
 
@@ -30,6 +32,9 @@ final class LiveSession {
 
     /// Places someone in the group blacklisted (they can't win).
     var ruledOutIDs: Set<String> { session?.ruledOutIDs(members: members) ?? [] }
+
+    /// Someone's blacklist covers every place, so they're all back in.
+    var everythingRuledOut: Bool { session?.everythingRuledOut(members: members) ?? false }
 
     /// Everyone's scrambled blacklists, to hide those places when adding.
     var groupBlockedHashes: Set<String> { Set(members.flatMap { $0.blockedHashes ?? [] }) }
@@ -69,10 +74,20 @@ final class LiveSession {
             let exists = snapshot?.exists ?? false
             Task { @MainActor in
                 guard let self else { return }
-                if let error { self.errorMessage = error.localizedDescription }
-                else if !exists { self.errorMessage = GroupError.sessionNotFound.localizedDescription }
+                if let error {
+                    self.errorMessage = GroupService.message(for: error)
+                    self.isLoaded = true
+                    return  // keep showing what we had; it's likely just the connection
+                }
+                self.errorMessage = exists ? nil : GroupError.sessionNotFound.localizedDescription
+                self.isGone = !exists
                 self.session = decoded
                 self.isLoaded = true
+                // No plan anymore (ended, reopened, or no time): drop this
+                // phone's "time to leave" reminder, whoever made the change.
+                if !exists || decoded?.status != .decided || decoded?.meetTime == nil {
+                    LeaveBy.cancel(sessionID: self.sessionID)
+                }
             }
         })
 

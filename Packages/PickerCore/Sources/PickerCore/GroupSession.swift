@@ -127,8 +127,17 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
 
     /// Whether this person can still add a place: one pick each, except the
     /// creator of a vote, who can add up to the 12-place limit.
+    /// A timed vote whose time is up (it stays "open" until someone locks it in).
+    public var isTimeUp: Bool {
+        guard status == .open, let closesAt else { return false }
+        return closesAt.timeIntervalSinceNow <= 0
+    }
+
+    /// Votes and new places are accepted: open, and the timer (if any) hasn't run out.
+    public var acceptsChanges: Bool { status == .open && !isTimeUp }
+
     public func canAdd(userID: String) -> Bool {
-        guard status == .open, options.count < GroupSession.maxOptions else { return false }
+        guard acceptsChanges, options.count < GroupSession.maxOptions else { return false }
         if mode == .vote && isOwned(by: userID) { return true }
         return pick(of: userID) == nil
     }
@@ -140,10 +149,27 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
 
     /// Places someone in the group has blacklisted. They stay visible but
     /// can't win; nobody is told who blocked them.
+    /// If every place is ruled out, nothing is (so the group isn't stuck);
+    /// see `everythingRuledOut` to tell people why.
     public func ruledOutIDs(members: [GroupMember]) -> Set<String> {
+        let blocked = blockedOptionIDs(members: members)
+        return blocked.count == options.count ? [] : blocked
+    }
+
+    /// True when someone's blacklist covers every place in the group.
+    public func everythingRuledOut(members: [GroupMember]) -> Bool {
+        !options.isEmpty && blockedOptionIDs(members: members).count == options.count
+    }
+
+    private func blockedOptionIDs(members: [GroupMember]) -> Set<String> {
         let blocked = Set(members.flatMap { $0.blockedHashes ?? [] })
         guard !blocked.isEmpty else { return [] }
         return Set(options.map(\.id).filter { blocked.contains(GroupBlacklist.hash(placeID: $0, sessionID: id)) })
+    }
+
+    /// The vote leader among places that can still win (nil if tied or no votes).
+    public func eligibleLeader(votes: [GroupVote], ruledOut: Set<String>) -> String? {
+        Tally(options: eligibleOptions(ruledOut: ruledOut), votes: votes).leader
     }
 
     /// The places that can win: everything not ruled out (or everything, if
@@ -153,16 +179,24 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         return eligible.isEmpty ? options : eligible
     }
 
-    /// The winner: most votes (fair tie-break) or a fair spin, skipping
-    /// ruled-out places. A vote with no votes falls back to a spin.
+    /// The winner: most votes (a random pick among tied places) or a random
+    /// spin, skipping ruled-out places. A vote with no votes picks at random.
+    /// Truly random, so spinning again after reopening can land somewhere new.
     public func pickWinner(votes: [GroupVote], ruledOut: Set<String> = []) -> String? {
+        var generator = SystemRandomNumberGenerator()
+        return pickWinner(votes: votes, ruledOut: ruledOut, using: &generator)
+    }
+
+    public func pickWinner<G: RandomNumberGenerator>(votes: [GroupVote], ruledOut: Set<String> = [],
+                                                     using generator: inout G) -> String? {
         let eligible = eligibleOptions(ruledOut: ruledOut)
         switch mode {
         case .vote:
-            return Tally(options: eligible, votes: votes).voteWinner(sessionID: id)
-                ?? Tally.spinWinner(options: eligible, sessionID: id)
+            let leaders = Tally(options: eligible, votes: votes).leaders
+            if !leaders.isEmpty { return leaders.randomElement(using: &generator) }
+            return eligible.randomElement(using: &generator)?.id
         case .spin:
-            return Tally.spinWinner(options: eligible, sessionID: id)
+            return eligible.randomElement(using: &generator)?.id
         }
     }
 

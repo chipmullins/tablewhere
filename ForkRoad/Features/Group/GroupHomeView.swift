@@ -75,10 +75,12 @@ struct GroupHomeView: View {
 
     private var setupNotice: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Group voting needs Firebase", systemImage: "wrench.and.screwdriver")
+            // Only in a developer build missing its Firebase config (a Release
+            // build without it fails to compile), so users never see setup steps.
+            Label("Group picks aren’t available right now", systemImage: "person.3")
                 .font(Theme.body(16, .semibold))
                 .foregroundStyle(Theme.text)
-            Text("Add your GoogleService-Info.plist to the Config folder and rebuild. The README’s Firebase setup section walks through it in about 10 minutes.")
+            Text("You can still discover, spin, and save places. Check back soon.")
                 .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)
         }
@@ -206,11 +208,11 @@ private struct RecentSessionRow: View {
 
     var body: some View {
         Button {
-            if live.session != nil { open() }
+            if live.session != nil { open() } else if live.isGone { remove() }
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(live.session?.title ?? (live.errorMessage == nil ? "Loading…" : "No longer available"))
+                    Text(live.session?.title ?? (live.isGone ? "This group has ended" : "Loading…"))
                         .font(Theme.body(16, .semibold))
                         .foregroundStyle(Theme.text)
                     Text(subtitle)
@@ -218,7 +220,9 @@ private struct RecentSessionRow: View {
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(Theme.muted.opacity(0.6))
+                Image(systemName: live.isGone ? "xmark.circle" : "chevron.right")
+                    .foregroundStyle(Theme.muted.opacity(0.6))
+                    .accessibilityLabel(live.isGone ? "Remove" : "")
             }
             .padding(14)
             .card()
@@ -232,7 +236,8 @@ private struct RecentSessionRow: View {
     }
 
     private var subtitle: String {
-        guard let session = live.session else { return " " }
+        if live.isGone { return "Tap to remove it from Recent" }
+        guard let session = live.session else { return live.errorMessage ?? " " }
         if let winner = session.winner { return "Picked \(winner.name)" }
         return "\(session.options.count) options · \(live.members.count) in"
     }

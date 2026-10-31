@@ -13,18 +13,8 @@ struct SpinView: View {
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
     @Query private var areas: [SavedArea]
 
-    @State private var reelIndex = 0
-    /// Frozen copy of the pool while spinning/landed, so new search results
-    /// arriving mid-spin can't change what the reel shows.
-    @State private var reelPool: [Place] = []
-    @State private var isSpinning = false
-    @State private var winner: Place?
-    @State private var showDetail = false
-    /// Increments each time a spin lands; drives the bounce and burst.
-    @State private var landCount = 0
     @State private var showLocationPicker = false
     @State private var showWheelPicker = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var actions: ListActions { ListActions(context: context) }
 
@@ -57,10 +47,6 @@ struct SpinView: View {
     var body: some View {
         @Bindable var model = model
         let pool = self.pool
-        // Copied out so the animation closure (which can run off the main
-        // actor) doesn't reach back into the view.
-        let reduceMotion = self.reduceMotion
-        let shown = (isSpinning || winner != nil) ? reelPool : pool
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -73,8 +59,6 @@ struct SpinView: View {
                     ForEach(SpinSource.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: model.spinSource) { reset() }
-                .onChange(of: model.listCity) { reset() }
 
                 if model.spinSource == .nearby {
                     // Where and how far, right here (same settings as Discover).
@@ -123,13 +107,10 @@ struct SpinView: View {
                         Spacer(minLength: 0)
                     }
                     .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
-                    .onChange(of: model.center.latitude) { reset() }
-                    .onChange(of: model.radiusMiles) { reset() }
 
                     CuisineChips(selection: $model.cuisines, diet: $model.diet)
                 } else if model.spinSource == .picked {
                     PickedWheelEditor(showPicker: $showWheelPicker)
-                        .onChange(of: model.pickedWheel.map(\.id)) { reset() }
                         .sheet(isPresented: $showWheelPicker) { WheelPickerSheet() }
                 } else {
                     HStack(spacing: 8) {
@@ -140,40 +121,25 @@ struct SpinView: View {
 
                 rulesSummary(count: pool.count)
 
-                reel(shown)
-                    .keyframeAnimator(initialValue: 1.0, trigger: landCount) { content, scale in
-                        content.scaleEffect(reduceMotion ? 1 : scale)
-                    } keyframes: { _ in
-                        SpringKeyframe(1.06, duration: 0.18, spring: .snappy)
-                        SpringKeyframe(1.0, duration: 0.35, spring: .bouncy)
-                    }
-                    .overlay { LandingBurst(trigger: landCount).allowsHitTesting(false) }
-
-                HStack {
-                    Spacer()
-                    spinButton(pool)
-                    Spacer()
-                }
-
-                if let winner, !isSpinning {
-                    resultCard(winner)
-                        .transition(reduceMotion ? .opacity : .asymmetric(
-                            insertion: .modifier(active: FlipIn(angle: -70, opacity: 0),
-                                                 identity: FlipIn(angle: 0, opacity: 1)),
-                            removal: .opacity))
-                }
+                // The reel, Spin button, and result live in their own view, so
+                // each reel tick redraws only them (not the lists and filters above).
+                SpinStage(pool: pool,
+                          resetKey: resetKey,
+                          emptyText: emptyReelText,
+                          isPickedWheel: model.spinSource == .picked,
+                          rulesAtSpin: { rules })
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
-            .animation(.spring(duration: 0.55, bounce: 0.35), value: winner)
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(isPresented: $showDetail) {
-            if let winner { PlaceDetailView(place: winner) }
-        }
-        .sensoryFeedback(.selection, trigger: reelIndex)
-        .sensoryFeedback(.success, trigger: winner)
+    }
+
+    /// When any of these change, the reel starts over.
+    private var resetKey: String {
+        [model.spinSource.rawValue, "\(model.listCity)", "\(model.center.latitude),\(model.center.longitude)",
+         "\(model.radiusMiles)", model.pickedWheel.map(\.id).joined(separator: ",")].joined(separator: "|")
     }
 
     // MARK: Pieces
@@ -192,7 +158,7 @@ struct SpinView: View {
             "\(count) in the wheel",
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
             model.excludeFastFood ? "No fast food" : nil,
-            "No repeats this week"
+            "Favors ones you haven’t had lately"
             ]
         }
         let labels = parts.compactMap { $0 }
@@ -209,6 +175,114 @@ struct SpinView: View {
                 }
             }
         }
+    }
+
+    /// Saved places on the current list (and area) that are left out of spins.
+    private var skippedCount: Int {
+        guard let list = model.spinSource.savedList else { return 0 }
+        return saved.filter { $0.list == list && $0.skipInSpins }
+            .filtered(by: model.listCity, near: model.center, areas: areas).count
+    }
+
+    private var areaChip: String {
+        let metros = saved.filter { $0.list == model.spinSource.savedList }.metros
+        switch model.listCity {
+        case .all: return "All areas"
+        case .metro(let name): return "In \(metros.first { $0.name == name }?.label ?? name)"
+        case .area(let name): return "In \(name)"
+        case .here:
+            let label = metros.first { $0.contains(model.center) }?.label ?? model.currentCity
+            return label.map { "In \($0)" } ?? "Around here"
+        }
+    }
+
+    private var emptyReelText: String {
+        switch model.spinSource {
+        case .nearby: return model.hasLocation ? "No places in range" : "Pick a location above"
+        case .picked: return "Add a few places to your wheel"
+        case .favorites:
+            return model.listCity == .all ? "Heart some favorites first" : "No favorites around here yet"
+        case .interested:
+            return model.listCity == .all ? "Bookmark places to try first" : "Nothing saved around here yet"
+        }
+    }
+}
+
+/// The reel, the Spin button, and the result card. Owns the spin state so a
+/// reel tick only redraws this view.
+private struct SpinStage: View {
+    let pool: [Place]
+    let resetKey: String
+    let emptyText: String
+    /// Your own wheel spins exactly what you chose (no rules at spin time).
+    let isPickedWheel: Bool
+    /// The rules for picking, worked out once when you tap Spin.
+    let rulesAtSpin: () -> Randomizer.Rules
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.modelContext) private var context
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var reelIndex = 0
+    /// Frozen copy of the pool while spinning/landed, so new search results
+    /// arriving mid-spin can't change what the reel shows.
+    @State private var reelPool: [Place] = []
+    @State private var isSpinning = false
+    @State private var winner: Place?
+    @State private var showDetail = false
+    /// Increments each time a spin lands; drives the bounce and burst.
+    @State private var landCount = 0
+    @State private var message: String?
+
+    private var actions: ListActions { ListActions(context: context) }
+    private var emptyReelText: String { emptyText }
+
+    var body: some View {
+        // Copied out so the animation closure (which can run off the main
+        // actor) doesn't reach back into the view.
+        let reduceMotion = self.reduceMotion
+        let shown = (isSpinning || winner != nil) ? reelPool : pool
+
+        VStack(alignment: .leading, spacing: 18) {
+            reel(shown)
+                .keyframeAnimator(initialValue: 1.0, trigger: landCount) { content, scale in
+                    content.scaleEffect(reduceMotion ? 1 : scale)
+                } keyframes: { _ in
+                    SpringKeyframe(1.06, duration: 0.18, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.35, spring: .bouncy)
+                }
+                .overlay { LandingBurst(trigger: landCount).allowsHitTesting(false) }
+
+            HStack {
+                Spacer()
+                spinButton(pool)
+                Spacer()
+            }
+
+            if let message {
+                Text(message)
+                    .font(Theme.body(13, .semibold))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+            }
+
+            if let winner, !isSpinning {
+                resultCard(winner)
+                    .transition(reduceMotion ? .opacity : .asymmetric(
+                        insertion: .modifier(active: FlipIn(angle: -70, opacity: 0),
+                                             identity: FlipIn(angle: 0, opacity: 1)),
+                        removal: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.55, bounce: 0.35), value: winner)
+        .navigationDestination(isPresented: $showDetail) {
+            if let winner { PlaceDetailView(place: winner) }
+        }
+        .sensoryFeedback(.selection, trigger: reelIndex)
+        .sensoryFeedback(.success, trigger: winner)
+        .onChange(of: resetKey) { reset() }
     }
 
     private func reel(_ pool: [Place]) -> some View {
@@ -250,36 +324,6 @@ struct SpinView: View {
         .accessibilityLabel(current.map { "Reel showing \($0.name)" } ?? "Reel is empty")
     }
 
-    /// Saved places on the current list (and area) that are left out of spins.
-    private var skippedCount: Int {
-        guard let list = model.spinSource.savedList else { return 0 }
-        return saved.filter { $0.list == list && $0.skipInSpins }
-            .filtered(by: model.listCity, near: model.center, areas: areas).count
-    }
-
-    private var areaChip: String {
-        let metros = saved.filter { $0.list == model.spinSource.savedList }.metros
-        switch model.listCity {
-        case .all: return "All areas"
-        case .metro(let name): return "In \(metros.first { $0.name == name }?.label ?? name)"
-        case .area(let name): return "In \(name)"
-        case .here:
-            let label = metros.first { $0.contains(model.center) }?.label ?? model.currentCity
-            return label.map { "In \($0)" } ?? "Around here"
-        }
-    }
-
-    private var emptyReelText: String {
-        switch model.spinSource {
-        case .nearby: return "No places in range"
-        case .picked: return "Add a few places to your wheel"
-        case .favorites:
-            return model.listCity == .all ? "Heart some favorites first" : "No favorites around here yet"
-        case .interested:
-            return model.listCity == .all ? "Bookmark places to try first" : "Nothing saved around here yet"
-        }
-    }
-
     private func spinButton(_ pool: [Place]) -> some View {
         Button { spin(pool) } label: {
             Text(isSpinning ? "…" : (winner == nil ? "Spin" : "Again"))
@@ -293,7 +337,7 @@ struct SpinView: View {
         .buttonStyle(.plain)
         .disabled(isSpinning || pool.isEmpty)
         .opacity(pool.isEmpty ? 0.4 : 1)
-        .accessibilityLabel("Spin")
+        .accessibilityLabel(isSpinning ? "Spinning" : (winner == nil ? "Spin" : "Spin again"))
     }
 
     private func resultCard(_ place: Place) -> some View {
@@ -338,7 +382,7 @@ struct SpinView: View {
                 }
                 ActionTile(title: "Nope", systemImage: "nosign") {
                     actions.block(place)
-                    if model.spinSource == .picked { model.togglePicked(place) }
+                    if isPickedWheel { model.togglePicked(place) }
                     winner = nil
                 }
             }
@@ -354,9 +398,15 @@ struct SpinView: View {
 
     /// Decide the winner up front, then animate the reel slowing down onto it.
     private func spin(_ pool: [Place]) {
-        guard !isSpinning,
-              let pick = Randomizer.pick(from: pool, rules: rules),
-              let target = pool.firstIndex(of: pick) else { return }
+        guard !isSpinning else { return }
+        // Your own wheel spins exactly what you chose. Everything else still
+        // prefers places you haven't had lately (the pool is already filtered).
+        let choice = isPickedWheel ? pool.randomElement() : Randomizer.pick(from: pool, rules: rulesAtSpin())
+        guard let pick = choice, let target = pool.firstIndex(of: pick) else {
+            message = "Nothing to spin. Try a bigger radius or fewer filters."
+            return
+        }
+        message = nil
         reelPool = pool
         isSpinning = true
         winner = nil
@@ -382,6 +432,7 @@ struct SpinView: View {
             isSpinning = false
             if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
             UsageStats.record(.spins)
+            AccessibilityNotification.Announcement("Tonight’s pick: \(pick.name)").post()
         }
     }
 
@@ -390,6 +441,7 @@ struct SpinView: View {
         reelIndex = 0
         winner = nil
         reelPool = []
+        message = nil
     }
 }
 

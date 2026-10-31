@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import SwiftData
 import MapKit
 import PickerCore
@@ -32,6 +33,8 @@ struct DiscoverView: View {
                 RestaurantSearchField(text: $searchText, isFocused: $searchFocused)
                 if isSearching {
                     RestaurantSearchResults(query: searchText)
+                } else if !model.hasLocation {
+                    whereToLook
                 } else {
                     NearbyMap(places: visiblePlaces)
                     RadiusControl()
@@ -48,6 +51,54 @@ struct DiscoverView: View {
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
         .refreshable { await model.search() }
         .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// Before ForkRoad knows where you are: ask, instead of guessing a city.
+    private var whereToLook: some View {
+        VStack(spacing: 14) {
+            Image(systemName: model.location.isDenied ? "location.slash" : "location.magnifyingglass")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Theme.accentText)
+                .frame(width: 60, height: 60)
+                .background(Theme.accentSoft, in: Circle())
+            Text("Where should we look?")
+                .font(Theme.display(22))
+                .foregroundStyle(Theme.text)
+            Text(model.location.isDenied
+                 ? "Location is off for ForkRoad. Pick a city or neighborhood, or turn location on in Settings."
+                 : "Use your location, or pick a city or neighborhood to find restaurants there.")
+                .font(Theme.body(15))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+            if model.location.isDenied {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+                .font(Theme.body(15, .bold))
+                .foregroundStyle(Theme.accentText)
+            } else {
+                Button { model.useCurrentLocation() } label: {
+                    Label("Use my location", systemImage: "location.fill")
+                        .font(Theme.display(17))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            Button { showLocationPicker = true } label: {
+                Text("Pick a city or neighborhood")
+                    .font(Theme.body(15, .bold))
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .card(radius: 24)
+        .padding(.top, 4)
     }
 
     private var header: some View {

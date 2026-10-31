@@ -31,7 +31,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     /// Label for the header: the real place name, or the fallback city.
     var displayName: String {
         if let placeName { return placeName }
-        return coordinate == nil ? "Lexington, KY" : "Near you"
+        return coordinate == nil ? "Choose a location" : "Near you"
     }
 
     func start() {

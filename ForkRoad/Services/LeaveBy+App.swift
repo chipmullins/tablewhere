@@ -8,8 +8,10 @@ import PickerCore
 /// reminders when the app opens, and the notification's Directions button.
 extension LeaveBy {
     /// Your GPS location if we have it, else the area you're searching.
-    static func origin(_ model: AppModel) -> Origin {
+    /// Nil before ForkRoad knows either.
+    static func origin(_ model: AppModel) -> Origin? {
         if let gps = model.location.coordinate { return Origin(coordinate: gps, isGPS: true, label: "where you are") }
+        guard model.hasLocation else { return nil }
         return Origin(coordinate: model.center, isGPS: false, label: model.locationName)
     }
 
@@ -19,13 +21,15 @@ extension LeaveBy {
     static func refreshAll(_ model: AppModel) async {
         guard FirebaseSetup.isConfigured, (try? await GroupService.shared.userID()) != nil else { return }
         for id in SharedCache.recentSessionIDs().prefix(5) {
-            guard let session = try? await GroupService.shared.sessionRef(id).getDocument(as: GroupSession.self),
+            // Offline? Leave existing reminders alone rather than cancelling them.
+            guard let snapshot = try? await GroupService.shared.sessionRef(id).getDocument() else { continue }
+            guard snapshot.exists, let session = try? snapshot.data(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
                   let meet = session.meetTime, meet.timeIntervalSinceNow > 0 else {
                 cancel(sessionID: id)
                 continue
             }
-            let from = origin(model)
+            guard let from = origin(model) else { continue }
             if let plan = await plan(to: CLLocationCoordinate2D(latitude: winner.latitude, longitude: winner.longitude),
                                      meetTime: meet, from: from.coordinate, isGPS: from.isGPS) {
                 await schedule(plan, sessionID: id, winner: winner, mayAsk: false)

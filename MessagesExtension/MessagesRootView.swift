@@ -210,7 +210,7 @@ struct NewVoteView: View {
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = GroupService.message(for: error)
             }
         }
     }
@@ -226,6 +226,10 @@ struct MessageVoteView: View {
     @State private var showAdd = false
     @State private var confirmEnd = false
     @State private var removing: GroupOption?
+    /// Bumped when a vote's timer runs out, so the view switches to "closed".
+    @State private var timeUpTick = 0
+    /// Bumped after posting a bubble, so "Post the plan" hides right away.
+    @State private var postedTick = 0
     @State private var reveal: GroupOption?
 
     init(sessionID: String, state: MessagesState) {
@@ -262,10 +266,22 @@ struct MessageVoteView: View {
                             .buttonStyle(.plain)
                         }
                         if live.isOwner {
-                            MessagePlanControls(session: session) { updated in
-                                // A new bubble so the chat shows "Meet at 7:00 PM".
-                                state.sendUpdate(updated, tally: live.tally, memberCount: live.members.count)
+                            let _ = postedTick
+                            if MessagesState.bubbleIsOutdated(session) {
+                                // One bubble when you're ready, not one per tap.
+                                Button {
+                                    state.sendUpdate(session, tally: live.tally, memberCount: live.members.count)
+                                    postedTick += 1
+                                } label: {
+                                    Label("Post the plan to the chat", systemImage: "paperplane.fill")
+                                        .font(Theme.display(16))
+                                        .foregroundStyle(Theme.onSaffron)
+                                        .frame(maxWidth: .infinity, minHeight: 50)
+                                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
                             }
+                            MessagePlanControls(session: session)
                         } else if let note = session.trimmedNote {
                             PlanNoteCard(note: note, author: session.createdByName)
                         }
@@ -285,17 +301,24 @@ struct MessageVoteView: View {
                         let tally = live.tally
                         let slots = max(live.members.count, tally.totalVotes, 1)
                         let ruledOut = live.ruledOutIDs
+                        let _ = timeUpTick
+                        let open = session.acceptsChanges
+                        let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
                         if session.mode == .spin {
                             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
                         }
+                        VoteNotices(session: session, isOwner: live.isOwner,
+                                    everythingRuledOut: live.everythingRuledOut,
+                                    myVoteIsRuledOut: live.myVote.map { ruledOut.contains($0) } ?? false)
                         ForEach(session.options) { option in
                             VoteOptionRow(option: option,
                                           votes: tally.count(for: option.id),
                                           totalSlots: slots,
                                           voters: tally.votersByOption[option.id] ?? [],
                                           isMine: live.myVote == option.id,
-                                          isLeading: tally.leader == option.id,
-                                          isEnabled: !isWorking && session.mode == .vote && !ruledOut.contains(option.id),
+                                          isLeading: leader == option.id,
+                                          isEnabled: !isWorking && session.mode == .vote && open
+                                              && (!ruledOut.contains(option.id) || live.myVote == option.id),
                                           showsVotes: session.mode == .vote,
                                           isRuledOut: ruledOut.contains(option.id)) {
                                 vote(option, session: session)
@@ -330,13 +353,17 @@ struct MessageVoteView: View {
                     if let errorMessage {
                         Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
                     }
-                } else if live.errorMessage != nil {
+                } else if live.isGone {
                     Text("This group pick has ended.")
                         .font(Theme.body(15, .semibold))
                         .foregroundStyle(Theme.muted)
                     Button("Start a new vote") { state.showNewVote() }
                         .font(Theme.body(15, .bold))
                         .foregroundStyle(Theme.accentText)
+                } else if let message = live.errorMessage {
+                    Label(message, systemImage: "wifi.slash")
+                        .font(Theme.body(14, .semibold))
+                        .foregroundStyle(Theme.muted)
                 } else {
                     ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 30)
                 }
@@ -351,6 +378,11 @@ struct MessageVoteView: View {
         }
         // A timed vote locks itself in when time's up, if the creator has it open.
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
+        .task(id: live.session?.closesAt) {
+            guard let wait = live.session?.closesAt?.timeIntervalSinceNow, wait > 0 else { return }
+            try? await Task.sleep(for: .seconds(wait + 0.5))
+            if !Task.isCancelled { timeUpTick += 1 }
+        }
         .onChange(of: live.session?.status) { old, new in
             guard new == .decided else { return }
             state.expand()
@@ -391,7 +423,7 @@ struct MessageVoteView: View {
                 try await GroupService.shared.endSession(session)
                 state.showNewVote()
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = GroupService.message(for: error)
                 await live.start()
             }
         }
@@ -402,7 +434,7 @@ struct MessageVoteView: View {
             do {
                 try await GroupService.shared.leaveSession(sessionID)
                 state.showNewVote()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -424,7 +456,7 @@ struct MessageVoteView: View {
                 // The live tally updates here. We don't post a new bubble per
                 // vote, so the group isn't notified for every tap; the bubble
                 // updates once, when the result is locked in.
-            } catch { errorMessage = error.localizedDescription }
+            } catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -442,7 +474,7 @@ struct MessageVoteView: View {
         removing = nil
         Task {
             do { try await GroupService.shared.removeOption(option.id, from: session) }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -460,7 +492,7 @@ struct MessageVoteView: View {
                     decided.winnerID = winnerID
                     state.sendUpdate(decided, tally: live.tally, memberCount: live.members.count)
                 }
-            } catch { errorMessage = error.localizedDescription }
+            } catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -520,7 +552,7 @@ struct MessageAddPlaceView: View {
                     option: GroupOption(place: place, addedBy: Identity.displayName ?? "Someone"))
                 dismiss()
             } catch let error as GroupError {
-                errorMessage = error.localizedDescription
+                errorMessage = GroupService.message(for: error)
             } catch {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the list is full."
             }
@@ -606,10 +638,10 @@ struct NoFastFoodChip: View {
 
 /// For the group's creator once it's decided: pick the meeting time (quick
 /// quarter-hour slots or any time) and add a short note, like in the app.
+/// Posting to the chat is a separate button, so trying times doesn't spam it.
 struct MessagePlanControls: View {
     let session: GroupSession
     /// Sends an updated bubble after the time changes.
-    var onTimeSet: (GroupSession) -> Void
 
     @State private var showPicker = false
     @State private var noteDraft = ""
@@ -690,11 +722,6 @@ struct MessagePlanControls: View {
 
     private func setTime(_ date: Date) {
         errorMessage = nil
-        var updated = session
-        updated.meetTime = date
-        // Send the bubble right away, while it's still part of the tap
-        // (Messages only sends in response to the user), then save.
-        onTimeSet(updated)
         Task {
             do { try await GroupService.shared.setMeetTime(sessionID: session.id, date: date) }
             catch { errorMessage = "Couldn’t save the time. Check your connection and try again." }

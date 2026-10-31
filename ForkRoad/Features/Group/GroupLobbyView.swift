@@ -22,6 +22,8 @@ struct GroupLobbyView: View {
     @State private var showTimePicker = false
     @State private var noteDraft = ""
     @State private var removing: GroupOption?
+    /// Bumped when a vote's timer runs out, so the screen switches to "closed".
+    @State private var timeUpTick = 0
     @State private var reveal: GroupOption?
     @FocusState private var noteFocused: Bool
 
@@ -40,11 +42,14 @@ struct GroupLobbyView: View {
                     } else {
                         deciding(session)
                     }
-                } else if live.errorMessage != nil {
+                } else if live.isGone {
                     StateCard(icon: "flag.checkered",
                               title: "This group pick has ended",
                               message: "The person who started it ended it, or it no longer exists.",
                               action: ("Back to Group", { SharedCache.forgetSession(sessionID); dismiss() }))
+                        .padding(.top, 40)
+                } else if let message = live.errorMessage {
+                    StateCard(icon: "wifi.slash", title: "Can’t reach this group", message: message)
                         .padding(.top, 40)
                 } else {
                     ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 80)
@@ -101,6 +106,11 @@ struct GroupLobbyView: View {
             await GroupService.shared.shareBlacklist(sessionID: sessionID)
         }
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
+        .task(id: live.session?.closesAt) {
+            guard let wait = live.session?.closesAt?.timeIntervalSinceNow, wait > 0 else { return }
+            try? await Task.sleep(for: .seconds(wait + 0.5))
+            if !Task.isCancelled { timeUpTick += 1 }
+        }
         .sheet(isPresented: $showAddPlace) {
             if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
         }
@@ -229,15 +239,21 @@ struct GroupLobbyView: View {
         let tally = live.tally
         let slots = max(live.members.count, tally.totalVotes, 1)
         let ruledOut = live.ruledOutIDs
+        let _ = timeUpTick
+        let open = session.acceptsChanges
+        let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
         if session.mode == .spin {
             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
         }
-        Label(session.mode == .vote
+        VoteNotices(session: session, isOwner: live.isOwner,
+                    everythingRuledOut: live.everythingRuledOut,
+                    myVoteIsRuledOut: live.myVote.map { ruledOut.contains($0) } ?? false)
+        if open { Label(session.mode == .vote
               ? (live.myVote == nil ? "Tap a place to cast your vote" : "Tap another place to change your vote")
               : "Everyone adds places, then \(live.isOwner ? "you spin" : "\(session.createdByName) spins")",
               systemImage: session.mode == .vote ? "hand.tap" : "dice")
             .font(Theme.body(14, .semibold))
-            .foregroundStyle(Theme.accentText)
+            .foregroundStyle(Theme.accentText) }
         VStack(spacing: 10) {
             ForEach(session.options) { option in
                 VoteOptionRow(
@@ -246,8 +262,10 @@ struct GroupLobbyView: View {
                     totalSlots: slots,
                     voters: session.mode == .vote ? (tally.votersByOption[option.id] ?? []) : [],
                     isMine: live.myVote == option.id,
-                    isLeading: session.mode == .vote && tally.leader == option.id,
-                    isEnabled: session.mode == .vote && !isWorking && !ruledOut.contains(option.id),
+                    isLeading: session.mode == .vote && leader == option.id,
+                    // Your own vote stays tappable so you can take it back.
+                    isEnabled: session.mode == .vote && open && !isWorking
+                        && (!ruledOut.contains(option.id) || live.myVote == option.id),
                     showsVotes: session.mode == .vote,
                     isRuledOut: ruledOut.contains(option.id)
                 ) {
@@ -475,7 +493,7 @@ struct GroupLobbyView: View {
                 } else {
                     try await GroupService.shared.vote(sessionID: session.id, optionID: option.id, displayName: name)
                 }
-            } catch { errorMessage = error.localizedDescription }
+            } catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -490,7 +508,7 @@ struct GroupLobbyView: View {
                 LeaveBy.cancel(sessionID: session.id)
                 dismiss()
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = GroupService.message(for: error)
                 await live.start()
             }
         }
@@ -502,7 +520,7 @@ struct GroupLobbyView: View {
                 try await GroupService.shared.leaveSession(sessionID)
                 LeaveBy.cancel(sessionID: sessionID)
                 dismiss()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -512,7 +530,7 @@ struct GroupLobbyView: View {
                 try await GroupService.shared.reopen(session: session)
                 LeaveBy.cancel(sessionID: session.id)
             }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -521,14 +539,14 @@ struct GroupLobbyView: View {
         Task {
             defer { isWorking = false }
             do { _ = try await GroupService.shared.decide(session: session, votes: live.votes, ruledOut: live.ruledOutIDs) }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
     private func setMeetTime(_ date: Date) {
         Task {
             do { try await GroupService.shared.setMeetTime(sessionID: sessionID, date: date) }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -537,7 +555,7 @@ struct GroupLobbyView: View {
         removing = nil
         Task {
             do { try await GroupService.shared.removeOption(option.id, from: session) }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -546,7 +564,7 @@ struct GroupLobbyView: View {
         let text = noteDraft
         Task {
             do { try await GroupService.shared.setNote(sessionID: sessionID, note: text) }
-            catch { errorMessage = error.localizedDescription }
+            catch { errorMessage = GroupService.message(for: error) }
         }
     }
 
@@ -651,7 +669,7 @@ private struct AddOptionView: View {
                 try await GroupService.shared.addOption(sessionID: session.id, option: GroupOption(place: place, addedBy: name))
                 dismiss()
             } catch let error as GroupError {
-                errorMessage = error.localizedDescription
+                errorMessage = GroupService.message(for: error)
             } catch {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
             }
