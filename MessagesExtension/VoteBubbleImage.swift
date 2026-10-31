@@ -20,18 +20,17 @@ private struct VoteBubbleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Messages draws ForkRoad's app icon over the bubble's top-left
+            // corner, so no icon of our own here, and room to its right.
             HStack(spacing: 8) {
-                Image(systemName: "fork.knife")
-                    .font(Theme.body(12, .bold))
-                    .foregroundStyle(Theme.onSaffron)
-                    .frame(width: 24, height: 24)
-                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 7))
                 Text(session.winner != nil ? "FORKROAD · DECIDED"
                      : session.mode == .spin ? "FORKROAD · SPIN" : "FORKROAD · VOTE")
                     .font(Theme.body(11, .bold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.accentText)
             }
+            .padding(.leading, 30)
+            .frame(minHeight: 24)
 
             if let winner = session.winner {
                 Text(winner.name)
