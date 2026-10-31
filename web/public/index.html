@@ -34,6 +34,10 @@
     .bar > span { display: block; height: 100%; border-radius: 4px; background: #5C5A66; transition: width .4s ease; }
     .lead .bar > span { background: var(--saffron); }
     .lead .count { color: var(--saffron); }
+    .option.static { cursor: default; }
+    .option.mine-pick { border-color: var(--saffron); }
+    .pill.soft { background: rgba(255,178,63,0.16); color: var(--saffron); }
+    .btn.primary.wide { width: 100%; }
     .pill { display: inline-block; padding: 3px 7px; border-radius: 6px; background: var(--saffron); color: var(--on-saffron); font-size: 10px; font-weight: 800; letter-spacing: .06em; margin-left: 6px; vertical-align: 2px; }
     .winner { background: var(--saffron); color: var(--on-saffron); border-radius: 26px; padding: 20px; }
     .winner .label { font-size: 12px; font-weight: 800; letter-spacing: .1em; }
@@ -109,7 +113,7 @@
           <button class="btn ghost" id="suggest-close" type="button">Done</button>
         </div>
       </div>
-      <p class="muted" style="font-size:13px;margin-top:14px">Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.</p>
+      <p class="muted" id="vote-help" style="font-size:13px;margin-top:14px">Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.</p>
     </section>
 
     <section id="decided-step" hidden>

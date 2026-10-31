@@ -157,7 +157,13 @@ function tally() {
   return { counts, voters, leader: leaders.length === 1 ? leaders[0] : null, total: Object.values(counts).reduce((a, b) => a + b, 0) };
 }
 
+function isSpin() { return session.mode === "spin"; }
+
 function statusText() {
+  if (isSpin()) {
+    const n = (session.options || []).length;
+    return `${members.length} in the group · ${n} place${n === 1 ? "" : "s"} in the wheel`;
+  }
   const waiting = Math.max(0, members.length - votes.length);
   let text = `${members.length} in the group · ` +
     (waiting === 0 ? "everyone has voted" : `waiting on ${waiting} vote${waiting === 1 ? "" : "s"}`);
@@ -175,12 +181,14 @@ setInterval(() => {
 }, 1000);
 
 function renderVote() {
+  if (isSpin()) return renderSpin();
   const t = tally();
   const mine = votes.find((v) => v.voterID === uid)?.optionID;
   const slots = Math.max(members.length, t.total, 1);
 
   $("title").textContent = session.title;
   $("status").textContent = statusText();
+  $("vote-help").textContent = "Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.";
 
   const list = $("options");
   list.replaceChildren();
@@ -235,6 +243,65 @@ function renderVote() {
   show("vote-step");
 }
 
+// Group spin: everyone adds their pick, then whoever started it spins the
+// wheel in the app and one is picked at random. Nothing to vote on here.
+function renderSpin() {
+  $("title").textContent = session.title;
+  $("status").textContent = statusText();
+  const me = (myName() || "").trim().toLowerCase();
+  const creator = session.createdByName || "Whoever started it";
+  const options = session.options || [];
+  const havePick = options.some((o) => (o.addedBy || "").trim().toLowerCase() === me);
+  $("vote-help").textContent = havePick
+    ? `You’re in the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
+    : mapkitToken
+      ? `Add your pick to the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
+      : `${creator} spins when everyone’s ready, and the app picks one at random. To add a pick, join in the ForkRoad app with the code below.`;
+
+  const list = $("options");
+  list.replaceChildren();
+  if (!options.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "The wheel is empty. Add the first pick!";
+    list.append(empty);
+  }
+  for (const option of options) {
+    const mine = (option.addedBy || "").trim().toLowerCase() === me;
+    const card = document.createElement("div");
+    card.className = "option static" + (mine ? " mine-pick" : "");
+    card.setAttribute("role", "listitem");
+    const row = document.createElement("div");
+    row.className = "row";
+    const [bg, ink] = tileColors(option.name);
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.style.background = bg;
+    tile.style.color = ink;
+    tile.textContent = option.name.charAt(0).toUpperCase();
+    const text = document.createElement("div");
+    const nameEl = document.createElement("div");
+    nameEl.className = "name";
+    nameEl.textContent = option.name;
+    if (mine) {
+      const pill = document.createElement("span");
+      pill.className = "pill soft";
+      pill.textContent = "YOUR PICK";
+      nameEl.append(pill);
+    }
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = `${option.category} · added by ${option.addedBy}`;
+    text.append(nameEl, sub);
+    row.append(tile, text);
+    card.append(row);
+    list.append(card);
+  }
+  list.setAttribute("role", "list");
+  updateSuggest(havePick);
+  show("vote-step");
+}
+
 async function vote(optionId, currentVote) {
   if (busy) return;
   busy = true;
@@ -259,7 +326,8 @@ function renderDecided() {
   if (!winner) return renderVote();
   $("winner-name").textContent = winner.name;
   const time = formatTime(session.meetTime);
-  $("winner-detail").textContent = time ? `Meet at ${time}` : winner.category;
+  const how = isSpin() ? `Picked by the spin · ${winner.addedBy ? winner.addedBy + "’s pick" : winner.category}` : winner.category;
+  $("winner-detail").textContent = time ? `Meet at ${time} · ${how}` : how;
 
   const q = encodeURIComponent(winner.name);
   $("apple-maps").href = `https://maps.apple.com/?daddr=${winner.latitude},${winner.longitude}&q=${q}`;
@@ -346,14 +414,19 @@ let searchTimer = null;
 let searchSeq = 0;
 let adding = false;
 
-function updateSuggest() {
+function updateSuggest(havePick = false) {
   const open = session.status === "open";
   const full = (session.options || []).length >= MAX_OPTIONS;
   $("suggest").hidden = !mapkitToken || !open;
+  // In a spin, adding your pick is the main thing to do, so make it the big button.
+  const primary = isSpin() && !havePick && !full;
+  $("suggest-open").className = primary ? "btn primary wide" : "btn ghost wide";
   $("suggest-open").textContent = full
-    ? "This pick is full (12 places)"
-    : (session.mode === "spin" ? "+ Add your pick" : "+ Suggest a place");
+    ? "The wheel is full (12 places)"
+    : isSpin() ? (havePick ? "+ Add another pick" : "+ Add your pick") : "+ Suggest a place";
+  if (!isSpin() && full) $("suggest-open").textContent = "This vote is full (12 places)";
   $("suggest-open").disabled = full;
+  $("suggest-open").style.width = "100%";
   if (full) $("suggest-panel").hidden = true;
   if (!suggestWired && mapkitToken) wireSuggest();
 }
@@ -503,7 +576,7 @@ function renderResults(places, query) {
     text.append(name, sub);
     const add = document.createElement("span");
     add.className = "add";
-    add.textContent = taken ? "In the vote" : "Add";
+    add.textContent = taken ? (isSpin() ? "In the wheel" : "In the vote") : "Add";
     button.append(tile, text, add);
     button.addEventListener("click", () => addOption(option));
     list.append(button);
@@ -582,7 +655,7 @@ async function addOption(option) {
     closeSuggest();
   } catch (error) {
     const messages = {
-      duplicate: "That place is already in the vote.",
+      duplicate: isSpin() ? "That place is already in the wheel." : "That place is already in the vote.",
       full: "This pick already has 12 places, the most it can hold.",
       closed: "Voting has closed, so places can’t be added.",
       ended: "This group pick has ended.",
