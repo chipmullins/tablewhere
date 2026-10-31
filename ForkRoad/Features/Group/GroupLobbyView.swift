@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 import SwiftData
 import PickerCore
 
@@ -266,6 +267,9 @@ struct GroupLobbyView: View {
         }
 
         meetTimeSection(session)
+        if let meet = session.meetTime, meet > .now.addingTimeInterval(-15 * 60) {
+            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet)
+        }
         noteSection(session)
 
         if session.mode == .vote {
@@ -446,6 +450,7 @@ struct GroupLobbyView: View {
             do {
                 live.stop()
                 try await GroupService.shared.endSession(session)
+                LeaveBy.cancel(sessionID: session.id)
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -458,6 +463,7 @@ struct GroupLobbyView: View {
         Task {
             do {
                 try await GroupService.shared.leaveSession(sessionID)
+                LeaveBy.cancel(sessionID: sessionID)
                 dismiss()
             } catch { errorMessage = error.localizedDescription }
         }
@@ -465,7 +471,10 @@ struct GroupLobbyView: View {
 
     private func reopen(_ session: GroupSession) {
         Task {
-            do { try await GroupService.shared.reopen(session: session) }
+            do {
+                try await GroupService.shared.reopen(session: session)
+                LeaveBy.cancel(sessionID: session.id)
+            }
             catch { errorMessage = error.localizedDescription }
         }
     }
@@ -601,5 +610,97 @@ private struct AddOptionView: View {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
             }
         }
+    }
+}
+
+
+/// "Leave by 6:38 PM · 17 min drive", worked out on this phone from your
+/// location, plus the "remind me" switch.
+private struct LeaveByCard: View {
+    let sessionID: String
+    let winner: GroupOption
+    let meetTime: Date
+
+    @Environment(AppModel.self) private var model
+    @State private var plan: LeaveBy.Plan?
+    @State private var failed = false
+    @State private var remind = LeaveBy.remindersOn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: plan?.isTimeToGo == true ? "car.fill" : "clock.badge")
+                    .font(Theme.body(20, .semibold))
+                    .foregroundStyle(Theme.onSaffron)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline)
+                        .font(Theme.display(20))
+                        .foregroundStyle(Theme.text)
+                        .contentTransition(.numericText())
+                    Text(detail)
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if plan == nil && !failed { ProgressView().tint(Theme.muted) }
+            }
+            if let plan, !plan.isTimeToGo {
+                Toggle("Remind me when it’s time to leave", isOn: $remind)
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.text)
+                    .tint(Theme.saffron)
+            }
+        }
+        .padding(14)
+        .card()
+        .accessibilityElement(children: .combine)
+        // Recalculate when the place or time changes (and each time you open it).
+        .task(id: "\(winner.id)|\(meetTime.timeIntervalSince1970)") { await refresh() }
+        .onChange(of: remind) {
+            LeaveBy.remindersOn = remind
+            Task {
+                if let plan { await LeaveBy.schedule(plan, sessionID: sessionID, winner: winner) }
+            }
+        }
+    }
+
+    private var headline: String {
+        guard let plan else { return failed ? "Couldn’t get a drive time" : "Working out when to leave…" }
+        if plan.isTimeToGo {
+            let late = plan.minutesLateIfLeavingNow
+            return late > 0 ? "Leave now (about \(late) min late)" : "Time to leave!"
+        }
+        return "Leave by \(plan.leaveAt.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private var detail: String {
+        guard let plan else {
+            return failed ? "Apple Maps couldn’t find a driving route. Use Directions for the trip." :
+                "Using your location, which stays on this phone."
+        }
+        let from = plan.fromCurrentLocation ? "from where you are" : "from \(model.locationName)"
+        var text = "\(plan.driveMinutes) min drive \(from), with 5 minutes to park."
+        if !plan.isTimeToGo && remind { text += " We’ll remind you." }
+        return text
+    }
+
+    private func refresh() async {
+        failed = false
+        // Get a fresh GPS fix if location is on (it's only used here, on the phone).
+        if model.location.authorization == .authorizedWhenInUse || model.location.authorization == .authorizedAlways {
+            model.location.start()
+        }
+        let from = LeaveBy.origin(model)
+        let destination = CLLocationCoordinate2D(latitude: winner.latitude, longitude: winner.longitude)
+        guard let next = await LeaveBy.plan(to: destination, meetTime: meetTime,
+                                            from: from.coordinate, isGPS: from.isGPS) else {
+            failed = true
+            return
+        }
+        withAnimation(.snappy) { plan = next }
+        await LeaveBy.schedule(next, sessionID: sessionID, winner: winner)
     }
 }

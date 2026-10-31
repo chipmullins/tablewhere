@@ -90,7 +90,7 @@ struct OnboardingView: View {
                     TourPoint("checkmark.circle", "Vote: you pick the options, friends suggest one each, and most votes wins."),
                     TourPoint("dice", "Spin: everyone adds one place, then you spin the wheel."),
                     TourPoint("message", "Friends join from iMessage, or a web link if they don’t have ForkRoad."),
-                    TourPoint("clock", "Lock it in, set a time, add a note, and send everyone the plan.")
+                    TourPoint("clock", "Lock it in and set a time. Everyone gets a “leave by” time and a reminder when it’s time to go.")
                  ])
     ]
 

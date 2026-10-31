@@ -65,6 +65,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             return
         }
 
+        if response.actionIdentifier == LeaveBy.directionsAction {
+            await MainActor.run { LeaveBy.openDirections(from: info) }
+            return
+        }
+
         if let sessionID = info["sessionId"] as? String {
             await MainActor.run { DeepLink.post("group:\(sessionID)") }
         }

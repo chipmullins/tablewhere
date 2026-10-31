@@ -29,7 +29,8 @@ enum VisitFollowUp {
         let never = UNNotificationAction(identifier: neverAction, title: "👎 Never again", options: [.destructive])
         let category = UNNotificationCategory(identifier: categoryID, actions: [loved, fine, never],
                                               intentIdentifiers: [], options: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        // One call sets every category, so the leave-by reminder's goes here too.
+        UNUserNotificationCenter.current().setNotificationCategories([category, LeaveBy.category])
     }
 
     // MARK: Recording
