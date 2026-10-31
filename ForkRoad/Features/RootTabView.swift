@@ -81,13 +81,15 @@ struct RootTabView: View {
     // MARK: Shared caches (widget, Siri, iMessage)
 
     private var cacheKey: [String] {
-        saved.map { "\($0.placeID)|\($0.listRaw)|\($0.skipInSpins)" }
+        saved.map { "\($0.placeID)|\($0.listRaw)|\($0.skipInSpins)|\($0.name)|\($0.hasExactLocation)" }
             + blockedPlaces.map(\.placeID) + blockedCategories.map(\.name)
     }
 
     private func refreshSharedCaches() {
         // Places left out of spins aren't offered by the widget or Siri either.
-        let spinnable = saved.filter { !$0.skipInSpins }
+        // Your own places without an address stay out too: the iMessage app
+        // uses this list for group picks, and they have no real location.
+        let spinnable = saved.filter { !$0.skipInSpins && $0.isShareable }
         SharedCache.saveFavorites(spinnable.filter { $0.list == .favorites }.map { $0.asPlace(from: model.center) })
         SharedCache.saveInterested(spinnable.filter { $0.list == .interested }.map { $0.asPlace(from: model.center) })
         SharedCache.saveBlocked(placeIDs: blockedPlaces.map(\.placeID), categories: blockedCategories.map(\.name))

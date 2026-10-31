@@ -21,6 +21,9 @@ struct ListActions {
     func toggle(_ place: Place, in list: SavedList) {
         if let existing = savedRecord(for: place.id) {
             if existing.list == list {
+                // Your own places are only removed on purpose (Delete), never by
+                // tapping the heart/bookmark off; they'd be gone for good.
+                guard !existing.isCustom else { return }
                 context.delete(existing)
             } else {
                 existing.list = list
@@ -93,6 +96,9 @@ struct ListActions {
     }
 
     // MARK: Helpers
+
+    /// The saved record for a place, if it's on a list.
+    func saved(_ place: Place) -> SavedPlace? { savedRecord(for: place.id) }
 
     private func savedRecord(for id: String) -> SavedPlace? {
         var descriptor = FetchDescriptor<SavedPlace>(predicate: #Predicate { $0.placeID == id })

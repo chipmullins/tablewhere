@@ -53,6 +53,18 @@ final class SavedPlace {
     var phoneNumber: String?
     var websiteURL: URL?
     var savedAt: Date = Date()
+    /// A restaurant you added yourself (not from Apple Maps).
+    var isCustom: Bool = false
+    /// Street address, if you gave one (your own places only).
+    var address: String = ""
+    /// False when you added your own place without an address: it sits at the
+    /// middle of the area you chose, so there are no directions to it and it
+    /// isn't offered to groups (friends would get the wrong spot).
+    var hasExactLocation: Bool = true
+
+    /// Can go in a group pick (and the widget/iMessage): everything except
+    /// your own places that have no address.
+    var isShareable: Bool { !isCustom || hasExactLocation }
 
     var list: SavedList {
         get { SavedList(rawValue: listRaw) ?? .interested }
@@ -68,6 +80,7 @@ final class SavedPlace {
         longitude = place.longitude
         phoneNumber = place.phoneNumber
         websiteURL = place.websiteURL
+        address = place.address ?? ""
         savedAt = .now
     }
 
@@ -78,7 +91,51 @@ final class SavedPlace {
         return Place(id: placeID, name: name, category: category,
                      latitude: latitude, longitude: longitude,
                      distanceMeters: here.distance(from: there),
-                     phoneNumber: phoneNumber, websiteURL: websiteURL)
+                     phoneNumber: phoneNumber, websiteURL: websiteURL,
+                     address: address.isEmpty ? nil : address)
+    }
+
+    /// A restaurant you add yourself. Its ID starts with "custom|" so it can
+    /// never collide with an Apple Maps place.
+    init(customName name: String, category: String, list: SavedList,
+         latitude: Double, longitude: Double, address: String, hasExactLocation: Bool) {
+        listRaw = list.rawValue
+        placeID = "custom|" + UUID().uuidString
+        self.name = name
+        self.category = category
+        self.latitude = latitude
+        self.longitude = longitude
+        self.address = address
+        self.hasExactLocation = hasExactLocation
+        isCustom = true
+        savedAt = .now
+    }
+}
+
+/// An area you added on the Lists tab ("Nashville, TN", "Chevy Chase"), so you
+/// can filter your lists there and add places before you've saved any.
+@Model
+final class SavedArea {
+    var name: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var addedAt: Date = Date()
+
+    init(name: String, latitude: Double, longitude: Double) {
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+        addedAt = .now
+    }
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    /// Saved places count as "in" an area within the same distance as a metro.
+    func contains(_ item: SavedPlace) -> Bool {
+        CLLocation(latitude: latitude, longitude: longitude)
+            .distance(from: CLLocation(latitude: item.latitude, longitude: item.longitude)) <= Metro.radiusMeters
     }
 }
 

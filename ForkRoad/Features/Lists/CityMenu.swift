@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import MapKit
 import CoreLocation
 
 /// Which metro area the saved lists show.
@@ -8,6 +10,8 @@ enum CityFilter: Hashable {
     case all
     /// A metro, by its name (its biggest city, e.g. "Lexington, KY").
     case metro(String)
+    /// An area you added yourself, by its name.
+    case area(String)
 }
 
 /// A metro area built from your saved places: nearby cities grouped under the
@@ -88,20 +92,33 @@ extension Array where Element == SavedPlace {
     }
 
     /// The places a filter shows. "Here" is the metro containing `center`.
-    func filtered(by filter: CityFilter, near center: CLLocationCoordinate2D) -> [SavedPlace] {
+    func filtered(by filter: CityFilter, near center: CLLocationCoordinate2D,
+                  areas: [SavedArea] = []) -> [SavedPlace] {
         switch filter {
         case .all: return self
         case .metro(let name): return metros.first { $0.name == name }?.items ?? []
+        case .area(let name):
+            guard let area = areas.first(where: { $0.name == name }) else { return [] }
+            return filter { area.contains($0) }
         case .here: return metros.first { $0.contains(center) }?.items ?? []
         }
     }
 }
 
-/// "📍 Lexington, KY area ▾" drop-down for filtering Favorites and Interested by metro.
+/// "📍 Lexington, KY area ▾" drop-down for filtering Favorites and Interested
+/// by metro, or by an area you added. Also where you add or remove areas.
 struct CityMenu: View {
     @Environment(AppModel.self) private var model
+    @Query(sort: \SavedArea.addedAt) private var areas: [SavedArea]
     /// Metros on the list being shown.
     let metros: [Metro]
+    @State private var showAreas = false
+
+    /// Your areas, minus any that are already a metro with the same name.
+    private var extraAreas: [SavedArea] {
+        let metroNames = Set(metros.map(\.name))
+        return areas.filter { !metroNames.contains($0.name) }
+    }
 
     var body: some View {
         Menu {
@@ -126,6 +143,24 @@ struct CityMenu: View {
                     }
                 }
             }
+            if !extraAreas.isEmpty {
+                Section("Your areas") {
+                    let everything = metros.flatMap(\.items)
+                    ForEach(extraAreas) { area in
+                        Button {
+                            model.listCity = .area(area.name)
+                        } label: {
+                            Text("\(area.name) (\(everything.filter { area.contains($0) }.count))")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showAreas = true
+            } label: {
+                Label(areas.isEmpty ? "Add an area…" : "Add or remove areas…", systemImage: "plus.circle")
+            }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: model.listCity == .all ? "globe.americas" : "mappin")
@@ -143,6 +178,7 @@ struct CityMenu: View {
             .overlay(Capsule().strokeBorder(Theme.hairline))
         }
         .accessibilityLabel("Area: \(title)")
+        .sheet(isPresented: $showAreas) { AreasSheet() }
     }
 
     /// The metro you're in, else your current city.
@@ -155,6 +191,107 @@ struct CityMenu: View {
         case .here: return hereLabel
         case .all: return "All areas"
         case .metro(let name): return metros.first { $0.name == name }?.label ?? name
+        case .area(let name): return name
+        }
+    }
+}
+
+/// Add an area (any city or neighborhood) or remove ones you added.
+struct AreasSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \SavedArea.addedAt) private var areas: [SavedArea]
+
+    @State private var search = CitySearch(citiesOnly: false)
+    @State private var isResolving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
+                }
+                if search.query.isEmpty {
+                    if areas.isEmpty {
+                        Text("Add a city or neighborhood to filter your lists there, even before you’ve saved anything in it. Search above.")
+                            .font(Theme.body(14))
+                            .foregroundStyle(Theme.muted)
+                            .listRowBackground(Color.clear)
+                    } else {
+                        Section {
+                            ForEach(areas) { area in
+                                Button {
+                                    model.listCity = .area(area.name)
+                                    dismiss()
+                                } label: {
+                                    Label(area.name, systemImage: "mappin.circle.fill")
+                                        .foregroundStyle(Theme.text)
+                                }
+                            }
+                            .onDelete { offsets in
+                                for area in offsets.map({ areas[$0] }) {
+                                    if model.listCity == .area(area.name) { model.listCity = .here }
+                                    context.delete(area)
+                                }
+                            }
+                        } header: {
+                            Text("Your areas")
+                        } footer: {
+                            Text("Swipe left to remove an area. Places you saved there stay on your lists.")
+                        }
+                        .listRowBackground(Theme.surface)
+                    }
+                } else {
+                    Section {
+                        ForEach(search.results, id: \.self) { result in
+                            Button { add(result) } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.title).font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
+                                    if !result.subtitle.isEmpty {
+                                        Text(result.subtitle).font(Theme.body(13)).foregroundStyle(Theme.muted).lineLimit(1)
+                                    }
+                                }
+                            }
+                            .disabled(isResolving)
+                        }
+                    }
+                    .listRowBackground(Theme.surface)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.night)
+            .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "City or neighborhood")
+            .overlay { if isResolving { ProgressView().tint(Theme.muted) } }
+            .navigationTitle("Areas")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.bold() } }
+        }
+        .presentationBackground(Theme.night)
+    }
+
+    private func add(_ completion: MKLocalSearchCompletion) {
+        isResolving = true
+        errorMessage = nil
+        Task {
+            defer { isResolving = false }
+            do {
+                let response = try await MKLocalSearch(request: MKLocalSearch.Request(completion: completion)).start()
+                guard let spot = response.mapItems.first?.placemark.location?.coordinate else {
+                    errorMessage = "Couldn’t find that place."
+                    return
+                }
+                let name = completion.title  // duplicates (same name) are skipped
+                if !areas.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                    context.insert(SavedArea(name: name, latitude: spot.latitude, longitude: spot.longitude))
+                }
+                model.listCity = .area(name)
+                dismiss()
+            } catch {
+                errorMessage = "Couldn’t find that place. Check your connection and try again."
+            }
         }
     }
 }

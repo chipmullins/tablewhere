@@ -25,8 +25,10 @@ struct ListsView: View {
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
     @Query(sort: \BlockedPlace.blockedAt, order: .reverse) private var blockedPlaces: [BlockedPlace]
     @Query(sort: \BlockedCategory.blockedAt, order: .reverse) private var blockedCategories: [BlockedCategory]
+    @Query private var areas: [SavedArea]
 
     @State private var tab: Tab = .favorites
+    @State private var showAddPlace = false
 
     private var actions: ListActions { ListActions(context: context) }
 
@@ -54,6 +56,19 @@ struct ListsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.night)
         .navigationTitle("Your lists")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAddPlace = true } label: {
+                    Label("Add a restaurant", systemImage: "plus")
+                }
+                .accessibilityHint("Add a place that isn’t on Apple Maps")
+            }
+        }
+        .sheet(isPresented: $showAddPlace) {
+            CustomPlaceForm(startingList: tab == .favorites ? .favorites : .interested) {
+                if tab == .blocked { tab = .interested }
+            }
+        }
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
         .animation(.snappy, value: saved.map(\.listRaw))
         // Fill in cities for places saved before cities existed (one at a time).
@@ -66,8 +81,8 @@ struct ListsView: View {
 
     private func label(for tab: Tab) -> String {
         switch tab {
-        case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center).count)"
-        case .interested: return "Interested \(items(in: .interested).filtered(by: model.listCity, near: model.center).count)"
+        case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center, areas: areas).count)"
+        case .interested: return "Interested \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
         case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
         }
     }
@@ -78,33 +93,38 @@ struct ListsView: View {
     private func savedSections(_ list: SavedList) -> some View {
         let all = items(in: list)
         let metros = all.metros
-        let rows = all.filtered(by: model.listCity, near: model.center)
+        let rows = all.filtered(by: model.listCity, near: model.center, areas: areas)
         let areaName = areaLabel(metros)
 
-        if !all.isEmpty {
-            Section {
-                CityMenu(metros: metros)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
+        Section {
+            CityMenu(metros: metros)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
 
         if all.isEmpty {
-            Text(list == .favorites
-                 ? "Tap the heart on a restaurant you love to add it here."
-                 : "Tap the bookmark on a restaurant you want to try to save it here.")
-                .font(Theme.body(15))
-                .foregroundStyle(Theme.muted)
-                .listRowBackground(Color.clear)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(list == .favorites
+                     ? "Tap the heart on a restaurant you love to add it here."
+                     : "Tap the bookmark on a restaurant you want to try to save it here.")
+                    .font(Theme.body(15))
+                    .foregroundStyle(Theme.muted)
+                addPlaceLink
+            }
+            .listRowBackground(Color.clear)
         } else if rows.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("No \(list == .favorites ? "favorites" : "saved places") \(areaName.map { "in \($0)" } ?? "around here") yet.")
                     .font(Theme.body(15))
                     .foregroundStyle(Theme.muted)
-                Button("Show all areas") { model.listCity = .all }
-                    .font(Theme.body(15, .semibold))
-                    .foregroundStyle(Theme.accentText)
+                HStack(spacing: 18) {
+                    Button("Show all areas") { model.listCity = .all }
+                        .font(Theme.body(15, .semibold))
+                        .foregroundStyle(Theme.accentText)
+                    addPlaceLink
+                }
+                .buttonStyle(.plain)
             }
             .listRowBackground(Color.clear)
         } else {
@@ -140,12 +160,21 @@ struct ListsView: View {
 
             Section {} footer: {
                 Text(list == .interested
-                     ? "Tried one and loved it? Swipe right to move it to Favorites. Swipe left to skip a place in spins or remove it."
+                     ? "Tried one and loved it? Swipe right to move it to Favorites. Swipe left to skip a place in spins or remove it. Missing a place? Tap + to add it."
                      : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it back to Interested.")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
             }
         }
+    }
+
+    private var addPlaceLink: some View {
+        Button { showAddPlace = true } label: {
+            Label("Add one yourself", systemImage: "plus.circle")
+                .font(Theme.body(15, .semibold))
+                .foregroundStyle(Theme.accentText)
+        }
+        .buttonStyle(.plain)
     }
 
     private func spinTitle(_ list: SavedList, area: String?) -> String {
@@ -159,6 +188,7 @@ struct ListsView: View {
         switch model.listCity {
         case .all: return nil
         case .metro(let name): return metros.first { $0.name == name }?.label ?? name
+        case .area(let name): return name
         case .here: return metros.first { $0.contains(model.center) }?.label ?? model.currentCity
         }
     }
@@ -172,7 +202,7 @@ struct ListsView: View {
                         .opacity(item.skipInSpins ? 0.45 : 1)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(Theme.body(16, .semibold))
-                        Text(item.skipInSpins ? "\(item.category) · left out of spins" : item.category)
+                        Text(rowDetail(item))
                             .font(Theme.body(13))
                             .foregroundStyle(Theme.muted)
                         if !item.note.isEmpty {
@@ -191,7 +221,7 @@ struct ListsView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
-                Button("Remove", systemImage: "trash", role: .destructive) { context.delete(item) }
+                Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) { context.delete(item) }
                 Button(item.skipInSpins ? "Spin it" : "Skip",
                        systemImage: item.skipInSpins ? "dice" : "pause.circle") {
                     item.skipInSpins.toggle()
@@ -214,6 +244,14 @@ struct ListsView: View {
                 }
             }
         }
+    }
+
+    /// "BBQ · added by you · no address · left out of spins"
+    private func rowDetail(_ item: SavedPlace) -> String {
+        var parts = [item.category]
+        if item.isCustom { parts.append(item.hasExactLocation ? "added by you" : "added by you · no address") }
+        if item.skipInSpins { parts.append("left out of spins") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Blacklisted

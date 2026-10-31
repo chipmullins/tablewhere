@@ -533,7 +533,7 @@ private struct AddOptionView: View {
     @State private var adding: String?
 
     private func savedPlaces(_ list: SavedList) -> [Place] {
-        saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
+        saved.filter { $0.list == list && $0.isShareable }.map { $0.asPlace(from: model.center) }
     }
 
     var body: some View {

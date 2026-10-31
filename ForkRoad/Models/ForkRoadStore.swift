@@ -17,7 +17,8 @@ enum ForkRoadStore {
         SpinRecord.self,
         Trip.self,
         TripPlace.self,
-        Visit.self
+        Visit.self,
+        SavedArea.self
     ])
 
     static let container: ModelContainer = {

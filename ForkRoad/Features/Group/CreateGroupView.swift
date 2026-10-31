@@ -28,7 +28,7 @@ struct CreateGroupView: View {
         model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
     }
     private func savedPlaces(in list: SavedList) -> [Place] {
-        saved.filter { $0.list == list }.map { $0.asPlace(from: model.center) }
+        saved.filter { $0.list == list && $0.isShareable }.map { $0.asPlace(from: model.center) }
     }
 
     var body: some View {

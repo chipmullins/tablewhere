@@ -11,6 +11,7 @@ struct SpinView: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
+    @Query private var areas: [SavedArea]
 
     @State private var reelIndex = 0
     /// Frozen copy of the pool while spinning/landed, so new search results
@@ -43,7 +44,7 @@ struct SpinView: View {
         case .favorites, .interested:
             let list = model.spinSource.savedList
             source = saved.filter { $0.list == list && !$0.skipInSpins }
-                .filtered(by: model.listCity, near: model.center)
+                .filtered(by: model.listCity, near: model.center, areas: areas)
                 .map { $0.asPlace(from: model.center) }
         }
         return Randomizer.eligible(source, rules: rules)
@@ -188,7 +189,7 @@ struct SpinView: View {
     private var skippedCount: Int {
         guard let list = model.spinSource.savedList else { return 0 }
         return saved.filter { $0.list == list && $0.skipInSpins }
-            .filtered(by: model.listCity, near: model.center).count
+            .filtered(by: model.listCity, near: model.center, areas: areas).count
     }
 
     private var areaChip: String {
@@ -196,6 +197,7 @@ struct SpinView: View {
         switch model.listCity {
         case .all: return "All areas"
         case .metro(let name): return "In \(metros.first { $0.name == name }?.label ?? name)"
+        case .area(let name): return "In \(name)"
         case .here:
             let label = metros.first { $0.contains(model.center) }?.label ?? model.currentCity
             return label.map { "In \($0)" } ?? "Around here"

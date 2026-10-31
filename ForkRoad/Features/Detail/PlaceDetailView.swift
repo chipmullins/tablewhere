@@ -15,22 +15,44 @@ struct PlaceDetailView: View {
     @State private var browserURL: URL?
     @State private var showBlockOptions = false
     @State private var refresh = 0  // re-render after save/block
+    @State private var showEdit = false
 
     private var actions: ListActions { ListActions(context: context) }
 
     var body: some View {
         let onList = actions.list(for: place)
+        let record = actions.saved(place)
+        let isCustom = record?.isCustom ?? false
+        let hasDirections = record?.hasExactLocation ?? true
         let _ = refresh
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                hero
+                if hasDirections {
+                    hero
+                } else {
+                    // No address: there's no real spot to show.
+                    ZStack {
+                        Theme.surface
+                        VStack(spacing: 8) {
+                            MonogramTile(name: place.name, category: place.category, size: 72)
+                            Text("No address yet. Tap Edit to add one for directions.")
+                                .font(Theme.body(13))
+                                .foregroundStyle(Theme.muted)
+                        }
+                        .padding(.top, 60)
+                    }
+                    .frame(height: 260)
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(place.name)
                         .font(Theme.display(32))
                         .foregroundStyle(Theme.text)
-                    Text("\(place.category) · \(place.distanceLabel)")
+                    Text(isCustom
+                         ? (hasDirections ? "\(place.category) · \(place.distanceLabel) · added by you"
+                                          : "\(place.category) · added by you · no address")
+                         : "\(place.category) · \(place.distanceLabel)")
                         .font(Theme.body(15))
                         .foregroundStyle(Theme.muted)
                 }
@@ -47,6 +69,8 @@ struct PlaceDetailView: View {
                         PlaceLinks.openDirections(place)
                         VisitFollowUp.record(place, in: context)
                     }
+                    .disabled(!hasDirections)
+                    .opacity(hasDirections ? 1 : 0.4)
 
                     ActionTile(title: "Favorite",
                                systemImage: onList == .favorites ? "heart.fill" : "heart",
@@ -64,8 +88,14 @@ struct PlaceDetailView: View {
                         refresh += 1
                     }
 
-                    ActionTile(title: "Blacklist", systemImage: "nosign", background: Theme.surface) {
-                        showBlockOptions = true
+                    if isCustom {
+                        ActionTile(title: "Edit", systemImage: "pencil", background: Theme.surface) {
+                            showEdit = true
+                        }
+                    } else {
+                        ActionTile(title: "Blacklist", systemImage: "nosign", background: Theme.surface) {
+                            showBlockOptions = true
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -116,7 +146,13 @@ struct PlaceDetailView: View {
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .task { await loadLookAround() }
+        .task { if actions.saved(place)?.hasExactLocation ?? true { await loadLookAround() } }
+        .sheet(isPresented: $showEdit) {
+            if let record = actions.saved(place) {
+                // Back to the list after saving or deleting, so nothing shows stale details.
+                CustomPlaceForm(existing: record) { dismiss() }
+            }
+        }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
         .confirmationDialog("Add to your blacklist?", isPresented: $showBlockOptions, titleVisibility: .visible) {
             Button("Just \(place.name)", role: .destructive) {
