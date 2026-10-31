@@ -105,11 +105,37 @@ final class AppModel {
     /// "Lexington, KY", "Chevy Chase", or "Near you".
     var locationName: String { chosenLocation?.name ?? location.displayName }
 
-    func choose(_ place: ChosenLocation) {
+    func choose(_ place: ChosenLocation, remember: Bool = true) {
         chosenLocation = place
         ChosenLocation.saved = place
-        ChosenLocation.remember(place)
+        if remember { ChosenLocation.remember(place) }
         scheduleSearch()
+    }
+
+    /// Searches around a spot picked on the map (a tap, or "Search this area").
+    /// It's named "Pinned spot" at once, then after the neighborhood or street
+    /// once Apple Maps looks it up. Map spots don't fill up the Recent list.
+    func searchHere(_ coordinate: CLLocationCoordinate2D) {
+        let pin = ChosenLocation(name: "Pinned spot", subtitle: "From the map",
+                                 latitude: coordinate.latitude, longitude: coordinate.longitude)
+        choose(pin, remember: false)
+        Task {
+            guard let name = await Self.spotName(for: coordinate),
+                  chosenLocation?.id == pin.id else { return }  // moved again meanwhile
+            var named = pin
+            named.name = name
+            chosenLocation = named
+            ChosenLocation.saved = named
+        }
+    }
+
+    /// "Chevy Chase", "S Limestone", or the city, for a map spot.
+    private static func spotName(for coordinate: CLLocationCoordinate2D) async -> String? {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard let mark = try? await CLGeocoder().reverseGeocodeLocation(location).first else { return nil }
+        if let area = mark.subLocality { return area }
+        if let street = mark.thoroughfare { return "Near \(street)" }
+        return mark.locality
     }
 
     func useCurrentLocation() {
