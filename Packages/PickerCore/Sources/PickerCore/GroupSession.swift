@@ -82,7 +82,8 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
-                winnerID: String? = nil, meetTime: Date? = nil, note: String? = nil) {
+                winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
+                note: String? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -95,6 +96,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.options = options
         self.winnerID = winnerID
         self.meetTime = meetTime
+        self.picksBy = picksBy
         self.note = note
     }
 
