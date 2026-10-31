@@ -48,7 +48,8 @@ struct TripDetailView: View {
                         Marker(place.name, systemImage: "suitcase.fill", coordinate: place.coordinate)
                             .tint(Theme.trip)
                     }
-                    ForEach(visibleResults.filter { !trip.contains($0) }) { place in
+                    // Nearest 40 only: 100+ pins on a small map is one orange blob.
+                    ForEach(Array(visibleResults.filter { !trip.contains($0) }.prefix(40))) { place in
                         Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
                             .tint(Theme.saffron)
                     }
