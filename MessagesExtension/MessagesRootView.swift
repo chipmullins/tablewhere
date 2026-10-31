@@ -234,15 +234,9 @@ struct MessageVoteView: View {
                                 vote(option, session: session)
                             }
                         }
-                        Button { state.expand(); showAdd = true } label: {
-                            Label(session.mode == .spin ? "Add your pick" : "Suggest a place", systemImage: "plus.circle.fill")
-                                .font(Theme.body(15, .bold))
-                                .foregroundStyle(Theme.accentText)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
+                            state.expand(); showAdd = true
                         }
-                        .buttonStyle(.plain)
-                        .disabled(session.options.count >= 12)
                         if live.isOwner {
                             Button { lockIn(session) } label: {
                                 Text("Lock it in")

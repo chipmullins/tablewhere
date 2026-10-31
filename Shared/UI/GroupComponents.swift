@@ -264,3 +264,42 @@ struct PlanNoteCard: View {
         .accessibilityLabel("Note from \(author): \(note)")
     }
 }
+
+/// "Add your pick" / "Suggest a place", following the group's limits: one
+/// place each in a spin (creator too); in a vote, the creator can add up to
+/// 12 and everyone else can suggest one. Once your pick is in, it says so.
+struct AddPlaceButton: View {
+    let session: GroupSession
+    let userID: String?
+    let action: () -> Void
+
+    var body: some View {
+        if let userID, let mine = session.pick(of: userID), !(session.mode == .vote && session.isOwned(by: userID)) {
+            Label("Your pick: \(mine.name)", systemImage: "checkmark.circle.fill")
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        } else {
+            let full = session.options.count >= GroupSession.maxOptions
+            Button(action: action) {
+                Label(full ? "Full (12 places)" : title, systemImage: "plus.circle.fill")
+                    .font(Theme.body(15, .bold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+            }
+            .buttonStyle(.plain)
+            .disabled(full || userID.map { !session.canAdd(userID: $0) } ?? false)
+        }
+    }
+
+    private var title: String {
+        switch session.mode {
+        case .spin: return "Add your pick to the wheel"
+        case .vote:
+            if let userID, session.isOwned(by: userID) { return "Add another place" }
+            return "Suggest a place (one each)"
+        }
+    }
+}

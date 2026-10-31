@@ -10,6 +10,7 @@ enum GroupError: LocalizedError {
     case notOwner
     case alreadyAdded
     case optionsFull
+    case alreadyPicked
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,7 @@ enum GroupError: LocalizedError {
         case .notOwner: return "Only the person who started this pick can lock it in."
         case .alreadyAdded: return "That place is already in the vote."
         case .optionsFull: return "This pick already has 12 places, the most it can hold."
+        case .alreadyPicked: return "You’ve already added your pick. Everyone gets one."
         }
     }
 }
@@ -57,6 +59,11 @@ final class GroupService {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
+        let options = options.map { option -> GroupOption in
+            var option = option
+            option.addedByID = uid
+            return option
+        }
         let session = GroupSession(
             id: ref.documentID,
             title: title,
@@ -66,7 +73,9 @@ final class GroupService {
             createdAt: Date(),
             closesAt: closesInMinutes.map { Date().addingTimeInterval(TimeInterval($0 * 60)) },
             mode: mode,
-            options: options
+            options: options,
+            // A spin creator's starting place is their one pick.
+            picksBy: mode == .spin ? options.first.map { [uid: $0.id] } : nil
         )
         try await ref.setData(Firestore.Encoder().encode(session))
         // joinCodes/{code} → session, so codes can be looked up without
@@ -142,24 +151,35 @@ final class GroupService {
         try await sessionRef(sessionID).collection("votes").document(uid).delete()
     }
 
-    /// Adds a place unless it's already there. A transaction, so two people
-    /// adding the same place at the same moment can't both get it in.
+    /// Adds a place unless it's already there, or this person has used their
+    /// pick. A transaction, so two people adding at once can't break the limits.
+    /// One pick each (creator too) in a spin; in a vote, the creator can add up
+    /// to 12 and everyone else can suggest one.
     func addOption(sessionID: String, option: GroupOption) async throws {
-        _ = try await userID()
+        let uid = try await userID()
         let ref = sessionRef(sessionID)
+        var option = option
+        option.addedByID = uid
         let data = try Firestore.Encoder().encode(option)
         let optionID = option.id
         let name = option.name, lat = option.latitude, lon = option.longitude
         _ = try await db.runTransaction { transaction, errorPointer in
             do {
                 let snapshot = try transaction.getDocument(ref)
-                guard snapshot.exists else { throw GroupError.sessionNotFound }
-                let existing = snapshot.data()?["options"] as? [[String: Any]] ?? []
+                guard snapshot.exists, let fields = snapshot.data() else { throw GroupError.sessionNotFound }
+                let existing = fields["options"] as? [[String: Any]] ?? []
+                let picks = fields["picksBy"] as? [String: String] ?? [:]
+                let isOwner = fields["createdBy"] as? String == uid
+                let isSpin = fields["mode"] as? String == GroupMode.spin.rawValue
+                let usesPick = isSpin || !isOwner
+                if usesPick && picks[uid] != nil { throw GroupError.alreadyPicked }
                 if existing.contains(where: { Self.isSamePlace($0, id: optionID, name: name, latitude: lat, longitude: lon) }) {
                     throw GroupError.alreadyAdded
                 }
-                if existing.count >= 12 { throw GroupError.optionsFull }
-                transaction.updateData(["options": FieldValue.arrayUnion([data])], forDocument: ref)
+                if existing.count >= GroupSession.maxOptions { throw GroupError.optionsFull }
+                var update: [String: Any] = ["options": FieldValue.arrayUnion([data])]
+                if usesPick { update["picksBy.\(uid)"] = optionID }
+                transaction.updateData(update, forDocument: ref)
             } catch {
                 errorPointer?.pointee = error as NSError
             }

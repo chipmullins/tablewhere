@@ -251,7 +251,7 @@ function renderSpin() {
   const me = (myName() || "").trim().toLowerCase();
   const creator = session.createdByName || "Whoever started it";
   const options = session.options || [];
-  const havePick = options.some((o) => (o.addedBy || "").trim().toLowerCase() === me);
+  const havePick = !!myPick();
   $("vote-help").textContent = havePick
     ? `You’re in the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
     : mapkitToken
@@ -267,7 +267,8 @@ function renderSpin() {
     list.append(empty);
   }
   for (const option of options) {
-    const mine = (option.addedBy || "").trim().toLowerCase() === me;
+    const mine = option.addedByID ? option.addedByID === uid
+      : (option.addedBy || "").trim().toLowerCase() === me;
     const card = document.createElement("div");
     card.className = "option static" + (mine ? " mine-pick" : "");
     card.setAttribute("role", "listitem");
@@ -298,7 +299,7 @@ function renderSpin() {
     list.append(card);
   }
   list.setAttribute("role", "list");
-  updateSuggest(havePick);
+  updateSuggest();
   show("vote-step");
 }
 
@@ -409,25 +410,40 @@ function renderBreakdown(winnerId) {
 // same way the app does: one transaction, no duplicates, at most 12 places.
 
 const MAX_OPTIONS = 12;
+
+// The place you added with your one pick, if any.
+function myPick() {
+  const options = session.options || [];
+  const id = (session.picksBy || {})[uid];
+  return (id && options.find((o) => o.id === id)) || options.find((o) => o.addedByID === uid) || null;
+}
 let suggestWired = false;
 let searchTimer = null;
 let searchSeq = 0;
 let adding = false;
 
-function updateSuggest(havePick = false) {
+function updateSuggest() {
   const open = session.status === "open";
   const full = (session.options || []).length >= MAX_OPTIONS;
+  const mine = myPick();
   $("suggest").hidden = !mapkitToken || !open;
-  // In a spin, adding your pick is the main thing to do, so make it the big button.
-  const primary = isSpin() && !havePick && !full;
-  $("suggest-open").className = primary ? "btn primary wide" : "btn ghost wide";
-  $("suggest-open").textContent = full
-    ? "The wheel is full (12 places)"
-    : isSpin() ? (havePick ? "+ Add another pick" : "+ Add your pick") : "+ Suggest a place";
-  if (!isSpin() && full) $("suggest-open").textContent = "This vote is full (12 places)";
-  $("suggest-open").disabled = full;
-  $("suggest-open").style.width = "100%";
-  if (full) $("suggest-panel").hidden = true;
+  const button = $("suggest-open");
+  button.style.width = "100%";
+  if (mine) {
+    // One pick each: once yours is in, the button becomes a label.
+    button.className = "btn ghost wide";
+    button.textContent = `✓ Your pick: ${mine.name}`;
+    button.disabled = true;
+    $("suggest-panel").hidden = true;
+    button.hidden = false;
+  } else {
+    button.className = isSpin() && !full ? "btn primary wide" : "btn ghost wide";
+    button.textContent = full
+      ? (isSpin() ? "The wheel is full (12 places)" : "This vote is full (12 places)")
+      : (isSpin() ? "+ Add your pick" : "+ Suggest a place (one each)");
+    button.disabled = full;
+    if (full) $("suggest-panel").hidden = true;
+  }
   if (!suggestWired && mapkitToken) wireSuggest();
 }
 
@@ -616,6 +632,7 @@ function toOption(place) {
     latitude: lat,
     longitude: lon,
     addedBy: myName() || "A friend",
+    addedByID: uid,
   };
   // Optional fields are left out when missing, matching the app.
   if (place.formattedAddress) option.address = place.formattedAddress;
@@ -648,9 +665,11 @@ async function addOption(option) {
       const data = snap.data();
       const options = data.options || [];
       if (data.status !== "open") throw new Error("closed");
+      if ((data.picksBy || {})[uid]) throw new Error("picked");
       if (options.some((o) => sameOption(o, option))) throw new Error("duplicate");
       if (options.length >= MAX_OPTIONS) throw new Error("full");
-      tx.update(sessionRef, { options: [...options, option] });
+      // Everyone gets one pick; it's recorded under your ID (the rules check it).
+      tx.update(sessionRef, { options: [...options, option], [`picksBy.${uid}`]: option.id });
     });
     closeSuggest();
   } catch (error) {
@@ -659,6 +678,7 @@ async function addOption(option) {
       full: "This pick already has 12 places, the most it can hold.",
       closed: "Voting has closed, so places can’t be added.",
       ended: "This group pick has ended.",
+      picked: "You’ve already added your pick. Everyone gets one.",
     };
     setStatus(messages[error?.message] || "Couldn’t add it. Check your connection and try again.", true);
     // Let them pick something else (places already in the vote stay disabled).

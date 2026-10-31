@@ -20,7 +20,9 @@ struct CreateGroupView: View {
     @State private var errorMessage: String?
     @State private var query = ""
 
-    static let maxOptions = 8
+    static let maxVoteOptions = 8
+    /// In a spin everyone adds one place, starting with you.
+    private var maxOptions: Int { mode == .spin ? 1 : Self.maxVoteOptions }
 
     private var rules: Randomizer.Rules {
         model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
@@ -39,6 +41,9 @@ struct CreateGroupView: View {
                         Text("Spin").tag(GroupMode.spin)
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: mode) {
+                        if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
+                    }
                     if mode == .vote {
                         Picker("Voting closes", selection: $closesIn) {
                             Text("5 min").tag(Int?.some(5))
@@ -49,8 +54,8 @@ struct CreateGroupView: View {
                     }
                 } footer: {
                     Text(mode == .vote
-                         ? "Most votes wins. Ties are broken fairly by the app."
-                         : "Friends can add places, then the app picks one at random.")
+                         ? "Most votes wins. Ties are broken fairly by the app. You can add up to 12 places; everyone else can suggest one."
+                         : "Everyone adds one place, starting with you. Then you spin and the app picks one at random.")
                 }
                 .listRowBackground(Theme.surface)
 
@@ -82,7 +87,7 @@ struct CreateGroupView: View {
                     rules: rules,
                     search: model.placeSearch,
                     accessory: { .check(isOn: selected.contains($0)) },
-                    isDisabled: { !selected.contains($0) && selected.count >= Self.maxOptions },
+                    isDisabled: { mode == .vote && !selected.contains($0) && selected.count >= maxOptions },
                     onTap: toggle
                 )
 
@@ -110,7 +115,9 @@ struct CreateGroupView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Text("\(selected.count) of up to \(Self.maxOptions) selected")
+                Text(mode == .spin
+                     ? (selected.isEmpty ? "Pick your one place for the wheel" : "Your pick: \(selected[0].name)")
+                     : "\(selected.count) of up to \(maxOptions) selected")
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity)
@@ -126,41 +133,12 @@ struct CreateGroupView: View {
             && (mode == .spin ? selected.count >= 1 : selected.count >= 2)
     }
 
-    @ViewBuilder
-    private func placeSection(_ header: String, places: [Place]) -> some View {
-        if !places.isEmpty {
-            Section(header) {
-                ForEach(places) { place in
-                    let isOn = selected.contains(place)
-                    Button {
-                        toggle(place)
-                    } label: {
-                        HStack(spacing: 12) {
-                            MonogramTile(name: place.name, category: place.category, size: 36)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(place.name).foregroundStyle(Theme.text)
-                                Text("\(place.category) · \(place.distanceLabel)")
-                                    .font(Theme.body(12))
-                                    .foregroundStyle(Theme.muted)
-                            }
-                            Spacer()
-                            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                .font(Theme.body(22))
-                                .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
-                        }
-                    }
-                    .disabled(!isOn && selected.count >= Self.maxOptions)
-                    .accessibilityAddTraits(isOn ? .isSelected : [])
-                }
-            }
-            .listRowBackground(Theme.surface)
-        }
-    }
-
     private func toggle(_ place: Place) {
         if let index = selected.firstIndex(of: place) {
             selected.remove(at: index)
-        } else if selected.count < Self.maxOptions {
+        } else if mode == .spin {
+            selected = [place]  // one pick: tapping another swaps it
+        } else if selected.count < maxOptions {
             selected.append(place)
         }
     }

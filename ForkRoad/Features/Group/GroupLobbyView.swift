@@ -222,16 +222,7 @@ struct GroupLobbyView: View {
             }
         }
 
-        Button { showAddPlace = true } label: {
-            Label(session.mode == .spin ? "Add your pick to the wheel" : "Suggest another place", systemImage: "plus.circle.fill")
-                .font(Theme.body(15, .bold))
-                .foregroundStyle(Theme.accentText)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
-        }
-        .buttonStyle(.plain)
-        .disabled(session.options.count >= 12)
+        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) { showAddPlace = true }
 
         if session.mode == .vote {
             Label("If it ends in a tie, the app picks fairly between the tied places.", systemImage: "shuffle")

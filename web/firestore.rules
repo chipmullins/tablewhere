@@ -32,16 +32,31 @@ service cloud.firestore {
         && request.resource.data.status == 'open'
         && request.resource.data.options.size() <= 12;
 
-      // The creator can change anything (lock in, meeting time, reopen).
-      // Anyone else can only add places while it's still open.
+      function addsMyOnePick() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let picksBefore = before.get('picksBy', {});
+        let picksAfter = after.get('picksBy', {});
+        return before.status == 'open'
+          && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
+          // exactly one new place, nothing removed, still 12 or fewer
+          && after.options.size() == before.options.size() + 1
+          && after.options.size() <= 12
+          && after.options.hasAll(before.options)
+          // the new place is yours, and it's your first
+          && after.options[before.options.size()].get('addedByID', '') == request.auth.uid
+          && !(request.auth.uid in picksBefore)
+          && picksAfter.diff(picksBefore).affectedKeys().hasOnly([request.auth.uid])
+          && picksAfter[request.auth.uid] == after.options[before.options.size()].id;
+      }
+
+      // The creator can change anything (lock in, meeting time, reopen, and
+      // add up to 12 places to a vote).
+      // Everyone else gets ONE pick per group, while it's open: they add one
+      // place and record it under their own ID in picksBy. A second add fails.
       allow update: if signedIn() && (
         resource.data.createdBy == request.auth.uid
-        || (
-          resource.data.status == 'open'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['options'])
-          && request.resource.data.options.size() > resource.data.options.size()
-          && request.resource.data.options.size() <= 12
-        )
+        || addsMyOnePick()
       );
 
       allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;

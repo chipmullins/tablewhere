@@ -29,8 +29,10 @@ public struct GroupOption: Codable, Hashable, Identifiable, Sendable {
     public var websiteURL: String?
     /// Display name of whoever added it.
     public var addedBy: String
+    /// Firebase user ID of whoever added it. Nil on places from older versions.
+    public var addedByID: String?
 
-    public init(place: Place, addedBy: String) {
+    public init(place: Place, addedBy: String, addedByID: String? = nil) {
         id = place.id
         name = place.name
         category = place.category
@@ -40,6 +42,7 @@ public struct GroupOption: Codable, Hashable, Identifiable, Sendable {
         phoneNumber = place.phoneNumber
         websiteURL = place.websiteURL?.absoluteString
         self.addedBy = addedBy
+        self.addedByID = addedByID
     }
 
     /// Converts back to a Place (distance unknown, so 0).
@@ -68,6 +71,10 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var options: [GroupOption]
     public var winnerID: String?
     public var meetTime: Date?
+    /// Who has used their one pick: user ID → option ID. In a spin, everyone
+    /// (creator too) adds one place; in a vote, everyone but the creator can
+    /// suggest one. Enforced by the Firestore rules. Nil on older sessions.
+    public var picksBy: [String: String]?
     /// Short note from the creator sent with the plan ("Bring a gift!").
     /// Optional, so sessions from older app versions still decode.
     public var note: String?
@@ -106,6 +113,25 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     }
 
     public func isOwned(by userID: String) -> Bool { createdBy == userID }
+
+    /// The place this person added with their one pick, if any.
+    public func pick(of userID: String) -> GroupOption? {
+        if let id = picksBy?[userID], let option = options.first(where: { $0.id == id }) { return option }
+        // Spin creators pick when they start the group.
+        if mode == .spin { return options.first { $0.addedByID == userID } }
+        return nil
+    }
+
+    /// Whether this person can still add a place: one pick each, except the
+    /// creator of a vote, who can add up to the 12-place limit.
+    public func canAdd(userID: String) -> Bool {
+        guard status == .open, options.count < GroupSession.maxOptions else { return false }
+        if mode == .vote && isOwned(by: userID) { return true }
+        return pick(of: userID) == nil
+    }
+
+    /// Most places a group can hold.
+    public static let maxOptions = 12
 }
 
 /// One person's vote. Stored one per person, so voting again replaces it.
