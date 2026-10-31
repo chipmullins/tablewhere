@@ -26,7 +26,8 @@ private struct VoteBubbleCard: View {
                     .foregroundStyle(Theme.onSaffron)
                     .frame(width: 24, height: 24)
                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 7))
-                Text(session.winner == nil ? "FORKROAD · VOTE" : "FORKROAD · DECIDED")
+                Text(session.winner != nil ? "FORKROAD · DECIDED"
+                     : session.mode == .spin ? "FORKROAD · SPIN" : "FORKROAD · VOTE")
                     .font(Theme.body(11, .bold))
                     .tracking(0.8)
                     .foregroundStyle(Theme.accentText)
@@ -40,6 +41,27 @@ private struct VoteBubbleCard: View {
                 Text(winner.category)
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
+            } else if session.mode == .spin {
+                Text("Everyone adds one place, then \(session.createdByName) spins.")
+                    .font(Theme.body(13, .semibold))
+                    .foregroundStyle(Theme.text)
+                ForEach(session.options.prefix(4)) { option in
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 6))
+                            .foregroundStyle(Theme.saffron)
+                        Text(option.name).lineLimit(1)
+                        Spacer()
+                        Text(option.addedBy).foregroundStyle(Theme.muted).lineLimit(1)
+                    }
+                    .font(Theme.body(13, .semibold))
+                    .foregroundStyle(Theme.text)
+                }
+                if session.options.count > 4 {
+                    Text("+\(session.options.count - 4) more")
+                        .font(Theme.body(12))
+                        .foregroundStyle(Theme.muted)
+                }
             } else {
                 let maxVotes = max(tally.counts.values.max() ?? 0, 1)
                 ForEach(session.options.prefix(4)) { option in

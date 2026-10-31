@@ -61,7 +61,12 @@ struct NewVoteView: View {
     @State private var query = ""
     @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
 
-    private let maxOptions = 6
+    @State private var mode: GroupMode = .vote
+
+    /// A vote starts with 2–6 of your places; a spin starts with your one pick.
+    private var maxOptions: Int { mode == .spin ? 1 : 6 }
+    private var minOptions: Int { mode == .spin ? 1 : 2 }
+    private var canSend: Bool { selected.count >= minOptions && !isSending }
 
     var body: some View {
         if !state.isExpanded {
@@ -73,8 +78,8 @@ struct NewVoteView: View {
                         .frame(width: 44, height: 44)
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Start a dinner vote").font(Theme.display(18))
-                        Text("Pick a few places, friends vote right here").font(Theme.body(12, .medium))
+                        Text("Start a dinner pick").font(Theme.display(18))
+                        Text("Vote on a few places, or everyone adds one and you spin").font(Theme.body(12, .medium))
                     }
                     Spacer()
                 }
@@ -88,11 +93,25 @@ struct NewVoteView: View {
             VStack(spacing: 0) {
                 List {
                     Section {
+                        Picker("How to decide", selection: $mode) {
+                            Text("Vote").tag(GroupMode.vote)
+                            Text("Spin").tag(GroupMode.spin)
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: mode) {
+                            if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
+                        }
+                    } footer: {
+                        Text(mode == .vote
+                             ? "Pick 2–6 places. Friends vote and can each suggest one more. Most votes wins."
+                             : "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random.")
+                    }
+                    Section {
                         MessageSearchField(text: $query)
                     }
                     .listRowBackground(Theme.surface)
                     if !selected.isEmpty {
-                        Section("Picked (\(selected.count) of \(maxOptions))") {
+                        Section(mode == .spin ? "Your pick" : "Picked (\(selected.count) of \(maxOptions))") {
                             ForEach(selected) { place in
                                 Button { toggle(place) } label: {
                                     HStack(spacing: 12) {
@@ -108,7 +127,7 @@ struct NewVoteView: View {
                     }
                     MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
                                        accessory: { .check(isOn: selected.contains($0)) },
-                                       isDisabled: { !selected.contains($0) && selected.count >= maxOptions },
+                                       isDisabled: { mode == .vote && !selected.contains($0) && selected.count >= maxOptions },
                                        onTap: toggle)
                     Section {
                         Toggle("Also send a web link for friends without ForkRoad", isOn: $includeWebLink)
@@ -124,23 +143,31 @@ struct NewVoteView: View {
                 Button(action: send) {
                     Group {
                         if isSending { ProgressView().tint(Theme.onSaffron) }
-                        else { Text(selected.count < 2 ? "Pick at least 2 places" : "Send vote · \(selected.count) places") }
+                        else { Text(sendTitle) }
                     }
                     .font(Theme.display(17))
                     .foregroundStyle(Theme.onSaffron)
                     .frame(maxWidth: .infinity, minHeight: 54)
-                    .background(Theme.saffron.opacity(selected.count < 2 ? 0.45 : 1),
+                    .background(Theme.saffron.opacity(canSend ? 1 : 0.45),
                                 in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .disabled(selected.count < 2 || isSending)
+                .disabled(!canSend)
                 .padding(16)
             }
         }
     }
 
+    private var sendTitle: String {
+        switch mode {
+        case .vote: return selected.count < 2 ? "Pick at least 2 places" : "Send vote · \(selected.count) places"
+        case .spin: return selected.first.map { "Start the spin · \($0.name)" } ?? "Pick your place"
+        }
+    }
+
     private func toggle(_ place: Place) {
         if let i = selected.firstIndex(of: place) { selected.remove(at: i) }
+        else if mode == .spin { selected = [place] }  // one pick: tapping another swaps it
         else if selected.count < maxOptions { selected.append(place) }
     }
 
@@ -152,8 +179,8 @@ struct NewVoteView: View {
             defer { isSending = false }
             do {
                 let session = try await GroupService.shared.createSession(
-                    title: "Where should we eat?",
-                    mode: .vote,
+                    title: mode == .spin ? "Spin for dinner" : "Where should we eat?",
+                    mode: mode,
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
                     closesInMinutes: nil,
                     displayName: name
@@ -244,14 +271,14 @@ struct MessageVoteView: View {
                         }
                         if live.isOwner {
                             Button { lockIn(session) } label: {
-                                Text("Lock it in")
+                                Text(session.mode == .spin ? "Spin it" : "Lock it in")
                                     .font(Theme.display(17))
                                     .foregroundStyle(Theme.onSaffron)
                                     .frame(maxWidth: .infinity, minHeight: 52)
                                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .disabled(isWorking || (session.mode == .vote && tally.totalVotes == 0))
+                            .disabled(isWorking || session.options.isEmpty || (session.mode == .vote && tally.totalVotes == 0))
                         }
                     }
                     Button(live.isOwner ? "End group for everyone" : "Leave group", role: .destructive) {

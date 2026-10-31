@@ -124,13 +124,19 @@ final class MessagesState {
         layout.image = VoteBubbleImage.render(session: session, tally: tally)
         if let winner = session.winner {
             layout.caption = "We’re going to \(winner.name)"
-            layout.subcaption = session.meetTime.map { "Meet at \($0.formatted(date: .omitted, time: .shortened))" } ?? "Tap for directions"
+            layout.subcaption = session.meetTime.map { "Meet at \($0.formatted(date: .omitted, time: .shortened))" }
+                ?? (session.mode == .spin ? "Picked by the spin · tap for directions" : "Tap for directions")
             message.summaryText = "Picked \(winner.name)"
         } else {
             layout.caption = session.title
-            let votes = tally.totalVotes
-            layout.subcaption = votes == 0 ? "Tap to vote" : "\(votes) vote\(votes == 1 ? "" : "s") so far · tap to vote"
-            message.summaryText = "Vote: \(session.title)"
+            if session.mode == .spin {
+                layout.subcaption = "Tap to add your pick to the wheel"
+                message.summaryText = "Spin: \(session.title)"
+            } else {
+                let votes = tally.totalVotes
+                layout.subcaption = votes == 0 ? "Tap to vote" : "\(votes) vote\(votes == 1 ? "" : "s") so far · tap to vote"
+                message.summaryText = "Vote: \(session.title)"
+            }
         }
         message.layout = layout
     }
