@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import FirebaseAuth
 import FirebaseFirestore
 import PickerCore
@@ -148,12 +149,15 @@ final class GroupService {
         let ref = sessionRef(sessionID)
         let data = try Firestore.Encoder().encode(option)
         let optionID = option.id
+        let name = option.name, lat = option.latitude, lon = option.longitude
         _ = try await db.runTransaction { transaction, errorPointer in
             do {
                 let snapshot = try transaction.getDocument(ref)
                 guard snapshot.exists else { throw GroupError.sessionNotFound }
                 let existing = snapshot.data()?["options"] as? [[String: Any]] ?? []
-                if existing.contains(where: { $0["id"] as? String == optionID }) { throw GroupError.alreadyAdded }
+                if existing.contains(where: { Self.isSamePlace($0, id: optionID, name: name, latitude: lat, longitude: lon) }) {
+                    throw GroupError.alreadyAdded
+                }
                 if existing.count >= 12 { throw GroupError.optionsFull }
                 transaction.updateData(["options": FieldValue.arrayUnion([data])], forDocument: ref)
             } catch {
@@ -187,6 +191,20 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         try await sessionRef(session.id).updateData(["status": GroupStatus.open.rawValue, "winnerID": FieldValue.delete()])
+    }
+
+    /// Same ID, or the same name within about 150 m. Apple Maps on the web
+    /// (friends adding from the vote page) and on iPhone can disagree by a
+    /// few meters, which changes the ID. Matches `sameOption` in web/public/app.js.
+    nonisolated static func isSamePlace(_ data: [String: Any], id: String, name: String,
+                                        latitude: Double, longitude: Double) -> Bool {
+        if data["id"] as? String == id { return true }
+        guard let otherName = data["name"] as? String,
+              otherName.trimmingCharacters(in: .whitespaces).lowercased() == name.trimmingCharacters(in: .whitespaces).lowercased(),
+              let otherLat = data["latitude"] as? Double, let otherLon = data["longitude"] as? Double else { return false }
+        let a = CLLocation(latitude: latitude, longitude: longitude)
+        let b = CLLocation(latitude: otherLat, longitude: otherLon)
+        return a.distance(from: b) < 160
     }
 
     /// Ends a group for everyone: deletes its votes, members, join code, and the session.

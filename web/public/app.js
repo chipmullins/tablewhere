@@ -3,7 +3,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp
+  getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -53,6 +53,13 @@ try {
   fail("This vote page isn’t set up yet. (Missing firebase-config.js — see the README.)");
   throw new Error("Missing firebase-config.js");
 }
+
+// Optional: the MapKit JS token for "Suggest a place" (web/tools/make-mapkit-token.mjs).
+// Without it, friends on the web can still vote; they just can't add places.
+let mapkitToken = null;
+try {
+  ({ mapkitToken } = await import("./mapkit-token.js"));
+} catch { /* no token yet */ }
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -224,6 +231,7 @@ function renderVote() {
     button.addEventListener("click", () => vote(option.id, mine));
     list.append(button);
   }
+  updateSuggest();
   show("vote-step");
 }
 
@@ -324,4 +332,265 @@ function renderBreakdown(winnerId) {
     list.append(item);
   }
   wrap.hidden = false;
+}
+
+
+// ---------------------------------------------------------------------------
+// Suggest a place (friends without the app). Searches Apple Maps with
+// MapKit JS around the places already in the vote, and adds the pick the
+// same way the app does: one transaction, no duplicates, at most 12 places.
+
+const MAX_OPTIONS = 12;
+let suggestWired = false;
+let searchTimer = null;
+let searchSeq = 0;
+let adding = false;
+
+function updateSuggest() {
+  const open = session.status === "open";
+  const full = (session.options || []).length >= MAX_OPTIONS;
+  $("suggest").hidden = !mapkitToken || !open;
+  $("suggest-open").textContent = full
+    ? "This pick is full (12 places)"
+    : (session.mode === "spin" ? "+ Add your pick" : "+ Suggest a place");
+  $("suggest-open").disabled = full;
+  if (full) $("suggest-panel").hidden = true;
+  if (!suggestWired && mapkitToken) wireSuggest();
+}
+
+function wireSuggest() {
+  suggestWired = true;
+  $("suggest-open").addEventListener("click", async () => {
+    $("suggest-panel").hidden = false;
+    $("suggest-open").hidden = true;
+    $("suggest-input").focus();
+    try {
+      await loadMapKit();
+      setStatus("");
+    } catch {
+      setStatus("Search isn’t available right now. You can still vote.");
+    }
+  });
+  $("suggest-close").addEventListener("click", closeSuggest);
+  $("suggest-input").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 350);
+  });
+  $("suggest-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); clearTimeout(searchTimer); runSearch(); }
+  });
+}
+
+function closeSuggest() {
+  $("suggest-panel").hidden = true;
+  $("suggest-open").hidden = false;
+  $("suggest-input").value = "";
+  $("suggest-results").replaceChildren();
+  setStatus("");
+}
+
+function setStatus(text, isError = false) {
+  const el = $("suggest-status");
+  el.textContent = text;
+  el.classList.toggle("error", isError);
+  el.hidden = !text;
+}
+
+let mapkitReady = null;
+function loadMapKit() {
+  if (mapkitReady) return mapkitReady;
+  mapkitReady = new Promise((resolve, reject) => {
+    window.__forkroadMapKitLoaded = () => {
+      try {
+        mapkit.init({ authorizationCallback: (done) => done(mapkitToken) });
+        mapkit.addEventListener("error", () => setStatus("Search isn’t available right now. You can still vote.", true));
+        resolve(window.mapkit);
+      } catch (e) { reject(e); }
+    };
+    const script = document.createElement("script");
+    script.src = "https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.core.js";
+    script.crossOrigin = "anonymous";
+    script.async = true;
+    script.dataset.callback = "__forkroadMapKitLoaded";
+    script.dataset.libraries = "services";
+    script.onerror = () => { mapkitReady = null; reject(new Error("MapKit JS failed to load")); };
+    document.head.append(script);
+  });
+  return mapkitReady;
+}
+
+// The middle of the places already in the vote: that's where the group is eating.
+function groupCenter() {
+  const opts = (session.options || []).filter((o) => Number.isFinite(o.latitude) && Number.isFinite(o.longitude));
+  if (!opts.length) return null;
+  const lat = opts.reduce((a, o) => a + o.latitude, 0) / opts.length;
+  const lon = opts.reduce((a, o) => a + o.longitude, 0) / opts.length;
+  return { lat, lon };
+}
+
+function milesBetween(a, b) {
+  const r = 3958.8, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(h));
+}
+
+async function runSearch() {
+  const query = $("suggest-input").value.trim();
+  const seq = ++searchSeq;
+  if (query.length < 2) { $("suggest-results").replaceChildren(); setStatus(""); return; }
+  const center = groupCenter();
+  if (!center) { setStatus("Couldn’t tell where this group is eating.", true); return; }
+
+  setStatus("Searching…");
+  let mk;
+  try { mk = await loadMapKit(); } catch { setStatus("Search isn’t available right now. You can still vote.", true); return; }
+
+  // About 15 miles each way, like a name search in the app.
+  const region = new mk.CoordinateRegion(
+    new mk.Coordinate(center.lat, center.lon),
+    new mk.CoordinateSpan(0.44, 0.44 / Math.max(0.2, Math.cos(center.lat * Math.PI / 180)))
+  );
+  const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
+  try {
+    const C = mk.PointOfInterestCategory;
+    options.pointOfInterestFilter = mk.PointOfInterestFilter.including(
+      [C.Restaurant, C.Cafe, C.Bakery, C.Brewery, C.Winery, C.FoodMarket].filter(Boolean));
+  } catch { /* older MapKit JS: search everything */ }
+
+  new mk.Search(options).search(query, (error, data) => {
+    if (seq !== searchSeq) return;  // a newer search took over
+    if (error) { setStatus("Couldn’t search right now. Try again in a moment.", true); return; }
+    const places = (data?.places || [])
+      .filter((p) => p.coordinate && p.name)
+      .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
+      .sort((a, b) => a.miles - b.miles)
+      .slice(0, 15);
+    renderResults(places, query);
+  }, { region });
+}
+
+function renderResults(places, query) {
+  const list = $("suggest-results");
+  list.replaceChildren();
+  if (!places.length) {
+    setStatus(`No restaurants found for “${query}”. Try a broader word like “pizza.”`);
+    return;
+  }
+  setStatus("");
+  for (const { p, miles } of places) {
+    const option = toOption(p);
+    const taken = isTaken(option);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "result";
+    button.disabled = taken || adding;
+    button.dataset.taken = taken ? "1" : "0";
+
+    const [bg, ink] = tileColors(option.name);
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.style.background = bg;
+    tile.style.color = ink;
+    tile.textContent = option.name.charAt(0).toUpperCase();
+    const text = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = option.name;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = `${option.category} · ${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi${option.address ? " · " + option.address : ""}`;
+    text.append(name, sub);
+    const add = document.createElement("span");
+    add.className = "add";
+    add.textContent = taken ? "In the vote" : "Add";
+    button.append(tile, text, add);
+    button.addEventListener("click", () => addOption(option));
+    list.append(button);
+  }
+}
+
+function categoryLabel(place) {
+  switch (place.pointOfInterestCategory) {
+    case "Cafe": return "Café";
+    case "Bakery": return "Bakery";
+    case "Brewery": return "Brewery";
+    case "Winery": return "Winery";
+    case "FoodMarket": return "Market";
+    default: return "Restaurant";
+  }
+}
+
+// Same ID the app makes (Place.makeID in PickerCore): name + coordinates
+// rounded to 4 places, written the way Swift prints a Double.
+function swiftDouble(x) {
+  if (Object.is(x, -0)) return "-0.0";
+  return Number.isInteger(x) ? x.toFixed(1) : String(x);
+}
+function roundAway(x) { return Math.sign(x) * Math.round(Math.abs(x)); }
+function makeID(name, lat, lon) {
+  const rLat = roundAway(lat * 10000) / 10000;
+  const rLon = roundAway(lon * 10000) / 10000;
+  return `${name.toLowerCase()}|${swiftDouble(rLat)}|${swiftDouble(rLon)}`;
+}
+
+function toOption(place) {
+  const lat = place.coordinate.latitude, lon = place.coordinate.longitude;
+  const option = {
+    id: makeID(place.name, lat, lon),
+    name: place.name,
+    category: categoryLabel(place),
+    latitude: lat,
+    longitude: lon,
+    addedBy: myName() || "A friend",
+  };
+  // Optional fields are left out when missing, matching the app.
+  if (place.formattedAddress) option.address = place.formattedAddress;
+  if (place.telephone) option.phoneNumber = place.telephone;
+  const url = Array.isArray(place.urls) ? place.urls[0] : place.url;
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) option.websiteURL = url;
+  return option;
+}
+
+// Apple Maps on the web and on iPhone can disagree by a few meters, so a
+// place with the same name within ~150 m also counts as already added.
+function sameOption(a, b) {
+  if (a.id === b.id) return true;
+  return a.name.trim().toLowerCase() === b.name.trim().toLowerCase()
+    && milesBetween({ lat: a.latitude, lon: a.longitude }, { lat: b.latitude, lon: b.longitude }) < 0.1;
+}
+function isTaken(option) {
+  return (session.options || []).some((o) => sameOption(o, option));
+}
+
+async function addOption(option) {
+  if (adding) return;
+  adding = true;
+  setStatus(`Adding ${option.name}…`);
+  [...$("suggest-results").children].forEach((b) => { b.disabled = true; });
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(sessionRef);
+      if (!snap.exists()) throw new Error("ended");
+      const data = snap.data();
+      const options = data.options || [];
+      if (data.status !== "open") throw new Error("closed");
+      if (options.some((o) => sameOption(o, option))) throw new Error("duplicate");
+      if (options.length >= MAX_OPTIONS) throw new Error("full");
+      tx.update(sessionRef, { options: [...options, option] });
+    });
+    closeSuggest();
+  } catch (error) {
+    const messages = {
+      duplicate: "That place is already in the vote.",
+      full: "This pick already has 12 places, the most it can hold.",
+      closed: "Voting has closed, so places can’t be added.",
+      ended: "This group pick has ended.",
+    };
+    setStatus(messages[error?.message] || "Couldn’t add it. Check your connection and try again.", true);
+    // Let them pick something else (places already in the vote stay disabled).
+    [...$("suggest-results").children].forEach((b) => { b.disabled = b.dataset.taken === "1"; });
+  } finally {
+    adding = false;
+  }
 }

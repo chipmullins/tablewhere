@@ -66,6 +66,16 @@ Everything except group picks works without this, and the project builds without
 7. In `Shared/Support/AppConfig.swift`, set `webHost` to `<your-project-id>.web.app`.
 8. Run `xcodegen generate` again and rebuild.
 
+### Adding places from the web vote page (optional)
+
+Friends without ForkRoad can suggest places on the vote page, using Apple Maps search (MapKit JS). It needs a token, made on your Mac from your MapKit JS key:
+
+1. Apple Developer → **Certificates, Identifiers & Profiles** → **Keys** → your MapKit JS key (Key ID `6GP6SL584A`). Keep its `.p8` file on your Mac; never commit or share it.
+2. Run `node web/tools/make-mapkit-token.mjs /path/to/AuthKey_6GP6SL584A.p8`. It writes `web/public/mapkit-token.js`, which only works on forkroad-app.web.app and lasts a year.
+3. `cd web && firebase deploy --only hosting`.
+
+The token is safe to commit (it's origin-restricted, and MapKit JS tokens are meant to sit in web pages). Without it, the page still works for voting; the Suggest button just doesn't appear.
+
 ### Group push notifications (optional)
 
 "Maya voted" and "It's decided" alerts come from Cloud Functions in `web/functions/`.

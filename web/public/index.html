@@ -59,6 +59,11 @@
     .breakdown .count { font-size: 20px; }
     .breakdown .won .count { color: var(--saffron); }
     .breakdown .crown { color: var(--saffron); margin-left: 6px; font-size: 12px; }
+    .suggest-panel { margin-top: 10px; }
+    .result { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--surface-high); border: 1px solid var(--hairline); border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; }
+    .result:disabled { cursor: default; opacity: .55; }
+    .result .add { margin-left: auto; color: var(--saffron); font-weight: 700; font-size: 14px; white-space: nowrap; }
+    .result .tile { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -92,6 +97,18 @@
       <h1 id="title"></h1>
       <p class="muted" id="status"></p>
       <div id="options" class="stack" style="margin-top:18px"></div>
+      <div id="suggest" style="margin-top:10px" hidden>
+        <button class="btn ghost" id="suggest-open" type="button" style="width:100%">+ Suggest a place</button>
+        <div id="suggest-panel" class="card stack suggest-panel" hidden>
+          <div>
+            <label for="suggest-input">Search restaurants</label>
+            <input id="suggest-input" type="search" placeholder="A name or a craving, like “tacos”" autocomplete="off" enterkeyhint="search">
+          </div>
+          <p class="muted" id="suggest-status" style="margin:0;font-size:13px" aria-live="polite"></p>
+          <div id="suggest-results" class="stack"></div>
+          <button class="btn ghost" id="suggest-close" type="button">Done</button>
+        </div>
+      </div>
       <p class="muted" style="font-size:13px;margin-top:14px">Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.</p>
     </section>
 
