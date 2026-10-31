@@ -680,7 +680,7 @@ async function runSearch() {
   try {
     const C = mk.PointOfInterestCategory;
     filter = mk.PointOfInterestFilter.including(
-      [C.Restaurant, C.Cafe, C.Bakery, C.Brewery, C.Winery, C.FoodMarket].filter(Boolean));
+      [C.Restaurant, C.Cafe, C.Bakery, C.Brewery, C.Winery].filter(Boolean));
   } catch { /* older MapKit JS: search everything */ }
 
   const searchIn = (region) => new Promise((resolve) => {

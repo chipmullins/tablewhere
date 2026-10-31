@@ -102,8 +102,9 @@ struct MapKitPlaceSearch: PlaceSearching {
         ("fast food", "Fast food")
     ]
 
+    /// No .foodMarket: that's grocery stores and markets, not places to eat.
     static let foodCategories: [MKPointOfInterestCategory] = [
-        .restaurant, .cafe, .bakery, .brewery, .winery, .foodMarket
+        .restaurant, .cafe, .bakery, .brewery, .winery
     ]
 
     func search(near center: CLLocationCoordinate2D,
@@ -269,6 +270,9 @@ struct MapKitPlaceSearch: PlaceSearching {
         let origin = CLLocation(latitude: center.latitude, longitude: center.longitude)
         return items.compactMap { item -> Place? in
             guard let name = item.name, let location = item.placemark.location else { return nil }
+            // Grocery bakeries, gas stations, pharmacies: Apple files some under
+            // food, but nobody means them. (A search by name still finds them.)
+            if job.trim && NotARestaurant.matches(name) { return nil }
             let distance = origin.distance(from: location)
             // Boxes are squares; keep only what's inside the circle you chose.
             if job.trim && distance > radiusMeters { return nil }
