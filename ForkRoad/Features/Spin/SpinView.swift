@@ -15,6 +15,8 @@ struct SpinView: View {
 
     @State private var showLocationPicker = false
     @State private var showWheelPicker = false
+    /// The full-screen reveal (same as Group Spin) while it plays.
+    @State private var reveal: SpinRevealRequest?
 
     private var actions: ListActions { ListActions(context: context) }
 
@@ -130,13 +132,21 @@ struct SpinView: View {
                           resetKey: resetKey,
                           emptyText: emptyReelText,
                           isPickedWheel: model.spinSource == .picked,
-                          rulesAtSpin: { rules })
+                          rulesAtSpin: { rules },
+                          reveal: $reveal)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
+        .overlay {
+            if let reveal {
+                SpinReveal(names: reveal.names, winner: reveal.winner) { self.reveal = nil }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: reveal?.id)
         .onChange(of: model.spinSource) {
             if model.spinSource == .picked { Hint.myWheel.dismiss() }
         }
@@ -216,6 +226,13 @@ struct SpinView: View {
 
 /// The reel, the Spin button, and the result card. Owns the spin state so a
 /// reel tick only redraws this view.
+/// Asks SpinView to play the full-screen reveal for a spin.
+struct SpinRevealRequest: Identifiable, Equatable {
+    let id = UUID()
+    let names: [String]
+    let winner: String
+}
+
 private struct SpinStage: View {
     let pool: [Place]
     let resetKey: String
@@ -240,6 +257,11 @@ private struct SpinStage: View {
     /// Increments each time a spin lands; drives the bounce and burst.
     @State private var landCount = 0
     @State private var message: String?
+    @Binding var reveal: SpinRevealRequest?
+    /// Settings → "Full-screen spin". On: the Group Spin reveal. Off: just the reel.
+    @AppStorage("spinReveal") private var useReveal = true
+    /// The pick waiting for the reveal to finish.
+    @State private var pending: (place: Place, index: Int)?
 
     private var actions: ListActions { ListActions(context: context) }
     private var emptyReelText: String { emptyText }
@@ -289,6 +311,12 @@ private struct SpinStage: View {
         .sensoryFeedback(.selection, trigger: reelIndex)
         .sensoryFeedback(.success, trigger: winner)
         .onChange(of: resetKey) { reset() }
+        // The reveal finished (or was tapped away): land on the pick.
+        .onChange(of: reveal == nil) {
+            guard reveal == nil, let pending else { return }
+            self.pending = nil
+            land(pending.place, at: pending.index)
+        }
         // "Spin for it" / "Spin my favorites" from another tab.
         .onAppear { consumePendingSpin() }
         .onChange(of: model.pendingSpin) { consumePendingSpin() }
@@ -452,6 +480,16 @@ private struct SpinStage: View {
         isSpinning = true
         winner = nil
 
+        if useReveal {
+            // The full-screen reveal (as in Group Spin) cycles through up to 16
+            // of the places, then lands on the pick; the reel lands with it.
+            var names = Array(pool.shuffled().prefix(16)).map(\.name)
+            if !names.contains(pick.name) { names[names.count - 1] = pick.name }
+            pending = (pick, target)
+            reveal = SpinRevealRequest(names: names, winner: pick.name)
+            return
+        }
+
         // Start the reel exactly `steps` positions before the winner, so it
         // lands on it naturally instead of jumping at the end. (The start
         // position change isn't noticeable because the reel begins fast.)
@@ -467,14 +505,18 @@ private struct SpinStage: View {
                 reelIndex = (reelIndex + 1) % count
                 delay *= growth
             }
-            reelIndex = target
-            winner = pick
-            landCount += 1
-            isSpinning = false
-            if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
-            UsageStats.record(.spins)
-            AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
+            land(pick, at: target)
         }
+    }
+
+    private func land(_ pick: Place, at target: Int) {
+        reelIndex = target
+        winner = pick
+        landCount += 1
+        isSpinning = false
+        if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
+        UsageStats.record(.spins)
+        AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
     }
 
     private func reset() {

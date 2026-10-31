@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var replayWelcome = false
     @State private var shareStats = UsageStats.isOn
     @State private var tipsReset = false
+    @AppStorage("spinReveal") private var spinReveal = true
 
     private let radiusOptions: [Double] = [0.5, 1, 2, 3, 5, 10]
 
@@ -51,6 +52,15 @@ struct SettingsView: View {
                     Picker("Diet", selection: $model.diet) {
                         ForEach(DietFilter.allCases) { Text($0.label).tag($0) }
                     }
+                }
+
+                Section {
+                    Toggle("Full-screen spin", isOn: $spinReveal)
+                        .tint(Theme.saffron)
+                } header: {
+                    Text("Spin")
+                } footer: {
+                    Text("Spins play the same big reveal as group spins. Turn off for the quicker reel.")
                 }
 
                 Section("Appearance") {
