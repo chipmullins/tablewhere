@@ -8,10 +8,10 @@ enum AppTab: Hashable {
 
 enum SpinSource: String, CaseIterable, Identifiable {
     case nearby = "Nearby"
-    case favorites = "Favorites"
-    case interested = "Interested"
     /// A wheel you build yourself: any places, plus anything you type.
     case picked = "Pick"
+    case favorites = "Favorites"
+    case interested = "Interested"
     var id: Self { self }
 
     /// The saved list this source spins from, if it's one.
