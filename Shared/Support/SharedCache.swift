@@ -50,6 +50,9 @@ enum SharedCache {
     /// Searches now return 100+ places; 200 is plenty and stays small (~60 KB).
     static func saveNearby(_ places: [Place]) { save(Array(places.prefix(200)), key: nearbyKey) }
     static func loadNearby() -> [Place] { load(key: nearbyKey) }
+    /// The widget and Siri pick from the closest places, not the whole radius
+    /// (the list is nearest first).
+    static func loadClosestNearby() -> [Place] { Array(loadNearby().prefix(40)) }
 
     static func saveInterested(_ places: [Place]) { save(places, key: interestedKey) }
     static func loadInterested() -> [Place] { load(key: interestedKey) }

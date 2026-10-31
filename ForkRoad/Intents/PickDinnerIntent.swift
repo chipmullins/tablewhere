@@ -17,7 +17,7 @@ enum DinnerSource: String, AppEnum {
         switch self {
         case .favorites: return SharedCache.loadFavorites()
         case .wantToTry: return SharedCache.loadInterested()
-        case .nearby: return SharedCache.loadNearby()
+        case .nearby: return SharedCache.loadClosestNearby()
         }
     }
 }

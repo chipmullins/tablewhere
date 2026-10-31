@@ -147,6 +147,11 @@ struct TripDetailView: View {
     }
 
     private func load() async {
+        // After the first load, let quick chip taps settle (MapKit limits searches per minute).
+        if !results.isEmpty {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+        }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

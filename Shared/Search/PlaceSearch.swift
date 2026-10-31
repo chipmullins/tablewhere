@@ -91,13 +91,15 @@ struct MapKitPlaceSearch: PlaceSearching {
     /// Extra searches that bring back what "restaurant" leaves out. The label
     /// becomes the place's type when Apple's category is just "restaurant".
     static let typeQueries: [(query: String, label: String)] = [
-        ("fast food", "Fast food"),
         ("burgers", "Burgers"),
         ("pizza", "Pizza"),
         ("mexican food", "Mexican"),
         ("chinese food", "Chinese"),
         ("sandwiches", "Sandwiches"),
-        ("chicken", "Chicken")
+        ("chicken", "Chicken"),
+        // Last, so a place that matches a cuisine too is labeled by its cuisine;
+        // known chains are still caught by name for "No fast food".
+        ("fast food", "Fast food")
     ]
 
     static let foodCategories: [MKPointOfInterestCategory] = [
@@ -148,6 +150,21 @@ struct MapKitPlaceSearch: PlaceSearching {
             }
         }
 
+        // MapKit throttles at about 50 searches a minute per app. Slider drags,
+        // chip taps, and pickers add up fast (a 10-mile "All" search is 17), so
+        // when the budget runs low, keep the whole-circle searches and drop
+        // grid boxes. A trimmed list isn't cached, so the next search fills it in.
+        try Task.checkCancellation()
+        let granted = await SearchCache.shared.reserve(jobs.count, minimum: min(jobs.count, 2))
+        let trimmed = granted < jobs.count
+        if trimmed {
+            let isWhole = { (job: Job) in
+                job.region.center.latitude == whole.center.latitude
+                    && job.region.center.longitude == whole.center.longitude
+            }
+            jobs = Array((jobs.filter(isWhole) + jobs.filter { !isWhole($0) }).prefix(granted))
+        }
+
         let batches = await withTaskGroup(of: (Int, [Place]?).self) { group in
             for (index, job) in jobs.enumerated() {
                 group.addTask {
@@ -161,14 +178,19 @@ struct MapKitPlaceSearch: PlaceSearching {
             // Job order, not finish order, so merge picks the same type every time.
             return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
-        try Task.checkCancellation()
-        if batches.allSatisfy({ $0 == nil }) { throw URLError(.cannotLoadFromNetwork) }
+        if batches.allSatisfy({ $0 == nil }) {
+            try Task.checkCancellation()
+            throw URLError(.cannotLoadFromNetwork)
+        }
 
         let merged = Self.merge(batches.compactMap { $0 })
-        // Don't keep a partial list (some searches failed or were throttled) for 10 minutes.
-        if !batches.contains(where: { $0 == nil }) {
+        // Don't keep a partial list (some searches failed, were throttled, or
+        // were skipped for the budget) for 10 minutes. A complete one is kept
+        // even if the caller moved on, so those searches aren't wasted.
+        if !trimmed && !batches.contains(where: { $0 == nil }) {
             await SearchCache.shared.store(merged, for: key, radiusMeters: radiusMeters)
         }
+        try Task.checkCancellation()
         return merged
     }
 
@@ -180,6 +202,7 @@ struct MapKitPlaceSearch: PlaceSearching {
         let region = MKCoordinateRegion(center: center,
                                         latitudinalMeters: radiusMeters * 2,
                                         longitudinalMeters: radiusMeters * 2)
+        _ = await SearchCache.shared.reserve(1)  // counts toward the per-minute budget
         return try await run(Job(query: text, region: region, cuisine: .all, diet: .none, trim: false),
                              center: center, radiusMeters: radiusMeters)
     }
@@ -359,4 +382,21 @@ actor SearchCache {
 
     /// Pull to refresh: search again for real.
     func clear() { entries = [:] }
+
+    // MARK: Request budget
+
+    /// When recent MapKit searches went out (this process only).
+    private var sentAt: [Date] = []
+    /// A little under Apple's ~50 a minute, to leave room for name searches.
+    private static let perMinute = 44
+
+    /// How many of `wanted` searches may go out now (never fewer than `minimum`).
+    /// Records them as sent.
+    func reserve(_ wanted: Int, minimum: Int = 1) -> Int {
+        let now = Date()
+        sentAt.removeAll { now.timeIntervalSince($0) >= 60 }
+        let granted = min(wanted, max(minimum, Self.perMinute - sentAt.count))
+        sentAt.append(contentsOf: repeatElement(now, count: max(0, granted)))
+        return granted
+    }
 }

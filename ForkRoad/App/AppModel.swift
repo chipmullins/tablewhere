@@ -277,19 +277,20 @@ final class AppModel {
         let generation = searchGeneration
         isLoading = true
         errorMessage = nil
+        // What this search is for (the filters can change while it runs).
+        let area = searchArea
         do {
             let results = try await searchService.search(
-                near: center,
-                radiusMeters: radiusMeters,
-                cuisines: cuisines,
-                diet: diet
+                near: area.center,
+                radiusMeters: area.radiusMiles * Place.metersPerMile,
+                cuisines: area.cuisines,
+                diet: area.diet
             )
             guard generation == searchGeneration else { return }  // a newer search took over
             places = results
             Task { await refreshCurrentCity() }
             SharedCache.saveNearby(results)  // lets the iMessage extension offer these
-            SharedCache.saveSearchArea(SearchArea(center: center, radiusMiles: radiusMiles,
-                                                  cuisines: cuisines, diet: diet))
+            SharedCache.saveSearchArea(area)
         } catch {
             guard generation == searchGeneration else { return }
             if !(error is CancellationError) {

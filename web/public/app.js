@@ -123,6 +123,15 @@ let votes = [];
 let members = [];
 let busy = false;
 const NAME_KEY = "forkroad.name";
+let membersLoaded = false;
+
+// localStorage throws in some private / cookies-blocked browsers; fall back to memory.
+const memoryStore = new Map();
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return memoryStore.get(k) ?? null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { memoryStore.set(k, v); } },
+  remove(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } memoryStore.delete(k); },
+};
 
 onAuthStateChanged(auth, (user) => {
   if (user) { uid = user.uid; start(); }
@@ -164,15 +173,16 @@ function start() {
 
   onSnapshot(collection(sessionRef, "members"), (snap) => {
     members = snap.docs.map((d) => d.data());
+    membersLoaded = true;
     render();
     refreshRuledOut();
-  });
+  }, () => { membersLoaded = true; render(); });
 
   $("name-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = $("name-input").value.trim().slice(0, 30);
     if (!name) return;
-    localStorage.setItem(NAME_KEY, name);
+    store.set(NAME_KEY, name);
     joinedOnce = true;
     await join(name);
     render();
@@ -180,8 +190,8 @@ function start() {
 
   // "Not you? Change name": back to the name step (a shared phone, a typo).
   $("change-name").addEventListener("click", () => {
-    localStorage.removeItem(NAME_KEY);
-    localStorage.removeItem(sessionNameKey());
+    store.remove(NAME_KEY);
+    store.remove(sessionNameKey());
     $("name-input").value = "";
     joinedOnce = false;
     render();
@@ -203,7 +213,7 @@ function uniqueName(name) {
 
 async function join(name) {
   const unique = uniqueName(name);
-  localStorage.setItem(sessionNameKey(), unique);
+  store.set(sessionNameKey(), unique);
   await setDoc(doc(sessionRef, "members", uid), { id: uid, name: unique, joinedAt: serverTimestamp() }, { merge: true });
   // Changed your name after voting: your vote shows the new one too.
   if (votes.some((v) => v.voterID === uid)) {
@@ -212,7 +222,7 @@ async function join(name) {
 }
 
 function myName() {
-  return localStorage.getItem(sessionNameKey()) || localStorage.getItem(NAME_KEY);
+  return store.get(sessionNameKey()) || store.get(NAME_KEY);
 }
 
 let joinedOnce = false;
@@ -234,7 +244,8 @@ function render() {
     show("name-step");
     return;
   }
-  if (!joinedOnce && !members.some((m) => m.id === uid)) {
+  // Wait for the members list, so a returning "Sam" still becomes "Sam 2".
+  if (!joinedOnce && membersLoaded && !members.some((m) => m.id === uid)) {
     joinedOnce = true;
     join(name).catch(() => {});
   }
