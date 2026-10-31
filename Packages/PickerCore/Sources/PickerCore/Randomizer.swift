@@ -37,7 +37,7 @@ public enum Randomizer {
             if rules.blockedPlaceIDs.contains(place.id) { return false }
             if blockedCats.contains(place.category.lowercased()) { return false }
             if let max = rules.maxDistanceMeters, place.distanceMeters > max { return false }
-            if rules.excludeFastFood && FastFood.isFastFood(place.name) { return false }
+            if rules.excludeFastFood && (FastFood.isFastFood(place.name) || place.category == "Fast food") { return false }
             return true
         }
     }

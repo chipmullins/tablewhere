@@ -261,6 +261,12 @@ final class AppModel {
         }
     }
 
+    /// Pull to refresh / Try again: skip saved results and search for real.
+    func refresh() async {
+        await SearchCache.shared.clear()
+        await search()
+    }
+
     func search() async {
         guard hasLocation else {
             places = []

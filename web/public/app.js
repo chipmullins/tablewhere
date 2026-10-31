@@ -660,28 +660,42 @@ async function runSearch() {
   let mk;
   try { mk = await loadMapKit(); } catch { setStatus("Search isn’t available right now. You can still vote.", true); return; }
 
-  // About 15 miles each way, like a name search in the app.
-  const region = new mk.CoordinateRegion(
-    new mk.Coordinate(center.lat, center.lon),
-    new mk.CoordinateSpan(0.44, 0.44 / Math.max(0.2, Math.cos(center.lat * Math.PI / 180)))
-  );
-  const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
+  // Apple returns only about two dozen places per search, so a word like
+  // "burgers" over a big area can skip the ones closest to the group. Search
+  // twice at once (about 3 miles around the group, and about 15) and merge.
+  const span = (degLat) => new mk.CoordinateSpan(degLat, degLat / Math.max(0.2, Math.cos(center.lat * Math.PI / 180)));
+  const regions = [0.09, 0.44].map((d) => new mk.CoordinateRegion(new mk.Coordinate(center.lat, center.lon), span(d)));
+  let filter = null;
   try {
     const C = mk.PointOfInterestCategory;
-    options.pointOfInterestFilter = mk.PointOfInterestFilter.including(
+    filter = mk.PointOfInterestFilter.including(
       [C.Restaurant, C.Cafe, C.Bakery, C.Brewery, C.Winery, C.FoodMarket].filter(Boolean));
   } catch { /* older MapKit JS: search everything */ }
 
-  new mk.Search(options).search(query, (error, data) => {
-    if (seq !== searchSeq) return;  // a newer search took over
-    if (error) { setStatus("Couldn’t search right now. Try again in a moment.", true); return; }
-    const places = (data?.places || [])
-      .filter((p) => p.coordinate && p.name)
-      .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
-      .sort((a, b) => a.miles - b.miles)
-      .slice(0, 15);
-    renderResults(places, query);
-  }, { region });
+  const searchIn = (region) => new Promise((resolve) => {
+    const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
+    if (filter) options.pointOfInterestFilter = filter;
+    try {
+      new mk.Search(options).search(query, (error, data) => resolve(error ? null : (data?.places || [])), { region });
+    } catch { resolve(null); }
+  });
+  const batches = await Promise.all(regions.map(searchIn));
+  if (seq !== searchSeq) return;  // a newer search took over
+  if (batches.every((b) => b === null)) { setStatus("Couldn’t search right now. Try again in a moment.", true); return; }
+
+  const seen = new Set();
+  const places = batches.flatMap((b) => b || [])
+    .filter((p) => p.coordinate && p.name)
+    .filter((p) => {
+      const key = `${p.name.toLowerCase()}|${p.coordinate.latitude.toFixed(3)}|${p.coordinate.longitude.toFixed(3)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
+    .sort((a, b) => a.miles - b.miles)
+    .slice(0, 20);
+  renderResults(places, query);
 }
 
 async function renderResults(places, query) {

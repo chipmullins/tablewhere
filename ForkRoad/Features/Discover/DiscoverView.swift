@@ -12,6 +12,8 @@ struct DiscoverView: View {
     @State private var showLocationPicker = false
     @State private var showSettings = false
     @State private var searchText = ""
+    /// How many of the nearby places the list shows (Show more adds 40).
+    @State private var shownCount = 40
     @FocusState private var searchFocused: Bool
 
     private var isSearching: Bool { searchText.trimmingCharacters(in: .whitespaces).count >= 2 }
@@ -50,7 +52,8 @@ struct DiscoverView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
-        .refreshable { await model.search() }
+        .refreshable { await model.refresh() }
+        .onChange(of: model.places.first?.id) { shownCount = 40 }
         .scrollDismissesKeyboard(.immediately)
     }
 
@@ -207,18 +210,32 @@ struct DiscoverView: View {
             StateCard(icon: "wifi.slash",
                       title: "Can’t reach Apple Maps",
                       message: "Check your connection and try again.",
-                      action: ("Try again", { Task { await model.search() } }))
+                      action: ("Try again", { Task { await model.refresh() } }))
         } else if !model.hasSearched || (model.isLoading && visiblePlaces.isEmpty) {
             ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
         } else if visiblePlaces.isEmpty {
             emptyResults
         }
 
+        // Searches can bring back 100+ places: show the nearest first, more on request.
+        let shown = visiblePlaces.prefix(shownCount)
         LazyVStack(spacing: 10) {
-            ForEach(visiblePlaces) { place in
+            ForEach(shown) { place in
                 NavigationLink(value: place) { PlaceRow(place: place) }
                     .buttonStyle(.plain)
             }
+        }
+        if visiblePlaces.count > shown.count {
+            Button {
+                shownCount += 40
+            } label: {
+                Text("Show more · \(visiblePlaces.count - shown.count) left")
+                    .font(Theme.body(15, .bold))
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
     }
 }

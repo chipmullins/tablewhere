@@ -46,7 +46,9 @@ enum SharedCache {
         return try? JSONDecoder().decode(SearchArea.self, from: data)
     }
 
-    static func saveNearby(_ places: [Place]) { save(Array(places.prefix(25)), key: nearbyKey) }
+    /// The app's last nearby search, for the widget, Siri, and the iMessage app.
+    /// Searches now return 100+ places; 200 is plenty and stays small (~60 KB).
+    static func saveNearby(_ places: [Place]) { save(Array(places.prefix(200)), key: nearbyKey) }
     static func loadNearby() -> [Place] { load(key: nearbyKey) }
 
     static func saveInterested(_ places: [Place]) { save(places, key: interestedKey) }
