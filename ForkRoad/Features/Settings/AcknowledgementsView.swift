@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Open-source credits, with each license's full text (required by the
+/// Credits: who made ForkRoad, the services it uses, and open-source
+/// licenses with each one's full text (required by the
 /// SIL Open Font License and the Apache License for software we ship).
 /// License files live in Licenses/ and are bundled as resources.
 struct AcknowledgementsView: View {
@@ -36,6 +37,32 @@ struct AcknowledgementsView: View {
     var body: some View {
         List {
             Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("ForkRoad")
+                        .font(Theme.display(26))
+                        .foregroundStyle(Theme.text)
+                    Text("Created by Chip Mullins")
+                        .font(Theme.body(15, .semibold))
+                        .foregroundStyle(Theme.accentText)
+                    Text("Made in Lexington, Kentucky.")
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(.vertical, 6)
+            }
+            .listRowBackground(Theme.surface)
+
+            Section("Data and services") {
+                creditRow("Maps and restaurant data",
+                          "Apple Maps. Map data © Apple and its data providers; see Legal on any map.")
+                creditRow("Group voting",
+                          "Firebase, by Google (sign-in, real-time data, and the web vote page).")
+                creditRow("Icons", "SF Symbols, by Apple.")
+                creditRow("Sync", "Your lists sync through your own iCloud account.")
+            }
+            .listRowBackground(Theme.surface)
+
+            Section {
                 ForEach(Self.credits) { credit in
                     NavigationLink {
                         LicenseTextView(credit: credit)
@@ -49,15 +76,26 @@ struct AcknowledgementsView: View {
                         .padding(.vertical, 2)
                     }
                 }
+            } header: {
+                Text("Open-source fonts and software")
             } footer: {
-                Text("ForkRoad is built with these open-source fonts and libraries. Thank you to their authors.")
+                Text("ForkRoad is built with these open-source fonts and libraries. Tap one for its full license. Thank you to their authors.")
             }
             .listRowBackground(Theme.surface)
         }
         .scrollContentBackground(.hidden)
         .background(Theme.night)
-        .navigationTitle("Acknowledgements")
+        .navigationTitle("Credits")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func creditRow(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).foregroundStyle(Theme.text)
+            Text(detail).font(Theme.body(12)).foregroundStyle(Theme.muted)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

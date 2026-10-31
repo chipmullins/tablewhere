@@ -99,11 +99,12 @@ struct SettingsView: View {
                 Section {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Restaurant data", value: "Apple Maps")
-                    NavigationLink("Acknowledgements") { AcknowledgementsView() }
+                    NavigationLink("Credits") { AcknowledgementsView() }
                 } header: {
                     Text("About")
                 } footer: {
-                    Text("Made with ♥ in Lexington, KY.")
+                    Text("Created by Chip Mullins\nMade with ♥ in Lexington, KY.")
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 12)
                 }
