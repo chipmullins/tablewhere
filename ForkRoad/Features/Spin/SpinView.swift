@@ -22,6 +22,7 @@ struct SpinView: View {
     @State private var showDetail = false
     /// Increments each time a spin lands; drives the bounce and burst.
     @State private var landCount = 0
+    @State private var showLocationPicker = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var actions: ListActions { ListActions(context: context) }
@@ -73,6 +74,55 @@ struct SpinView: View {
                 .onChange(of: model.listCity) { reset() }
 
                 if model.spinSource == .nearby {
+                    // Where and how far, right here (same settings as Discover).
+                    HStack(spacing: 8) {
+                        Button { showLocationPicker = true } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
+                                    .foregroundStyle(Theme.accentText)
+                                Text(model.locationName).lineLimit(1)
+                                Image(systemName: "chevron.down")
+                                    .font(Theme.body(11, .bold))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .font(Theme.body(14, .semibold))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, 14)
+                            .frame(height: 40)
+                            .background(Theme.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.hairline))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Spinning near \(model.locationName). Change location")
+
+                        Menu {
+                            Picker("Search radius", selection: $model.radiusMiles) {
+                                ForEach([0.5, 1, 2, 3, 5, 10], id: \.self) { miles in
+                                    Text(RadiusSlider.label(miles)).tag(miles)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "circle.dashed").foregroundStyle(Theme.accentText)
+                                Text(model.radiusLabel)
+                                Image(systemName: "chevron.down")
+                                    .font(Theme.body(11, .bold))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .font(Theme.body(14, .semibold))
+                            .foregroundStyle(Theme.text)
+                            .padding(.horizontal, 14)
+                            .frame(height: 40)
+                            .background(Theme.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.hairline))
+                        }
+                        .accessibilityLabel("Search radius, \(model.radiusLabel)")
+                        Spacer(minLength: 0)
+                    }
+                    .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
+                    .onChange(of: model.center.latitude) { reset() }
+                    .onChange(of: model.radiusMiles) { reset() }
+
                     CuisineChips(selection: $model.cuisines, diet: $model.diet)
                 } else {
                     HStack(spacing: 8) {
