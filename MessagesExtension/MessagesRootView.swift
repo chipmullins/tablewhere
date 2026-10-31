@@ -237,7 +237,12 @@ struct MessageVoteView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        if let note = session.trimmedNote {
+                        if live.isOwner {
+                            MessagePlanControls(session: session) { updated in
+                                // A new bubble so the chat shows "Meet at 7:00 PM".
+                                state.sendUpdate(updated, tally: live.tally, memberCount: live.members.count)
+                            }
+                        } else if let note = session.trimmedNote {
                             PlanNoteCard(note: note, author: session.createdByName)
                         }
                         if session.mode == .vote {
@@ -520,5 +525,117 @@ struct NoFastFoodChip: View {
 
     var body: some View {
         FastFoodChip(isOn: $excludeFastFood)
+    }
+}
+
+
+/// For the group's creator once it's decided: pick the meeting time (quick
+/// quarter-hour slots or any time) and add a short note, like in the app.
+struct MessagePlanControls: View {
+    let session: GroupSession
+    /// Sends an updated bubble after the time changes.
+    var onTimeSet: (GroupSession) -> Void
+
+    @State private var showPicker = false
+    @State private var noteDraft = ""
+    @State private var savingNote = false
+    @State private var errorMessage: String?
+    @FocusState private var noteFocused: Bool
+
+    var body: some View {
+        let slots = MeetTimes.slots(count: 6)
+        let isSlot: (Date) -> Bool = { slot in
+            session.meetTime.map { abs($0.timeIntervalSince(slot)) < 60 } ?? false
+        }
+        let isCustom = session.meetTime != nil && !slots.contains(where: isSlot)
+
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: session.meetTime == nil ? "Set a meeting time" : "Meet at")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(slots, id: \.self) { slot in
+                    timeButton(slot.formatted(date: .omitted, time: .shortened), isOn: isSlot(slot)) { setTime(slot) }
+                }
+            }
+            timeButton(isCustom ? "Custom: \(session.meetTime?.formatted(date: .omitted, time: .shortened) ?? "")" : "Pick another time…",
+                       isOn: isCustom) { showPicker = true }
+
+            SectionLabel(text: "Note for the group")
+                .padding(.top, 6)
+            HStack(spacing: 8) {
+                TextField("Optional, like “Bring a gift!”", text: $noteDraft)
+                    .font(Theme.body(15, .medium))
+                    .foregroundStyle(Theme.text)
+                    .focused($noteFocused)
+                    .submitLabel(.done)
+                    .onSubmit(saveNote)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 46)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if noteChanged {
+                    Button(savingNote ? "Saving…" : "Save", action: saveNote)
+                        .font(Theme.body(14, .bold))
+                        .foregroundStyle(Theme.onSaffron)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 46)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .buttonStyle(.plain)
+                        .disabled(savingNote)
+                }
+            }
+            if let errorMessage {
+                Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
+            }
+        }
+        .onAppear { noteDraft = session.note ?? "" }
+        .onChange(of: noteDraft) {
+            if noteDraft.count > GroupSession.maxNoteLength { noteDraft = String(noteDraft.prefix(GroupSession.maxNoteLength)) }
+        }
+        .sheet(isPresented: $showPicker) {
+            MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
+        }
+    }
+
+    private var noteChanged: Bool {
+        noteDraft.trimmingCharacters(in: .whitespacesAndNewlines) != (session.trimmedNote ?? "")
+    }
+
+    private func timeButton(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .font(Theme.body(14, .bold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(isOn ? Theme.night : Theme.text)
+                .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    private func setTime(_ date: Date) {
+        errorMessage = nil
+        var updated = session
+        updated.meetTime = date
+        // Send the bubble right away, while it's still part of the tap
+        // (Messages only sends in response to the user), then save.
+        onTimeSet(updated)
+        Task {
+            do { try await GroupService.shared.setMeetTime(sessionID: session.id, date: date) }
+            catch { errorMessage = "Couldn’t save the time. Check your connection and try again." }
+        }
+    }
+
+    private func saveNote() {
+        guard noteChanged else { noteFocused = false; return }
+        noteFocused = false
+        savingNote = true
+        errorMessage = nil
+        let text = noteDraft
+        Task {
+            defer { savingNote = false }
+            do { try await GroupService.shared.setNote(sessionID: session.id, note: text) }
+            catch { errorMessage = "Couldn’t save the note. Check your connection and try again." }
+        }
     }
 }

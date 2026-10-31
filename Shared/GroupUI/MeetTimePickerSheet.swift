@@ -3,7 +3,8 @@ import UIKit
 import PickerCore
 
 /// Lets the group's creator pick any meeting time (in 5-minute steps).
-/// A time earlier than now means tomorrow.
+/// A time earlier than now means tomorrow. Used by the app and the iMessage
+/// app (Shared/GroupUI isn't compiled into the widget).
 struct MeetTimePickerSheet: View {
     let initial: Date
     var onPick: (Date) -> Void
