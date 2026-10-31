@@ -179,8 +179,11 @@ struct SpinView: View {
     // MARK: Pieces
 
     private func rulesSummary(count: Int) -> some View {
-        let picked = model.spinSource == .picked
-        let parts: [String?] = picked ? ["Your hand-picked wheel", "\(count) in the wheel"] : [
+        let parts: [String?]
+        if model.spinSource == .picked {
+            parts = ["Your hand-picked wheel", "\(count) in the wheel"]
+        } else {
+            parts = [
             model.spinSource == .nearby ? "Within \(model.radiusLabel)"
                 : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
             model.spinSource != .nearby ? areaChip : nil,
@@ -190,7 +193,8 @@ struct SpinView: View {
             blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
             model.excludeFastFood ? "No fast food" : nil,
             "No repeats this week"
-        ]
+            ]
+        }
         let labels = parts.compactMap { $0 }
 
         return ScrollView(.horizontal, showsIndicators: false) {
