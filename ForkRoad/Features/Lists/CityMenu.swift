@@ -99,7 +99,7 @@ extension Array where Element == SavedPlace {
         case .metro(let name): return metros.first { $0.name == name }?.items ?? []
         case .area(let name):
             guard let area = areas.first(where: { $0.name == name }) else { return [] }
-            return filter { area.contains($0) }
+            return self.filter { area.contains($0) }
         case .here: return metros.first { $0.contains(center) }?.items ?? []
         }
     }
