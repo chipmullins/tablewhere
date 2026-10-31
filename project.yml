@@ -27,7 +27,7 @@ settingGroups:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "10"
+    CURRENT_PROJECT_VERSION: "11"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: ""
@@ -99,6 +99,7 @@ targets:
           - DMSans-SemiBold.ttf
           - DMSans-Bold.ttf
         NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you."
+        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s dinner plan to your calendar when you ask."
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:
       path: ForkRoad/ForkRoad.entitlements
@@ -138,6 +139,8 @@ targets:
       properties:
         CFBundleDisplayName: ForkRoad
         UIAppFonts: *appFonts
+        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to work out when you should leave for dinner. It stays on your phone."
+        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s dinner plan to your calendar when you ask."
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController

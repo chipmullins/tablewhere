@@ -62,6 +62,8 @@ struct NewVoteView: View {
     @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
 
     @State private var mode: GroupMode = .vote
+    @State private var title = ""
+    @State private var closesIn: Int? = nil
 
     /// A vote starts with 2–6 of your places; a spin starts with your one pick.
     private var maxOptions: Int { mode == .spin ? 1 : 6 }
@@ -101,11 +103,24 @@ struct NewVoteView: View {
                         .onChange(of: mode) {
                             if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
                         }
+                        TextField(mode == .spin ? "Name (Spin for dinner)" : "Name (Where should we eat?)", text: $title)
+                            .foregroundStyle(Theme.text)
+                            .submitLabel(.done)
+                        if mode == .vote {
+                            Picker("Voting closes", selection: $closesIn) {
+                                Text("When I lock it in").tag(Int?.none)
+                                Text("In 5 min").tag(Int?.some(5))
+                                Text("In 15 min").tag(Int?.some(15))
+                                Text("In 30 min").tag(Int?.some(30))
+                            }
+                            .tint(Theme.accentText)
+                        }
                     } footer: {
                         Text(mode == .vote
                              ? "Pick 2–6 places. Friends vote and can each suggest one more. Most votes wins."
                              : "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random.")
                     }
+                    .listRowBackground(Theme.surface)
                     Section {
                         MessageSearchField(text: $query)
                     }
@@ -158,6 +173,13 @@ struct NewVoteView: View {
         }
     }
 
+    /// What you typed, or the default name.
+    private var groupTitle: String {
+        let typed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typed.isEmpty { return String(typed.prefix(60)) }
+        return mode == .spin ? "Spin for dinner" : "Where should we eat?"
+    }
+
     private var sendTitle: String {
         switch mode {
         case .vote: return selected.count < 2 ? "Pick at least 2 places" : "Send vote · \(selected.count) places"
@@ -179,10 +201,10 @@ struct NewVoteView: View {
             defer { isSending = false }
             do {
                 let session = try await GroupService.shared.createSession(
-                    title: mode == .spin ? "Spin for dinner" : "Where should we eat?",
+                    title: groupTitle,
                     mode: mode,
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
-                    closesInMinutes: nil,
+                    closesInMinutes: mode == .vote ? closesIn : nil,
                     displayName: name
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
@@ -203,6 +225,8 @@ struct MessageVoteView: View {
     @State private var errorMessage: String?
     @State private var showAdd = false
     @State private var confirmEnd = false
+    @State private var removing: GroupOption?
+    @State private var reveal: GroupOption?
 
     init(sessionID: String, state: MessagesState) {
         self.sessionID = sessionID
@@ -245,6 +269,12 @@ struct MessageVoteView: View {
                         } else if let note = session.trimmedNote {
                             PlanNoteCard(note: note, author: session.createdByName)
                         }
+                        if let meet = session.meetTime, meet > .now.addingTimeInterval(-15 * 60) {
+                            AddToCalendarButton(session: session, winner: winner, meetTime: meet)
+                            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet,
+                                        origin: { await MessageLeaveOrigin.current() },
+                                        askForLocation: { await OneShotLocation.shared.requestPermission() })
+                        }
                         if session.mode == .vote {
                             VoteBreakdown(options: session.options,
                                           tally: live.tally,
@@ -273,6 +303,12 @@ struct MessageVoteView: View {
                         }
                         AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
                             state.expand(); showAdd = true
+                        }
+                        if live.isOwner {
+                            OwnerGroupTools(session: session,
+                                            nudge: Nudge.text(session: session, members: live.members, votes: live.votes),
+                                            sendNudge: { state.insertText($0) },
+                                            onRemove: { removing = $0 })
                         }
                         if live.isOwner {
                             Button { lockIn(session) } label: {
@@ -313,8 +349,29 @@ struct MessageVoteView: View {
                 try? await GroupService.shared.join(sessionID: sessionID, displayName: name)
             }
         }
-        .onChange(of: live.session?.status) {
-            if live.session?.status == .decided { state.expand() }
+        // A timed vote locks itself in when time's up, if the creator has it open.
+        .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
+        .onChange(of: live.session?.status) { old, new in
+            guard new == .decided else { return }
+            state.expand()
+            // Everyone watching a Group Spin sees the wheel land.
+            if old == .open, let session = live.session, session.mode == .spin, let winner = session.winner {
+                reveal = winner
+            }
+        }
+        .overlay {
+            if let reveal, let session = live.session {
+                SpinReveal(names: session.options.map(\.name), winner: reveal.name) { self.reveal = nil }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .confirmationDialog("Remove \(removing?.name ?? "this place")?",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { removePlace() }
+        } message: {
+            Text("Its votes are cleared, and whoever added it can add a different place.")
         }
         .sheet(isPresented: $showAdd) {
             if let session = live.session {
@@ -368,6 +425,24 @@ struct MessageVoteView: View {
                 // vote, so the group isn't notified for every tap; the bubble
                 // updates once, when the result is locked in.
             } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func autoCloseWhenTimeIsUp() async {
+        guard let session = live.session, let closesAt = session.closesAt,
+              session.status == .open, live.isOwner else { return }
+        let wait = closesAt.timeIntervalSinceNow
+        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        guard !Task.isCancelled, let current = live.session, current.status == .open else { return }
+        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs)
+    }
+
+    private func removePlace() {
+        guard let option = removing, let session = live.session else { return }
+        removing = nil
+        Task {
+            do { try await GroupService.shared.removeOption(option.id, from: session) }
+            catch { errorMessage = error.localizedDescription }
         }
     }
 
@@ -637,5 +712,20 @@ struct MessagePlanControls: View {
             do { try await GroupService.shared.setNote(sessionID: session.id, note: text) }
             catch { errorMessage = "Couldn’t save the note. Check your connection and try again." }
         }
+    }
+}
+
+/// Where the iMessage app measures leave-by from: your location if you've
+/// allowed it here, else where the app last searched.
+@MainActor
+enum MessageLeaveOrigin {
+    static func current() async -> LeaveBy.Origin? {
+        if let gps = await OneShotLocation.shared.current() {
+            return LeaveBy.Origin(coordinate: gps, isGPS: true, label: "where you are")
+        }
+        if let area = SharedCache.loadSearchArea() {
+            return LeaveBy.Origin(coordinate: area.center, isGPS: false, label: "your last search area")
+        }
+        return nil
     }
 }

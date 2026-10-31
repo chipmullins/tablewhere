@@ -227,6 +227,34 @@ final class GroupService {
         return winner
     }
 
+    /// The creator takes a place out of an open group. Its votes are cleared,
+    /// and whoever added it gets their pick back so they can add another.
+    func removeOption(_ optionID: String, from session: GroupSession) async throws {
+        let uid = try await userID()
+        guard session.isOwned(by: uid) else { throw GroupError.notOwner }
+        let ref = sessionRef(session.id)
+        _ = try await db.runTransaction { transaction, errorPointer in
+            do {
+                let snapshot = try transaction.getDocument(ref)
+                guard snapshot.exists, let fields = snapshot.data() else { throw GroupError.sessionNotFound }
+                guard fields["status"] as? String == GroupStatus.open.rawValue else { throw GroupError.closed }
+                let options = (fields["options"] as? [[String: Any]] ?? []).filter { $0["id"] as? String != optionID }
+                var update: [String: Any] = ["options": options]
+                let picks = fields["picksBy"] as? [String: String] ?? [:]
+                for (person, picked) in picks where picked == optionID {
+                    update["picksBy.\(person)"] = FieldValue.delete()
+                }
+                transaction.updateData(update, forDocument: ref)
+            } catch {
+                errorPointer?.pointee = error as NSError
+            }
+            return nil
+        }
+        // Votes for it no longer count; clear them so people can vote again.
+        let stale = try? await ref.collection("votes").whereField("optionID", isEqualTo: optionID).getDocuments()
+        for doc in stale?.documents ?? [] { try? await doc.reference.delete() }
+    }
+
     func reopen(session: GroupSession) async throws {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }

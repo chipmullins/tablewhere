@@ -97,6 +97,12 @@ final class MessagesState {
     func expand() { controller?.requestPresentationStyle(.expanded) }
     func collapse() { controller?.requestPresentationStyle(.compact) }
 
+    /// Drops text into the message field (you tap send), e.g. a nudge.
+    func insertText(_ text: String) {
+        controller?.activeConversation?.insertText(text) { @Sendable _ in }
+        collapse()
+    }
+
     /// Puts a new vote bubble in the message field (and optionally the web link
     /// as text, for friends who don't have ForkRoad).
     func insertNewVote(_ session: GroupSession, includeWebLink: Bool) {

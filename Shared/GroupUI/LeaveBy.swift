@@ -1,9 +1,7 @@
 import Foundation
 import CoreLocation
 import MapKit
-import UIKit
 import UserNotifications
-import FirebaseFirestore
 import PickerCore
 
 /// "Leave by 6:38 PM · 17 min drive": once a group has a place and a meeting
@@ -12,6 +10,8 @@ import PickerCore
 ///
 /// Everything happens on the phone: your location never leaves it, and the
 /// reminder is a local notification, so it works without server pushes.
+/// Shared by the app and the iMessage app; the app adds its own pieces in
+/// ForkRoad/Services/LeaveBy+App.swift.
 @MainActor
 enum LeaveBy {
     /// Extra minutes to park and walk in.
@@ -28,8 +28,17 @@ enum LeaveBy {
 
     /// The "Remind me when it's time to leave" switch (on by default).
     static var remindersOn: Bool {
-        get { UserDefaults.standard.object(forKey: "leaveByReminders") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "leaveByReminders") }
+        get { SharedDefaults.store.object(forKey: "leaveByReminders") as? Bool ?? true }
+        set { SharedDefaults.store.set(newValue, forKey: "leaveByReminders") }
+    }
+
+    /// Where a drive time is measured from.
+    struct Origin {
+        let coordinate: CLLocationCoordinate2D
+        /// True for a GPS fix; false for a search area or city.
+        let isGPS: Bool
+        /// "your search area" / "Lexington, KY", shown when not GPS.
+        let label: String
     }
 
     struct Plan: Equatable {
@@ -48,12 +57,6 @@ enum LeaveBy {
         var minutesLateIfLeavingNow: Int {
             max(0, Int((Date.now.addingTimeInterval(travel).timeIntervalSince(meetTime) / 60).rounded(.up)))
         }
-    }
-
-    /// Where to measure from: your GPS location if we have it, else the area you're searching.
-    static func origin(_ model: AppModel) -> (coordinate: CLLocationCoordinate2D, isGPS: Bool) {
-        if let gps = model.location.coordinate { return (gps, true) }
-        return (model.center, false)
     }
 
     /// Works out when to leave. Nil if Apple Maps can't find a driving route.
@@ -115,34 +118,5 @@ enum LeaveBy {
 
     static func cancel(sessionID: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
-    }
-
-    /// Sets up reminders for every recent group that's decided with a time
-    /// ahead (and clears ones that ended or changed). Run when the app opens,
-    /// so you get reminded even if you never opened the group after the time was set.
-    static func refreshAll(_ model: AppModel) async {
-        guard FirebaseSetup.isConfigured, (try? await GroupService.shared.userID()) != nil else { return }
-        for id in SharedCache.recentSessionIDs().prefix(5) {
-            guard let session = try? await GroupService.shared.sessionRef(id).getDocument(as: GroupSession.self),
-                  session.status == .decided, let winner = session.winner,
-                  let meet = session.meetTime, meet > .now else {
-                cancel(sessionID: id)
-                continue
-            }
-            let from = origin(model)
-            if let plan = await plan(to: CLLocationCoordinate2D(latitude: winner.latitude, longitude: winner.longitude),
-                                     meetTime: meet, from: from.coordinate, isGPS: from.isGPS) {
-                await schedule(plan, sessionID: id, winner: winner, mayAsk: false)
-            }
-        }
-    }
-
-    /// The notification's Directions button.
-    static func openDirections(from info: [AnyHashable: Any]) {
-        guard let lat = info["lat"] as? Double, let lon = info["lon"] as? Double else { return }
-        let name = (info["name"] as? String)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let url = URL(string: "https://maps.apple.com/?daddr=\(lat),\(lon)&q=\(name)&dirflg=d") {
-            UIApplication.shared.open(url)
-        }
     }
 }
