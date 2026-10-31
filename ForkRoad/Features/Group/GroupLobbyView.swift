@@ -11,6 +11,7 @@ struct GroupLobbyView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     @State private var confirmEnd = false
     @State private var confirmLeave = false
     @State private var live: LiveSession
