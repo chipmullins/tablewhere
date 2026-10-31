@@ -65,8 +65,8 @@ struct NewVoteView: View {
     @State private var title = ""
     @State private var closesIn: Int? = nil
 
-    /// A vote starts with 2–6 of your places; a spin starts with your one pick.
-    private var maxOptions: Int { mode == .spin ? 1 : 6 }
+    /// A vote starts with 2–8 of your places; a spin starts with your one pick.
+    private var maxOptions: Int { mode == .spin ? 1 : GroupMode.maxStartingVoteOptions }
     private var minOptions: Int { mode == .spin ? 1 : 2 }
     private var canSend: Bool { selected.count >= minOptions && !isSending }
 
@@ -103,7 +103,7 @@ struct NewVoteView: View {
                         .onChange(of: mode) {
                             if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
                         }
-                        TextField(mode == .spin ? "Name (Spin for dinner)" : "Name (Where should we eat?)", text: $title)
+                        TextField("Name (\(mode.defaultTitle))", text: $title)
                             .foregroundStyle(Theme.text)
                             .submitLabel(.done)
                         if mode == .vote {
@@ -117,7 +117,7 @@ struct NewVoteView: View {
                         }
                     } footer: {
                         Text(mode == .vote
-                             ? "Pick 2–6 places. Friends vote and can each suggest one more. Most votes wins."
+                             ? "Start with 2–\(GroupMode.maxStartingVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
                              : "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random.")
                     }
                     .listRowBackground(Theme.surface)
@@ -177,7 +177,7 @@ struct NewVoteView: View {
     private var groupTitle: String {
         let typed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !typed.isEmpty { return String(typed.prefix(60)) }
-        return mode == .spin ? "Spin for dinner" : "Where should we eat?"
+        return mode.defaultTitle
     }
 
     private var sendTitle: String {
@@ -225,6 +225,8 @@ struct MessageVoteView: View {
     @State private var errorMessage: String?
     @State private var showAdd = false
     @State private var confirmEnd = false
+    @State private var confirmLeave = false
+    @State private var confirmLockIn = false
     @State private var removing: GroupOption?
     /// Bumped when a vote's timer runs out, so the view switches to "closed".
     @State private var timeUpTick = 0
@@ -242,28 +244,43 @@ struct MessageVoteView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let session = live.session {
-                    HStack {
+                    HStack(alignment: .firstTextBaseline) {
                         Text(session.title)
                             .font(Theme.display(20))
                             .foregroundStyle(Theme.text)
                         Spacer()
-                        Button("New vote") { state.showNewVote() }
-                            .font(Theme.body(13, .semibold))
-                            .foregroundStyle(Theme.accentText)
+                        // Only the creator starts over from here; everyone
+                        // else can start their own from the app drawer.
+                        if live.isOwner {
+                            Button("New vote") { state.showNewVote() }
+                                .font(Theme.body(13, .semibold))
+                                .foregroundStyle(Theme.accentText)
+                        }
                     }
+                    Text("\(live.members.count) in the group · \(GroupWording.line(session, nonVoterNames: live.nonVoterNames))")
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.muted)
 
                     if let winner = session.winner {
                         WinnerCard(option: winner,
-                                   detail: session.meetTime.map { "Meet at \($0.formatted(date: .omitted, time: .shortened))" } ?? winner.category)
-                        if let url = directionsURL(winner) {
-                            Button { state.open(url: url) } label: {
-                                Label("Directions", systemImage: "location.north.line")
-                                    .font(Theme.body(15, .bold))
-                                    .foregroundStyle(Theme.night)
-                                    .frame(maxWidth: .infinity, minHeight: 48)
-                                    .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category)
+                        HStack(spacing: 8) {
+                            ActionTile(title: "Directions", systemImage: "location.north.line",
+                                       tint: Theme.accentText, background: Theme.surface) {
+                                if let url = directionsURL(winner) { state.open(url: url) }
                             }
-                            .buttonStyle(.plain)
+                            ActionTile(title: "Call", systemImage: "phone",
+                                       tint: Theme.accentText, background: Theme.surface) {
+                                if let url = phoneURL(winner) { state.open(url: url) }
+                            }
+                            .disabled(phoneURL(winner) == nil)
+                            .opacity(phoneURL(winner) == nil ? 0.4 : 1)
+                            ActionTile(title: "Menu", systemImage: "menucard",
+                                       tint: Theme.accentText, background: Theme.surface) {
+                                if let url = winner.place.websiteURL { state.open(url: url) }
+                            }
+                            .disabled(winner.place.websiteURL == nil)
+                            .opacity(winner.place.websiteURL == nil ? 0.4 : 1)
                         }
                         if live.isOwner {
                             let _ = postedTick
@@ -297,6 +314,20 @@ struct MessageVoteView: View {
                                           winnerID: session.winnerID,
                                           nonVoters: live.nonVoterNames)
                         }
+                        if live.isOwner {
+                            Button {
+                                Task {
+                                    do { try await GroupService.shared.reopen(session: session) }
+                                    catch { errorMessage = GroupService.message(for: error) }
+                                }
+                            } label: {
+                                Label(session.mode == .vote ? "Reopen voting" : "Reopen picks", systemImage: "arrow.uturn.backward")
+                                    .font(Theme.body(14, .semibold))
+                                    .foregroundStyle(Theme.accentText)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     } else {
                         let tally = live.tally
                         let slots = max(live.members.count, tally.totalVotes, 1)
@@ -304,6 +335,12 @@ struct MessageVoteView: View {
                         let _ = timeUpTick
                         let open = session.acceptsChanges
                         let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
+                        if let closesAt = session.closesAt, session.mode == .vote {
+                            VoteCountdown(closesAt: closesAt)
+                        }
+                        if live.isOwner && live.members.count <= 1 {
+                            inviteCard(session)
+                        }
                         if session.mode == .spin {
                             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
                         }
@@ -325,7 +362,13 @@ struct MessageVoteView: View {
                             }
                         }
                         AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
-                            state.expand(); showAdd = true
+                            state.expand()
+                            Task {
+                                // Adding a place is taking part: join first.
+                                do { try await GroupService.shared.joinIfNeeded(sessionID: session.id) }
+                                catch { errorMessage = GroupService.message(for: error); return }
+                                showAdd = true
+                            }
                         }
                         if live.isOwner {
                             OwnerGroupTools(session: session,
@@ -334,7 +377,13 @@ struct MessageVoteView: View {
                                             onRemove: { removing = $0 })
                         }
                         if live.isOwner {
-                            Button { lockIn(session) } label: {
+                            Button {
+                                if GroupWording.lockInWarning(session, totalVotes: tally.totalVotes) != nil {
+                                    confirmLockIn = true
+                                } else {
+                                    lockIn(session)
+                                }
+                            } label: {
                                 Text(session.mode == .spin ? "Spin it" : "Lock it in")
                                     .font(Theme.display(17))
                                     .foregroundStyle(Theme.onSaffron)
@@ -342,14 +391,23 @@ struct MessageVoteView: View {
                                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .disabled(isWorking || session.options.isEmpty || (session.mode == .vote && tally.totalVotes == 0))
+                            .disabled(isWorking || session.options.isEmpty)
+                        } else {
+                            Text(GroupWording.whoDecides(session))
+                                .font(Theme.body(14, .semibold))
+                                .foregroundStyle(Theme.muted)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
                     }
-                    Button(live.isOwner ? "End group for everyone" : "Leave group", role: .destructive) {
-                        if live.isOwner { confirmEnd = true } else { leave() }
+                    // Only people who've joined (voted or added) have anything to leave.
+                    if live.isOwner || live.members.contains(where: { $0.id == GroupService.shared.currentUserID }) {
+                        Button(live.isOwner ? "End group for everyone" : "Leave group", role: .destructive) {
+                            if live.isOwner { confirmEnd = true } else { confirmLeave = true }
+                        }
+                        .font(Theme.body(13, .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .font(Theme.body(13, .semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
                     if let errorMessage {
                         Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
                     }
@@ -370,12 +428,8 @@ struct MessageVoteView: View {
             }
             .padding(16)
         }
-        .task {
-            await live.start()
-            if let name = Identity.displayName {
-                try? await GroupService.shared.join(sessionID: sessionID, displayName: name)
-            }
-        }
+        // Watch only; you join when you vote or add a place.
+        .task { await live.start() }
         // A timed vote locks itself in when time's up, if the creator has it open.
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
         .task(id: live.session?.closesAt) {
@@ -412,7 +466,54 @@ struct MessageVoteView: View {
         }
         .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End for everyone", role: .destructive) { end() }
+        } message: {
+            Text("Votes and the join code are deleted, and everyone’s told it has ended.")
         }
+        .confirmationDialog("Leave this group pick?", isPresented: $confirmLeave, titleVisibility: .visible) {
+            Button("Leave", role: .destructive) { leave() }
+        } message: {
+            Text("Your vote is removed. You can come back by tapping the bubble.")
+        }
+        .confirmationDialog(lockInWarning.title, isPresented: $confirmLockIn, titleVisibility: .visible) {
+            if let session = live.session {
+                Button(session.mode == .vote ? "Lock it in anyway" : "Spin anyway") { lockIn(session) }
+            }
+        } message: {
+            Text(lockInWarning.message)
+        }
+    }
+
+    private var lockInWarning: (title: String, message: String) {
+        guard let session = live.session else { return ("", "") }
+        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes) ?? ("", "")
+    }
+
+    /// While nobody else has joined: friends tap the bubble, or use the link.
+    private func inviteCard(_ session: GroupSession) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Waiting for friends", systemImage: "person.badge.plus")
+                .font(Theme.body(15, .bold))
+                .foregroundStyle(Theme.text)
+            Text("Friends with ForkRoad tap the bubble to join. Anyone without it can use the web link.")
+                .font(Theme.body(13))
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
+                Button {
+                    state.insertText("\(GroupWording.inviteText(session)) \(url.absoluteString)")
+                } label: {
+                    Label("Send the web link", systemImage: "link")
+                        .font(Theme.body(14, .bold))
+                        .foregroundStyle(Theme.accentText)
+                        .padding(.horizontal, 14)
+                        .frame(height: 40)
+                        .background(Theme.accentSoft, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .card(radius: 18)
     }
 
     private func end() {
@@ -448,6 +549,8 @@ struct MessageVoteView: View {
         Task {
             defer { isWorking = false }
             do {
+                // Voting is taking part: join first (once).
+                try await GroupService.shared.joinIfNeeded(sessionID: session.id)
                 if live.myVote == option.id {
                     try await GroupService.shared.removeVote(sessionID: session.id)
                 } else {
@@ -494,6 +597,12 @@ struct MessageVoteView: View {
                 }
             } catch { errorMessage = GroupService.message(for: error) }
         }
+    }
+
+    private func phoneURL(_ option: GroupOption) -> URL? {
+        guard let phone = option.phoneNumber else { return nil }
+        let digits = phone.filter { $0.isNumber || $0 == "+" }
+        return digits.isEmpty ? nil : URL(string: "tel:\(digits)")
     }
 
     private func directionsURL(_ option: GroupOption) -> URL? {
@@ -663,7 +772,7 @@ struct MessagePlanControls: View {
                     timeButton(slot.formatted(date: .omitted, time: .shortened), isOn: isSlot(slot)) { setTime(slot) }
                 }
             }
-            timeButton(isCustom ? "Custom: \(session.meetTime?.formatted(date: .omitted, time: .shortened) ?? "")" : "Pick another time…",
+            timeButton(isCustom ? "Custom: \(session.meetTime.map { MeetTimes.label(for: $0) } ?? "")" : "Pick another time…",
                        isOn: isCustom) { showPicker = true }
 
             SectionLabel(text: "Note for the group")

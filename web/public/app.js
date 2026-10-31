@@ -33,10 +33,16 @@ function formatCode(code) {
   return code && code.length === 6 ? `${code.slice(0, 3)}·${code.slice(3)}` : code || "";
 }
 
+// "7:00 PM" today, "tomorrow at 7:00 PM", or "Sat at 7:00 PM" (same as the app).
 function formatTime(ts) {
   if (!ts) return null;
   const date = ts.toDate ? ts.toDate() : new Date(ts);
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const startOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(date) - startOf(new Date())) / 86400000);
+  if (days <= 0) return `at ${time}`;
+  if (days === 1) return `tomorrow at ${time}`;
+  return `${date.toLocaleDateString([], { weekday: "short" })} at ${time}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,17 +173,46 @@ function start() {
     const name = $("name-input").value.trim().slice(0, 30);
     if (!name) return;
     localStorage.setItem(NAME_KEY, name);
+    joinedOnce = true;
     await join(name);
     render();
   });
+
+  // "Not you? Change name": back to the name step (a shared phone, a typo).
+  $("change-name").addEventListener("click", () => {
+    localStorage.removeItem(NAME_KEY);
+    localStorage.removeItem(sessionNameKey());
+    $("name-input").value = "";
+    joinedOnce = false;
+    render();
+    $("name-input").focus();
+  });
+}
+
+function sessionNameKey() { return `forkroad.name.${sessionId}`; }
+
+// Two Sams in one group become "Sam" and "Sam 2" (same as the app).
+function uniqueName(name) {
+  const taken = new Set(members.filter((m) => m.id !== uid).map((m) => String(m.name || "").toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; n <= 20; n++) {
+    if (!taken.has(`${name} ${n}`.toLowerCase())) return `${name} ${n}`;
+  }
+  return name;
 }
 
 async function join(name) {
-  await setDoc(doc(sessionRef, "members", uid), { id: uid, name, joinedAt: serverTimestamp() });
+  const unique = uniqueName(name);
+  localStorage.setItem(sessionNameKey(), unique);
+  await setDoc(doc(sessionRef, "members", uid), { id: uid, name: unique, joinedAt: serverTimestamp() }, { merge: true });
+  // Changed your name after voting: your vote shows the new one too.
+  if (votes.some((v) => v.voterID === uid)) {
+    await setDoc(doc(sessionRef, "votes", uid), { voterName: unique }, { merge: true }).catch(() => {});
+  }
 }
 
 function myName() {
-  return localStorage.getItem(NAME_KEY);
+  return localStorage.getItem(sessionNameKey()) || localStorage.getItem(NAME_KEY);
 }
 
 let joinedOnce = false;
@@ -234,9 +269,11 @@ function statusText() {
       : `waiting on picks from ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`;
     return `${n} place${n === 1 ? "" : "s"} in the wheel · ${tail}`;
   }
-  const waiting = Math.max(0, members.length - votes.length);
+  const voted = new Set(votes.map((v) => v.voterID));
+  const names = members.filter((m) => !voted.has(m.id)).map((m) => (m.id === uid ? "you" : m.name));
   let text = `${members.length} in the group · ` +
-    (waiting === 0 ? "everyone has voted" : `waiting on ${waiting} vote${waiting === 1 ? "" : "s"}`);
+    (!names.length ? "everyone has voted"
+      : `waiting on ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`);
   const closes = session.closesAt && session.closesAt.toDate ? session.closesAt.toDate() : null;
   if (closes) {
     const left = Math.max(0, Math.floor((closes - Date.now()) / 1000));
@@ -255,6 +292,7 @@ setInterval(() => {
 }, 1000);
 
 function renderVote() {
+  $("you-are").textContent = myName() ? `You’re ${myName()}.` : "";
   if (isSpin()) return renderSpin();
   const t = tally();
   const mine = votes.find((v) => v.voterID === uid)?.optionID;
@@ -416,7 +454,7 @@ function renderDecided() {
   $("winner-name").textContent = winner.name;
   const time = formatTime(session.meetTime);
   const how = isSpin() ? `Picked by the spin · ${winner.addedBy ? winner.addedBy + "’s pick" : winner.category}` : winner.category;
-  $("winner-detail").textContent = time ? `Meet at ${time} · ${how}` : how;
+  $("winner-detail").textContent = time ? `Meet ${time} · ${how}` : how;
 
   const q = encodeURIComponent(winner.name);
   $("apple-maps").href = `https://maps.apple.com/?daddr=${winner.latitude},${winner.longitude}&q=${q}`;

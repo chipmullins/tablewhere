@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Favorites (places you love), Interested (places to try), and Blacklisted.
+/// Favorites (places you love), Want to try, and Blacklisted.
 struct ListsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case favorites = "Favorites"
@@ -47,6 +47,14 @@ struct ListsView: View {
                 .listRowInsets(EdgeInsets())
             }
 
+            if HintStore.shared.isVisible(.listsAdd) {
+                Section {
+                    HintCard(.listsAdd)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             if let list = tab.savedList {
                 savedSections(list)
             } else {
@@ -58,7 +66,10 @@ struct ListsView: View {
         .navigationTitle("Your lists")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showAddPlace = true } label: {
+                Button {
+                    Hint.listsAdd.dismiss()
+                    showAddPlace = true
+                } label: {
                     Label("Add a place", systemImage: "plus")
                 }
                 .accessibilityHint("Search for a restaurant, or add one yourself")
@@ -80,7 +91,7 @@ struct ListsView: View {
     private func label(for tab: Tab) -> String {
         switch tab {
         case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center, areas: areas).count)"
-        case .interested: return "Interested \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
+        case .interested: return "To try \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
         case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
         }
     }
@@ -129,6 +140,7 @@ struct ListsView: View {
             Section {
                 Button {
                     model.spinSource = SpinSource(list)
+                    model.pendingSpin = true
                     model.selectedTab = .spin
                 } label: {
                     Label(spinTitle(list, area: areaName), systemImage: "dice")
@@ -159,7 +171,7 @@ struct ListsView: View {
             Section {} footer: {
                 Text(list == .interested
                      ? "Tried one and loved it? Swipe right to move it to Favorites. Swipe left to skip a place in spins or remove it. Missing a place? Tap + to add it."
-                     : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it back to Interested.")
+                     : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it to Want to try.")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
             }
@@ -219,7 +231,7 @@ struct ListsView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
-                Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) { context.delete(item) }
+                Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) { actions.remove(item) }
                 Button(item.skipInSpins ? "Spin it" : "Skip",
                        systemImage: item.skipInSpins ? "dice" : "pause.circle") {
                     item.skipInSpins.toggle()
@@ -265,14 +277,14 @@ struct ListsView: View {
         if !blockedCategories.isEmpty {
             Section("Categories") {
                 ForEach(blockedCategories) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedCategories[$0] }.forEach { context.delete($0) } }
+                    .onDelete { offsets in offsets.map { blockedCategories[$0] }.forEach { actions.unblock($0) } }
                     .listRowBackground(Theme.surface)
             }
         }
         if !blockedPlaces.isEmpty {
             Section("Places") {
                 ForEach(blockedPlaces) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedPlaces[$0] }.forEach { context.delete($0) } }
+                    .onDelete { offsets in offsets.map { blockedPlaces[$0] }.forEach { actions.unblock($0) } }
                     .listRowBackground(Theme.surface)
             }
         }

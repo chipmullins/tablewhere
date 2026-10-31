@@ -150,7 +150,7 @@ final class MessagesState {
         layout.image = VoteBubbleImage.render(session: session, tally: tally)
         if let winner = session.winner {
             layout.caption = "We’re going to \(winner.name)"
-            layout.subcaption = session.meetTime.map { "Meet at \($0.formatted(date: .omitted, time: .shortened))" }
+            layout.subcaption = session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" }
                 ?? (session.mode == .spin ? "Picked by the spin · tap for directions" : "Tap for directions")
             message.summaryText = "Picked \(winner.name)"
         } else {

@@ -36,6 +36,7 @@ struct DiscoverView: View {
                 } else if !model.hasLocation {
                     whereToLook
                 } else {
+                    HintCard(.discoverMap)
                     NearbyMap(places: visiblePlaces)
                     RadiusControl()
                     cuisineChips
@@ -123,6 +124,20 @@ struct DiscoverView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Searching near \(model.locationName). Change location")
+            if !model.isUsingCurrentLocation && !model.location.isDenied {
+                Button { model.useCurrentLocation() } label: {
+                    Label("Use my location", systemImage: "location.fill")
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.accentSoft, in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Use my location")
+            }
             Spacer()
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
@@ -148,6 +163,7 @@ struct DiscoverView: View {
     private var spinBanner: some View {
         Button {
             model.spinSource = .nearby
+            model.pendingSpin = true
             model.selectedTab = .spin
         } label: {
             HStack(spacing: 14) {
@@ -195,10 +211,7 @@ struct DiscoverView: View {
         } else if !model.hasSearched || (model.isLoading && visiblePlaces.isEmpty) {
             ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
         } else if visiblePlaces.isEmpty {
-            StateCard(icon: "fork.knife",
-                      title: "Nothing nearby yet",
-                      message: "No matches within \(model.radiusLabel). Try a bigger radius or fewer filters.",
-                      action: model.radiusMiles < 10 ? ("Search 10 mi", { model.radiusMiles = 10 }) : nil)
+            emptyResults
         }
 
         LazyVStack(spacing: 10) {
@@ -206,6 +219,41 @@ struct DiscoverView: View {
                 NavigationLink(value: place) { PlaceRow(place: place) }
                     .buttonStyle(.plain)
             }
+        }
+    }
+}
+
+extension DiscoverView {
+    /// Filters you've turned on, so the empty state can offer to clear them.
+    private var hasFilters: Bool {
+        !model.cuisines.isEmpty || model.diet != .none || model.excludeFastFood
+    }
+
+    /// Nothing to show: say why (blacklist, filters, radius) and offer the fix.
+    @ViewBuilder
+    var emptyResults: some View {
+        let hiddenByBlacklist = model.places.count - visiblePlaces.count
+        let reasons: [String] = [
+            hiddenByBlacklist > 0 ? "\(hiddenByBlacklist) \(hiddenByBlacklist == 1 ? "place is" : "places are") on your blacklist." : nil,
+            hasFilters ? "Your filters may be hiding some." : nil
+        ].compactMap { $0 }
+        let message = reasons.isEmpty
+            ? "No matches within \(model.radiusLabel). Try a bigger radius."
+            : "No matches within \(model.radiusLabel). " + reasons.joined(separator: " ")
+        if hasFilters {
+            StateCard(icon: "line.3.horizontal.decrease.circle",
+                      title: "Nothing matches",
+                      message: message,
+                      action: ("Clear filters", {
+                          model.cuisines = []
+                          model.diet = .none
+                          model.excludeFastFood = false
+                      }))
+        } else {
+            StateCard(icon: "fork.knife",
+                      title: "Nothing nearby yet",
+                      message: message,
+                      action: model.radiusMiles < 10 ? ("Search 10 mi", { model.radiusMiles = 10 }) : nil)
         }
     }
 }

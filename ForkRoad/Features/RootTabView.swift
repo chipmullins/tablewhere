@@ -39,6 +39,9 @@ struct RootTabView: View {
         }
         .toolbarBackground(Theme.night, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .overlay(alignment: .bottom) { UndoToastHost() }
+        // A toast from one tab doesn't follow you to the next.
+        .onChange(of: model.selectedTab) { UndoCenter.shared.hide() }
         .task { model.start() }
         // Keep the widget's, Siri's, and the iMessage app's copies of your lists current.
         .onChange(of: cacheKey, initial: true) { refreshSharedCaches() }

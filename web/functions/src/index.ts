@@ -227,7 +227,7 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     // 1. Just locked in.
     if (before.status !== "decided" && after.status === "decided") {
       const to = await recipients(sessionId, { except });
-      const body = `We're going to ${winner}` + (label ? ` at ${label}` : "");
+      const body = `We're going to ${winner}` + (label ? ` · ${label}` : "");
       await send(sessionId, to, "It's decided!", body);
       return;
     }
@@ -238,7 +238,7 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     if (before.status === "decided" && after.status === "decided") {
       if (!label || before.meetTimeLabel === after.meetTimeLabel) return;
       const to = await recipients(sessionId, { except });
-      await send(sessionId, to, sessionTitle(after), `Meet at ${label} · ${winner}`);
+      await send(sessionId, to, sessionTitle(after), `Meet: ${label} · ${winner}`);
     }
   } catch (err) {
     logger.error("onSessionUpdated failed", { params: event.params, err });

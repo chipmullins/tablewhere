@@ -11,6 +11,15 @@ public enum GroupMode: String, Codable, Sendable, CaseIterable {
     case vote
     /// Everyone adds a place; the app picks one at random.
     case spin
+
+    /// The name a group gets if you don't type one (app and iMessage alike).
+    public var defaultTitle: String {
+        self == .spin ? "Spin for dinner" : "Where should we eat?"
+    }
+
+    /// Most places you can start a vote with (you can add more later, up to
+    /// `GroupSession.maxOptions`). A spin starts with your one pick.
+    public static let maxStartingVoteOptions = 8
 }
 
 public enum GroupStatus: String, Codable, Sendable {

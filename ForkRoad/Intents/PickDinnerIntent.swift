@@ -9,7 +9,7 @@ enum DinnerSource: String, AppEnum {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "List"
     static var caseDisplayRepresentations: [DinnerSource: DisplayRepresentation] = [
         .favorites: "Favorites",
-        .wantToTry: "Want to Try",
+        .wantToTry: "Want to try",
         .nearby: "Nearby"
     ]
 
@@ -26,13 +26,13 @@ enum DinnerSource: String, AppEnum {
 struct PickDinnerIntent: AppIntent {
     static var title: LocalizedStringResource = "Pick dinner"
     static var description = IntentDescription(
-        "Picks a random restaurant from your Favorites, Want to Try, or nearby places."
+        "Picks a random restaurant from your Favorites, Want to try, or nearby places."
     )
     static var openAppWhenRun: Bool = false
 
     @Parameter(
         title: "From",
-        description: "Leave empty to try Favorites, then Want to Try, then Nearby."
+        description: "Leave empty to try Favorites, then Want to try, then Nearby."
     )
     var source: DinnerSource?
 

@@ -21,7 +21,7 @@ enum SavedList: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .favorites: return "Favorites"
-        case .interested: return "Interested"
+        case .interested: return "Want to try"
         }
     }
 

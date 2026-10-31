@@ -44,4 +44,34 @@ public enum MeetTimes {
         if today.timeIntervalSince(now) > 0 { return today }
         return calendar.date(byAdding: .day, value: 1, to: today) ?? today
     }
+
+    /// "7:00 PM" today, "Tomorrow 7:00 PM", or "Sat 7:00 PM" further out,
+    /// so a time picked late at night doesn't read as tonight.
+    public static func label(for date: Date, now: Date = Date(), calendar: Calendar = .current,
+                             locale: Locale = .current) -> String {
+        let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                                   calendar: calendar, timeZone: calendar.timeZone))
+        let today = calendar.startOfDay(for: now)
+        let day = calendar.startOfDay(for: date)
+        let days = calendar.dateComponents([.day], from: today, to: day).day ?? 0
+        switch days {
+        case 0: return time
+        case 1: return "Tomorrow \(time)"
+        default:
+            var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+            style = style.weekday(.abbreviated)
+            return "\(date.formatted(style)) \(time)"
+        }
+    }
+
+    /// For sentences: "at 7:00 PM", "tomorrow at 7:00 PM", "Sat at 7:00 PM".
+    public static func phrase(for date: Date, now: Date = Date(), calendar: Calendar = .current,
+                              locale: Locale = .current) -> String {
+        let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                                   calendar: calendar, timeZone: calendar.timeZone))
+        let label = Self.label(for: date, now: now, calendar: calendar, locale: locale)
+        if label == time { return "at \(time)" }
+        if label.hasPrefix("Tomorrow ") { return "tomorrow at \(time)" }
+        return "\(label.dropLast(time.count + 1)) at \(time)"
+    }
 }

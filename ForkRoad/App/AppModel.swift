@@ -14,6 +14,16 @@ enum SpinSource: String, CaseIterable, Identifiable {
     case interested = "Interested"
     var id: Self { self }
 
+    /// What the picker shows. (The raw values stay as they were.)
+    var label: String {
+        switch self {
+        case .nearby: return "Nearby"
+        case .picked: return "My wheel"
+        case .favorites: return "Favorites"
+        case .interested: return "To try"
+        }
+    }
+
     /// The saved list this source spins from, if it's one.
     var savedList: SavedList? {
         switch self {
@@ -35,6 +45,8 @@ enum SpinSource: String, CaseIterable, Identifiable {
 final class AppModel {
     var selectedTab: AppTab = .discover
     var spinSource: SpinSource = .nearby
+    /// Set by "Spin for it" / "Spin my favorites": Spin starts as soon as it opens.
+    var pendingSpin = false
 
     /// The hand-picked wheel (Spin → Pick). Saved on this device.
     var pickedWheel: [Place] = AppModel.savedWheel {
@@ -144,9 +156,11 @@ final class AppModel {
     /// "Lexington, KY", "Chevy Chase", or "Near you".
     var locationName: String { chosenLocation?.name ?? location.displayName }
 
-    func choose(_ place: ChosenLocation, remember: Bool = true) {
+    /// `persist: false` searches there now but opens on your location next
+    /// time (used for map taps, unless location is off and there's no other way).
+    func choose(_ place: ChosenLocation, remember: Bool = true, persist: Bool = true) {
         chosenLocation = place
-        ChosenLocation.saved = place
+        ChosenLocation.saved = persist ? place : nil
         if remember { ChosenLocation.remember(place) }
         scheduleSearch()
     }
@@ -157,14 +171,17 @@ final class AppModel {
     func searchHere(_ coordinate: CLLocationCoordinate2D) {
         let pin = ChosenLocation(name: "Pinned spot", subtitle: "From the map",
                                  latitude: coordinate.latitude, longitude: coordinate.longitude)
-        choose(pin, remember: false)
+        // A map tap is for right now: next launch opens on your location again.
+        // (With location off, keep it, so there's still somewhere to look.)
+        let persist = location.isDenied || location.coordinate == nil
+        choose(pin, remember: false, persist: persist)
         Task {
             guard let name = await Self.spotName(for: coordinate),
                   chosenLocation?.id == pin.id else { return }  // moved again meanwhile
             var named = pin
             named.name = name
             chosenLocation = named
-            ChosenLocation.saved = named
+            if persist { ChosenLocation.saved = named }
         }
     }
 

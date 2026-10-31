@@ -56,7 +56,7 @@ struct TonightsPickWidget: Widget {
                 .widgetURL(URL(string: "forkroad://spin"))
         }
         .configurationDisplayName("Tonight's Pick")
-        .description("A random place from your Favorites, Want to Try, or nearby list.")
+        .description("A random place from your Favorites, Want to try, or nearby list.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }

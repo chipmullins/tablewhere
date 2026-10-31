@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var clearedHistory = false
     @State private var replayWelcome = false
     @State private var shareStats = UsageStats.isOn
+    @State private var tipsReset = false
 
     private let radiusOptions: [Double] = [0.5, 1, 2, 3, 5, 10]
 
@@ -103,6 +104,11 @@ struct SettingsView: View {
                         replayWelcome = true
                         dismiss()
                     }
+                    Button(tipsReset ? "Tips are back" : "Show tips again") {
+                        HintStore.shared.reset()
+                        tipsReset = true
+                    }
+                    .disabled(tipsReset)
                 }
 
                 Section {

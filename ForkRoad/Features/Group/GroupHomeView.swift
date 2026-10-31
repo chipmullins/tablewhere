@@ -39,6 +39,7 @@ struct GroupHomeView: View {
                 if !FirebaseSetup.isConfigured {
                     setupNotice
                 } else {
+                    HintCard(.groupStart)
                     startCard
                     joinCard
                     if let errorMessage {
@@ -162,6 +163,7 @@ struct GroupHomeView: View {
     // MARK: Actions
 
     private func withName(_ action: PendingAction) {
+        Hint.groupStart.dismiss()
         pendingAction = action
         if Identity.displayName == nil { showNamePrompt = true } else { runPending() }
     }

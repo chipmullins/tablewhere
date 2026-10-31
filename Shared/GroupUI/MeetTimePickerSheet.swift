@@ -42,7 +42,7 @@ struct MeetTimePickerSheet: View {
                     onPick(resolved)
                     dismiss()
                 } label: {
-                    Text("Meet at \(resolved.formatted(date: .omitted, time: .shortened))")
+                    Text("Meet \(MeetTimes.phrase(for: resolved))")
                         .font(Theme.display(17))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 54)

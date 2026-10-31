@@ -56,7 +56,7 @@ struct SpinView: View {
                     .padding(.top, 8)
 
                 Picker("Pick from", selection: $model.spinSource) {
-                    ForEach(SpinSource.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(SpinSource.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
 
@@ -121,6 +121,9 @@ struct SpinView: View {
 
                 rulesSummary(count: pool.count)
 
+                HintCard(.spinFirst)
+                HintCard(.myWheel)
+
                 // The reel, Spin button, and result live in their own view, so
                 // each reel tick redraws only them (not the lists and filters above).
                 SpinStage(pool: pool,
@@ -134,6 +137,9 @@ struct SpinView: View {
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: model.spinSource) {
+            if model.spinSource == .picked { Hint.myWheel.dismiss() }
+        }
     }
 
     /// When any of these change, the reel starts over.
@@ -283,6 +289,26 @@ private struct SpinStage: View {
         .sensoryFeedback(.selection, trigger: reelIndex)
         .sensoryFeedback(.success, trigger: winner)
         .onChange(of: resetKey) { reset() }
+        // "Spin for it" / "Spin my favorites" from another tab.
+        .onAppear { consumePendingSpin() }
+        .onChange(of: model.pendingSpin) { consumePendingSpin() }
+        .onChange(of: pool.count) { consumePendingSpin() }
+        .onChange(of: model.isLoading) { consumePendingSpin() }
+    }
+
+    private func consumePendingSpin() {
+        guard model.pendingSpin, !isSpinning else { return }
+        guard !pool.isEmpty else {
+            // Still searching: wait for results. Nothing to spin: give up quietly.
+            if !model.isLoading { model.pendingSpin = false }
+            return
+        }
+        model.pendingSpin = false
+        Task { @MainActor in
+            // Let the tab switch settle so you see the reel start.
+            try? await Task.sleep(for: .milliseconds(350))
+            spin(pool)
+        }
     }
 
     private func reel(_ pool: [Place]) -> some View {
@@ -380,9 +406,10 @@ private struct SpinStage: View {
                            tint: onList == .interested ? Theme.accentText : Theme.text) {
                     actions.toggle(place, in: .interested)
                 }
-                ActionTile(title: "Nope", systemImage: "nosign") {
-                    actions.block(place)
-                    if isPickedWheel { model.togglePicked(place) }
+                ActionTile(title: "Blacklist", systemImage: "nosign") {
+                    let wasOnWheel = isPickedWheel
+                    actions.block(place, extraUndo: wasOnWheel ? { [model] in model.togglePicked(place) } : nil)
+                    if wasOnWheel { model.togglePicked(place) }
                     winner = nil
                 }
             }
@@ -399,6 +426,7 @@ private struct SpinStage: View {
     /// Decide the winner up front, then animate the reel slowing down onto it.
     private func spin(_ pool: [Place]) {
         guard !isSpinning else { return }
+        Hint.spinFirst.dismiss()
         // Your own wheel spins exactly what you chose. Everything else still
         // prefers places you haven't had lately (the pool is already filtered).
         let choice = isPickedWheel ? pool.randomElement() : Randomizer.pick(from: pool, rules: rulesAtSpin())

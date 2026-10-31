@@ -25,6 +25,9 @@ struct GroupLobbyView: View {
     /// Bumped when a vote's timer runs out, so the screen switches to "closed".
     @State private var timeUpTick = 0
     @State private var reveal: GroupOption?
+    @State private var confirmLockIn = false
+    @State private var showNamePrompt = false
+    @State private var pendingVote: GroupOption?
     @FocusState private var noteFocused: Bool
 
     init(sessionID: String) {
@@ -92,6 +95,26 @@ struct GroupLobbyView: View {
             Button("Leave", role: .destructive) { leaveGroup() }
         } message: {
             Text("Your vote is removed. You can rejoin with the code.")
+        }
+        .confirmationDialog(lockInWarning.title, isPresented: $confirmLockIn, titleVisibility: .visible) {
+            if let session = live.session {
+                Button(session.mode == .vote ? "Lock it in anyway" : "Spin anyway") { lockIn(session) }
+            }
+        } message: {
+            Text(lockInWarning.message)
+        }
+        .sheet(isPresented: $showNamePrompt, onDismiss: {
+            if let option = pendingVote, let session = live.session, Identity.displayName != nil {
+                Task {
+                    try? await GroupService.shared.join(sessionID: session.id, displayName: Identity.displayName ?? "")
+                    vote(for: option, in: session)
+                }
+            }
+            pendingVote = nil
+        }) {
+            NamePromptView { _ in showNamePrompt = false }
+                .presentationDetents([.height(300)])
+                .presentationBackground(Theme.night)
         }
         .alert("Something went wrong", isPresented: Binding(get: { errorMessage != nil },
                                                              set: { if !$0 { errorMessage = nil } })) {
@@ -177,7 +200,7 @@ struct GroupLobbyView: View {
                 if let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
                     ShareLink(item: url,
                               subject: Text(session.title),
-                              message: Text("Help pick where we eat! Vote here, or join in ForkRoad with code \(JoinCode.display(session.joinCode)).")) {
+                              message: Text(GroupWording.inviteText(session))) {
                         Image(systemName: "square.and.arrow.up")
                             .font(Theme.body(17, .semibold))
                             .foregroundStyle(Theme.text)
@@ -209,14 +232,7 @@ struct GroupLobbyView: View {
     }
 
     private func statusLine(_ session: GroupSession) -> String {
-        if session.status == .decided { return "Locked in by \(session.createdByName)" }
-        switch session.mode {
-        case .vote:
-            let waiting = max(0, live.members.count - live.votes.count)
-            return waiting == 0 ? "Everyone has voted" : "Waiting on \(waiting) vote\(waiting == 1 ? "" : "s")"
-        case .spin:
-            return "\(session.options.count) places in the wheel"
-        }
+        GroupWording.line(session, nonVoterNames: live.nonVoterNames)
     }
 
     // MARK: Deciding
@@ -224,16 +240,11 @@ struct GroupLobbyView: View {
     @ViewBuilder
     private func deciding(_ session: GroupSession) -> some View {
         if let closesAt = session.closesAt, session.mode == .vote {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let remaining = max(0, Int(closesAt.timeIntervalSince(context.date)))
-                Label(remaining > 0 ? "Closes in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Voting closed",
-                      systemImage: "timer")
-                    .font(Theme.body(13, .bold))
-                    .foregroundStyle(Theme.accentText)
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(Theme.accentSoft, in: Capsule())
-            }
+            VoteCountdown(closesAt: closesAt)
+        }
+
+        if live.isOwner && live.members.count <= 1 {
+            inviteCard(session)
         }
 
         let tally = live.tally
@@ -287,6 +298,38 @@ struct GroupLobbyView: View {
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.muted)
         }
+    }
+
+    /// While it's just you: the next step is getting friends in.
+    private func inviteCard(_ session: GroupSession) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("It’s just you so far", systemImage: "person.badge.plus")
+                .font(Theme.body(16, .bold))
+                .foregroundStyle(Theme.text)
+            Text("Send the link to the group chat. Friends can \(session.mode == .vote ? "vote" : "add their pick") from the web, no app needed, or join in ForkRoad with code \(JoinCode.display(session.joinCode)).")
+                .font(Theme.body(14))
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
+                ShareLink(item: url,
+                          subject: Text(session.title),
+                          message: Text(GroupWording.inviteText(session))) {
+                    Label("Invite friends", systemImage: "square.and.arrow.up")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+        }
+        .padding(16)
+        .card(radius: 22)
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+    }
+
+    private var lockInWarning: (title: String, message: String) {
+        guard let session = live.session else { return ("", "") }
+        return GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes) ?? ("", "")
     }
 
     // MARK: Decided
@@ -351,7 +394,7 @@ struct GroupLobbyView: View {
                             setMeetTime(slot)
                         }
                     }
-                    meetButton(isCustom ? (session.meetTime?.formatted(date: .omitted, time: .shortened) ?? "Custom")
+                    meetButton(isCustom ? (session.meetTime.map { MeetTimes.label(for: $0) } ?? "Custom")
                                         : "Custom…",
                                systemImage: "clock", isOn: isCustom) {
                         showTimePicker = true
@@ -361,7 +404,7 @@ struct GroupLobbyView: View {
                     MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setMeetTime($0) }
                 }
             } else {
-                Text(session.meetTime.map { $0.formatted(date: .omitted, time: .shortened) } ?? "\(session.createdByName) hasn’t set a time yet")
+                Text(session.meetTime.map { MeetTimes.label(for: $0) } ?? "\(session.createdByName) hasn’t set a time yet")
                     .font(Theme.display(22))
                     .foregroundStyle(Theme.text)
             }
@@ -454,7 +497,9 @@ struct GroupLobbyView: View {
                             .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 } else if live.isOwner {
-                    Button { lockIn(session) } label: {
+                    Button {
+                        if GroupWording.lockInWarning(session, totalVotes: live.tally.totalVotes) != nil { confirmLockIn = true } else { lockIn(session) }
+                    } label: {
                         Text(session.mode == .vote ? "Lock it in" : "Spin it")
                             .font(Theme.display(17))
                             .foregroundStyle(Theme.onSaffron)
@@ -464,7 +509,7 @@ struct GroupLobbyView: View {
                     .buttonStyle(.plain)
                     .disabled(isWorking || session.options.isEmpty)
                 } else {
-                    Text(session.mode == .vote ? "\(session.createdByName) will lock in the result" : "\(session.createdByName) will spin when everyone’s ready")
+                    Text(GroupWording.whoDecides(session))
                         .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, minHeight: 56)
@@ -481,7 +526,8 @@ struct GroupLobbyView: View {
 
     private func vote(for option: GroupOption, in session: GroupSession) {
         guard let name = Identity.displayName else {
-            errorMessage = "Add your name in Settings so friends can see your vote."
+            pendingVote = option
+            showNamePrompt = true
             return
         }
         isWorking = true
@@ -589,7 +635,7 @@ struct GroupLobbyView: View {
     static func planText(_ session: GroupSession, winner: GroupOption, note: String? = nil) -> String {
         var text = "\(session.title): we’re going to \(winner.name)"
         if let time = session.meetTime {
-            text += " at \(time.formatted(date: .omitted, time: .shortened))"
+            text += " \(MeetTimes.phrase(for: time))"
         }
         if let note = (note ?? session.note)?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             text += ".\nNote: \(note)"

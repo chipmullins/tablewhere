@@ -17,6 +17,17 @@ final class MeetTimesTests: XCTestCase {
         return String(format: "%02d:%02d:%02d", p.hour!, p.minute!, p.second!)
     }
 
+    func testLabelSaysTomorrowOrTheDay() {
+        let en = Locale(identifier: "en_US")
+        let now = date(23, 10)  // Monday night
+        XCTAssertEqual(MeetTimes.label(for: date(23, 45), now: now, calendar: calendar, locale: en), "11:45\u{202F}PM")
+        XCTAssertEqual(MeetTimes.label(for: date(19, 0, day: 27), now: now, calendar: calendar, locale: en), "Tomorrow 7:00\u{202F}PM")
+        XCTAssertTrue(MeetTimes.label(for: date(19, 0, day: 31), now: now, calendar: calendar, locale: en).hasPrefix("Sat "))
+        XCTAssertEqual(MeetTimes.phrase(for: date(19, 0, day: 27), now: now, calendar: calendar, locale: en), "tomorrow at 7:00\u{202F}PM")
+        XCTAssertEqual(MeetTimes.phrase(for: date(23, 45), now: now, calendar: calendar, locale: en), "at 11:45\u{202F}PM")
+        XCTAssertEqual(MeetTimes.phrase(for: date(19, 0, day: 31), now: now, calendar: calendar, locale: en), "Sat at 7:00\u{202F}PM")
+    }
+
     func testRoundsUpToQuarterHours() {
         XCTAssertEqual(clock(MeetTimes.nextQuarterHour(onOrAfter: date(18, 31), calendar: calendar)), "18:45:00")
         XCTAssertEqual(clock(MeetTimes.nextQuarterHour(onOrAfter: date(18, 45), calendar: calendar)), "18:45:00")

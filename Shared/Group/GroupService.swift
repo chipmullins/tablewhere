@@ -115,9 +115,12 @@ final class GroupService {
 
     func join(sessionID: String, displayName: String) async throws {
         let uid = try await userID()
+        // Two Sams in one group become "Sam" and "Sam 2", so votes are clear.
+        let name = await uniqueName(displayName, sessionID: sessionID, uid: uid)
+        SharedDefaults.store.set(name, forKey: Self.nameKey(sessionID))
         var data: [String: Any] = [
             "id": uid,
-            "name": displayName,
+            "name": name,
             "joinedAt": FieldValue.serverTimestamp()
         ]
         // The app saves this device's push token here (also readable by the iMessage extension).
@@ -127,6 +130,47 @@ final class GroupService {
         // Merge, so joining again never wipes a saved push token.
         try await sessionRef(sessionID).collection("members").document(uid).setData(data, merge: true)
         SharedCache.rememberSession(sessionID)
+    }
+
+    /// Groups this device has joined since launch (so `joinIfNeeded` checks once).
+    private var joinedSessions: Set<String> = []
+
+    /// Joins with your saved name, unless you're already in the group. Used by
+    /// the iMessage app, which joins only when you vote or add a place, so just
+    /// opening a bubble doesn't make the group wait on you.
+    func joinIfNeeded(sessionID: String) async throws {
+        guard !joinedSessions.contains(sessionID), let name = Identity.displayName else { return }
+        let uid = try await userID()
+        let member = try? await sessionRef(sessionID).collection("members").document(uid).getDocument()
+        if member?.exists != true {
+            try await join(sessionID: sessionID, displayName: name)
+        } else {
+            await shareBlacklist(sessionID: sessionID)
+        }
+        joinedSessions.insert(sessionID)
+    }
+
+    nonisolated private static func nameKey(_ sessionID: String) -> String { "groupName.\(sessionID)" }
+
+    /// The name you go by in this group ("Sam 2"), else `fallback`.
+    nonisolated static func name(in sessionID: String, fallback: String) -> String {
+        SharedDefaults.store.string(forKey: nameKey(sessionID)) ?? fallback
+    }
+
+    /// `name`, or "name 2", "name 3"… if someone else in the group already uses it.
+    /// If the members can't be read, keeps the name as is.
+    private func uniqueName(_ name: String, sessionID: String, uid: String) async -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let docs = try? await sessionRef(sessionID).collection("members").getDocuments().documents else {
+            return trimmed
+        }
+        let taken = Set(docs.filter { $0.documentID != uid }
+            .compactMap { ($0.data()["name"] as? String)?.lowercased() })
+        guard taken.contains(trimmed.lowercased()) else { return trimmed }
+        for number in 2...20 where !taken.contains("\(trimmed) \(number)".lowercased()) {
+            return "\(trimmed) \(number)"
+        }
+        return trimmed
     }
 
     /// Re-shares your blacklist with a group you're already in (it may have
@@ -153,7 +197,7 @@ final class GroupService {
         let uid = try await userID()
         try await sessionRef(sessionID).collection("votes").document(uid).setData([
             "voterID": uid,
-            "voterName": displayName,
+            "voterName": Self.name(in: sessionID, fallback: displayName),
             "optionID": optionID,
             "votedAt": FieldValue.serverTimestamp()
         ])
@@ -174,6 +218,7 @@ final class GroupService {
         let ref = sessionRef(sessionID)
         var option = option
         option.addedByID = uid
+        option.addedBy = Self.name(in: sessionID, fallback: option.addedBy)
         let data = try Firestore.Encoder().encode(option)
         let optionID = option.id
         let name = option.name, lat = option.latitude, lon = option.longitude
@@ -328,7 +373,7 @@ final class GroupService {
         // know anyone's time zone; it's used in the "Meet at…" push.
         try await sessionRef(sessionID).updateData([
             "meetTime": Timestamp(date: date),
-            "meetTimeLabel": date.formatted(date: .omitted, time: .shortened)
+            "meetTimeLabel": MeetTimes.label(for: date)
         ])
     }
 

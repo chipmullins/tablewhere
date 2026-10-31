@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Spin → Pick: the places on your hand-picked wheel, with Add and Clear.
+/// Spin → My wheel: the places on your hand-picked wheel, with Add and Clear.
 struct PickedWheelEditor: View {
     @Binding var showPicker: Bool
     @Environment(AppModel.self) private var model
@@ -15,7 +15,11 @@ struct PickedWheelEditor: View {
                     .foregroundStyle(Theme.muted)
             } else {
                 FlowChips(items: model.pickedWheel) { place in
+                    let before = model.pickedWheel
                     model.togglePicked(place)
+                    UndoCenter.shared.show("Took \(place.name) off your wheel") { [model] in
+                        model.pickedWheel = before
+                    }
                 }
             }
             HStack(spacing: 8) {
@@ -30,7 +34,13 @@ struct PickedWheelEditor: View {
                 .buttonStyle(.plain)
                 .disabled(model.pickedWheel.count >= AppModel.maxPicked)
                 if !model.pickedWheel.isEmpty {
-                    Button("Clear") { model.pickedWheel = [] }
+                    Button("Clear") {
+                        let before = model.pickedWheel
+                        model.pickedWheel = []
+                        UndoCenter.shared.show("Cleared your wheel") { [model] in
+                            model.pickedWheel = before
+                        }
+                    }
                         .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.muted)
                         .padding(.horizontal, 14)

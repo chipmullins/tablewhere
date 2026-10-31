@@ -19,6 +19,8 @@ struct NearbyMap: View {
     /// Where the map is looking after the user drags it.
     @State private var viewCenter: CLLocationCoordinate2D?
     @State private var showFullMap = false
+    /// Full map: the marker you tapped, shown as a card.
+    @State private var selected: Place?
 
     /// Show "Search this area" once the map has moved well away from the search center.
     private var movedAway: Bool {
@@ -30,7 +32,9 @@ struct NearbyMap: View {
 
     var body: some View {
         MapReader { proxy in
-            Map(position: $camera) {
+            // The small map doesn't pan or zoom, so scrolling Discover never
+            // gets caught on it; a tap opens the big one.
+            Map(position: $camera, interactionModes: isExpanded ? .all : []) {
                 if model.isUsingCurrentLocation {
                     UserAnnotation()
                 } else {
@@ -42,7 +46,7 @@ struct NearbyMap: View {
                     .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
                 ForEach(places) { place in
                     Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
-                        .tint(Theme.saffron)
+                        .tint(selected?.id == place.id ? Theme.text : Theme.saffron)
                 }
             }
             .mapStyle(.standard(pointsOfInterest: .excludingAll))
@@ -55,13 +59,35 @@ struct NearbyMap: View {
                 // scrolling never moves your search). On the big map, a tap
                 // searches that spot.
                 guard isExpanded else { showFullMap = true; return }
+                // On (or right next to) a marker: show that place. Elsewhere:
+                // close the card if one is open, or search that spot.
+                if let place = marker(near: point, proxy: proxy) {
+                    withAnimation(.snappy) { selected = place }
+                    return
+                }
+                if selected != nil {
+                    withAnimation(.snappy) { selected = nil }
+                    return
+                }
                 guard let spot = proxy.convert(point, from: .local) else { return }
                 search(at: spot)
             }
         }
         .frame(height: isExpanded ? nil : 170)
         .clipShape(RoundedRectangle(cornerRadius: isExpanded ? 0 : 22, style: .continuous))
-        .overlay(alignment: .bottomLeading) { countBadge }
+        .overlay(alignment: .bottomLeading) { if selected == nil { countBadge } }
+        .overlay(alignment: .bottom) {
+            if isExpanded, let selected {
+                MapPlaceCard(place: selected) { self.selected = nil }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onChange(of: places.map(\.id)) {
+            // New search: the card's place may be gone.
+            if let selected, !places.contains(where: { $0.id == selected.id }) { self.selected = nil }
+        }
         .overlay(alignment: .top) {
             if movedAway {
                 Button {
@@ -101,8 +127,9 @@ struct NearbyMap: View {
         .onChange(of: model.center.longitude) { fitToRadius() }
         .sensoryFeedback(.selection, trigger: model.center.latitude)
         .fullScreenCover(isPresented: $showFullMap) { FullMapView() }
+        .onChange(of: showFullMap) { if showFullMap { Hint.discoverMap.dismiss() } }
         .accessibilityLabel(isExpanded
-            ? "Map of \(places.count) restaurants. Tap a spot to search there."
+            ? "Map of \(places.count) restaurants. Tap a restaurant to see it, or anywhere else to search there."
             : "Map of \(places.count) restaurants within \(model.radiusLabel). Opens a bigger map.")
     }
 
@@ -121,6 +148,20 @@ struct NearbyMap: View {
         .padding(.vertical, 7)
         .background(Theme.night.opacity(0.85), in: Capsule())
         .padding(12)
+    }
+
+    /// The closest marker to a tap, if the tap is on or right by it. A marker's
+    /// balloon sits just above its coordinate.
+    private func marker(near point: CGPoint, proxy: MapProxy) -> Place? {
+        var best: (place: Place, distance: CGFloat)?
+        for place in places {
+            guard let pin = proxy.convert(place.coordinate, to: .local) else { continue }
+            let dx = point.x - pin.x
+            let dy = point.y - (pin.y - 18)
+            let distance = (dx * dx + dy * dy).squareRoot()
+            if distance < 30, distance < (best?.distance ?? .infinity) { best = (place, distance) }
+        }
+        return best?.place
     }
 
     private func search(at spot: CLLocationCoordinate2D) {
@@ -157,7 +198,7 @@ private struct FullMapView: View {
             NearbyMap(places: visiblePlaces, isExpanded: true)
                 .ignoresSafeArea(edges: .bottom)
                 .safeAreaInset(edge: .top) {
-                    Label("Tap a spot, or drag and tap Search this area", systemImage: "hand.tap")
+                    Label("Tap a place to see it, or tap anywhere else to search there", systemImage: "hand.tap")
                         .font(Theme.body(13, .semibold))
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity)
@@ -178,5 +219,66 @@ private struct FullMapView: View {
                 .toolbarBackground(Theme.night, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
         }
+    }
+}
+
+/// Full map: the place you tapped, with Details and Directions.
+private struct MapPlaceCard: View {
+    let place: Place
+    var onClose: () -> Void
+    @Environment(\.modelContext) private var context
+    @State private var showDetail = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                MonogramTile(name: place.name, category: place.category, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(place.name)
+                        .font(Theme.body(16, .bold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Text("\(place.category) · \(place.distanceLabel)")
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 0)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.muted)
+                        .frame(width: 32, height: 32)
+                        .background(Theme.surfaceHigh, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
+            HStack(spacing: 8) {
+                Button { showDetail = true } label: {
+                    Text("Details")
+                        .font(Theme.body(15, .bold))
+                        .foregroundStyle(Theme.night)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                Button {
+                    PlaceLinks.openDirections(place)
+                    VisitFollowUp.record(place, in: context)
+                } label: {
+                    Label("Directions", systemImage: "location.north.line")
+                        .font(Theme.body(15, .bold))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.hairline))
+        .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
+        .navigationDestination(isPresented: $showDetail) { PlaceDetailView(place: place) }
     }
 }
