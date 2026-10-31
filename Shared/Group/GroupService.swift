@@ -364,6 +364,8 @@ final class GroupService {
         let ref = sessionRef(sessionID)
         try? await ref.collection("votes").document(uid).delete()
         try await ref.collection("members").document(uid).delete()
+        // Voting again after leaving has to join again.
+        joinedSessions.remove(sessionID)
         SharedCache.forgetSession(sessionID)
     }
 

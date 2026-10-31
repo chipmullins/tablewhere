@@ -317,7 +317,10 @@ struct MessageVoteView: View {
                         if live.isOwner {
                             Button {
                                 Task {
-                                    do { try await GroupService.shared.reopen(session: session) }
+                                    do {
+                                        try await GroupService.shared.reopen(session: session)
+                                        LeaveBy.cancel(sessionID: session.id)
+                                    }
                                     catch { errorMessage = GroupService.message(for: error) }
                                 }
                             } label: {

@@ -232,7 +232,13 @@ extension DiscoverView {
     /// Nothing to show: say why (blacklist, filters, radius) and offer the fix.
     @ViewBuilder
     var emptyResults: some View {
-        let hiddenByBlacklist = model.places.count - visiblePlaces.count
+        // Count only the blacklist here (No fast food is a filter, covered below).
+        let blacklistRules: Randomizer.Rules = {
+            var rules = model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
+            rules.excludeFastFood = false
+            return rules
+        }()
+        let hiddenByBlacklist = model.places.count - Randomizer.eligible(model.places, rules: blacklistRules).count
         let reasons: [String] = [
             hiddenByBlacklist > 0 ? "\(hiddenByBlacklist) \(hiddenByBlacklist == 1 ? "place is" : "places are") on your blacklist." : nil,
             hasFilters ? "Your filters may be hiding some." : nil
