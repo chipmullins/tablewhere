@@ -16,7 +16,7 @@ struct SpinReveal: View {
         ZStack {
             Theme.night.opacity(0.94).ignoresSafeArea()
             VStack(spacing: 14) {
-                Image(systemName: landed ? "party.popper.fill" : "dice.fill")
+                Image(systemName: landed ? "party.popper.fill" : "sparkles")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(Theme.saffron)
                     .contentTransition(.symbolEffect(.replace))

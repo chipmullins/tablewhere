@@ -3,7 +3,7 @@ import CoreLocation
 import SwiftData
 import PickerCore
 
-/// A live group pick: invite, vote (or add places for a spin), lock it in,
+/// A live group plan: invite, vote (or add places for a spin), lock it in,
 /// then set a meeting time and send everyone the plan.
 struct GroupLobbyView: View {
     let sessionID: String
@@ -47,7 +47,7 @@ struct GroupLobbyView: View {
                     }
                 } else if live.isGone {
                     StateCard(icon: "flag.checkered",
-                              title: "This group pick has ended",
+                              title: "This group plan has ended",
                               message: "The person who started it ended it, or it no longer exists.",
                               action: ("Back to Group", { SharedCache.forgetSession(sessionID); dismiss() }))
                         .padding(.top, 40)
@@ -86,12 +86,12 @@ struct GroupLobbyView: View {
                 }
             }
         }
-        .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
+        .confirmationDialog("End this group plan?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End for everyone", role: .destructive) { endGroup() }
         } message: {
             Text("Votes and the join code are deleted, and everyone’s told it has ended.")
         }
-        .confirmationDialog("Leave this group pick?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        .confirmationDialog("Leave this group plan?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { leaveGroup() }
         } message: {
             Text("Your vote is removed. You can rejoin with the code.")
@@ -262,7 +262,7 @@ struct GroupLobbyView: View {
         if open { Label(session.mode == .vote
               ? (live.myVote == nil ? "Tap a place to cast your vote" : "Tap another place to change your vote")
               : "Everyone adds places, then \(live.isOwner ? "you spin" : "\(session.createdByName) spins")",
-              systemImage: session.mode == .vote ? "hand.tap" : "dice")
+              systemImage: session.mode == .vote ? "hand.tap" : "sparkles")
             .font(Theme.body(14, .semibold))
             .foregroundStyle(Theme.accentText) }
         VStack(spacing: 10) {

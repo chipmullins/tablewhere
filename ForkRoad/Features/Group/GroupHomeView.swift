@@ -29,7 +29,7 @@ struct GroupHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    SectionLabel(text: "Group pick")
+                    SectionLabel(text: "Group plan")
                     Text("Decide together")
                         .font(Theme.display(34))
                         .foregroundStyle(Theme.text)
@@ -78,7 +78,7 @@ struct GroupHomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Only in a developer build missing its Firebase config (a Release
             // build without it fails to compile), so users never see setup steps.
-            Label("Group picks aren’t available right now", systemImage: "person.3")
+            Label("Group plans aren’t available right now", systemImage: "person.3")
                 .font(Theme.body(16, .semibold))
                 .foregroundStyle(Theme.text)
             Text("You can still discover, spin, and save places. Check back soon.")
@@ -100,7 +100,7 @@ struct GroupHomeView: View {
                     .frame(width: 48, height: 48)
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Start a group pick").font(Theme.display(19))
+                    Text("Start a group plan").font(Theme.display(19))
                     Text("Vote or spin, then send everyone the plan").font(Theme.body(13, .medium))
                 }
                 Spacer()

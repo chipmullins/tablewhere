@@ -143,7 +143,7 @@ struct ListsView: View {
                     model.pendingSpin = true
                     model.selectedTab = .spin
                 } label: {
-                    Label(spinTitle(list, area: areaName), systemImage: "dice")
+                    Label(spinTitle(list, area: areaName), systemImage: "sparkles")
                         .font(Theme.display(17))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 50)
@@ -233,14 +233,14 @@ struct ListsView: View {
             .swipeActions(edge: .trailing) {
                 Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) { actions.remove(item) }
                 Button(item.skipInSpins ? "Spin it" : "Skip",
-                       systemImage: item.skipInSpins ? "dice" : "pause.circle") {
+                       systemImage: item.skipInSpins ? "sparkles" : "pause.circle") {
                     item.skipInSpins.toggle()
                 }
                 .tint(Theme.trackFill)
             }
             .contextMenu {
                 Button(item.skipInSpins ? "Include in spins" : "Leave out of spins",
-                       systemImage: item.skipInSpins ? "dice" : "pause.circle") {
+                       systemImage: item.skipInSpins ? "sparkles" : "pause.circle") {
                     item.skipInSpins.toggle()
                 }
             }

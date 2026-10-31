@@ -15,8 +15,8 @@ enum GroupError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Group picks aren’t available right now."
-        case .sessionNotFound: return "This group pick has ended or doesn’t exist."
+        case .notConfigured: return "Group plans aren’t available right now."
+        case .sessionNotFound: return "This group plan has ended or doesn’t exist."
         case .notOwner: return "Only the person who started this pick can lock it in."
         case .alreadyAdded: return "That place is already in the vote."
         case .optionsFull: return "This pick already has 12 places, the most it can hold."
@@ -323,7 +323,7 @@ final class GroupService {
             case .unavailable, .deadlineExceeded:
                 return "You’re offline. Check your connection and try again."
             case .notFound:
-                return GroupError.sessionNotFound.errorDescription ?? "This group pick has ended."
+                return GroupError.sessionNotFound.errorDescription ?? "This group plan has ended."
             default: break
             }
         }

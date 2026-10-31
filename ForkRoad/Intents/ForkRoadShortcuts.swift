@@ -7,11 +7,13 @@ struct ForkRoadShortcuts: AppShortcutsProvider {
             intent: PickDinnerIntent(),
             phrases: [
                 "Pick dinner with \(.applicationName)",
+                "Pick lunch with \(.applicationName)",
+                "Pick breakfast with \(.applicationName)",
                 "What should I eat \(.applicationName)",
                 "Pick a restaurant with \(.applicationName)",
                 "Where should I eat \(.applicationName)"
             ],
-            shortTitle: "Pick dinner",
+            shortTitle: "Pick a place to eat",
             systemImageName: "fork.knife"
         )
         AppShortcut(
@@ -22,7 +24,7 @@ struct ForkRoadShortcuts: AppShortcutsProvider {
                 "Open the spinner in \(.applicationName)"
             ],
             shortTitle: "Spin",
-            systemImageName: "dice"
+            systemImageName: "sparkles"
         )
     }
 

@@ -14,7 +14,7 @@ public enum GroupMode: String, Codable, Sendable, CaseIterable {
 
     /// The name a group gets if you don't type one (app and iMessage alike).
     public var defaultTitle: String {
-        self == .spin ? "Spin for dinner" : "Where should we eat?"
+        self == .spin ? "Spin for where to eat" : "Where should we eat?"
     }
 
     /// Most places you can start a vote with (you can add more later, up to

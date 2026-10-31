@@ -59,7 +59,7 @@ struct TripDetailView: View {
 
                 if !saved.isEmpty {
                     Button { pick = Randomizer.pick(from: saved, rules: rules) } label: {
-                        Label("Pick one of my saved spots", systemImage: "dice")
+                        Label("Pick one of my saved spots", systemImage: "sparkles")
                             .font(Theme.display(16))
                             .foregroundStyle(Theme.onSaffron)
                             .frame(maxWidth: .infinity, minHeight: 50)

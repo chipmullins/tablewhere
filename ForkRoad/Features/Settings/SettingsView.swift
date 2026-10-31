@@ -35,7 +35,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Your name")
                 } footer: {
-                    Text("Shown to friends when you vote on group picks.")
+                    Text("Shown to friends when you vote on group plans.")
                 }
 
                 Section("Searching") {
@@ -83,7 +83,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("Alerts remind you when it’s time to leave for a group plan and keep you posted on group picks. After you get directions somewhere, ForkRoad also asks how it went: Loved it adds it to Favorites, Never again blacklists it.")
+                    Text("Alerts remind you when it’s time to leave for a group plan and keep you posted as friends vote and add places. After you get directions somewhere, ForkRoad also asks how it went: Loved it adds it to Favorites, Never again blacklists it.")
                 }
 
                 Section {

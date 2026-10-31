@@ -80,7 +80,7 @@ struct NewVoteView: View {
                         .frame(width: 44, height: 44)
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Start a dinner pick").font(Theme.display(18))
+                        Text("Start a group plan").font(Theme.display(18))
                         Text("Vote on a few places, or everyone adds one and you spin").font(Theme.body(12, .medium))
                     }
                     Spacer()
@@ -415,7 +415,7 @@ struct MessageVoteView: View {
                         Text(errorMessage).font(Theme.body(13)).foregroundStyle(Theme.danger)
                     }
                 } else if live.isGone {
-                    Text("This group pick has ended.")
+                    Text("This group plan has ended.")
                         .font(Theme.body(15, .semibold))
                         .foregroundStyle(Theme.muted)
                     Button("Start a new vote") { state.showNewVote() }
@@ -467,12 +467,12 @@ struct MessageVoteView: View {
                 MessageAddPlaceView(session: session, groupBlockedHashes: live.groupBlockedHashes)
             }
         }
-        .confirmationDialog("End this group pick?", isPresented: $confirmEnd, titleVisibility: .visible) {
+        .confirmationDialog("End this group plan?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End for everyone", role: .destructive) { end() }
         } message: {
             Text("Votes and the join code are deleted, and everyone’s told it has ended.")
         }
-        .confirmationDialog("Leave this group pick?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        .confirmationDialog("Leave this group plan?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave", role: .destructive) { leave() }
         } message: {
             Text("Your vote is removed. You can rejoin anytime by voting again.")

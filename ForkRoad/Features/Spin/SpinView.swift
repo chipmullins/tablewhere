@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// The randomizer: a slot-machine reel that lands on tonight's pick.
+/// The randomizer: a slot-machine reel that lands on your pick.
 struct SpinView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.modelContext) private var context
@@ -372,7 +372,7 @@ private struct SpinStage: View {
         // Something you typed onto your wheel ("Leftovers") isn't a real place.
         let isTyped = place.id.hasPrefix("typed|")
         return VStack(alignment: .leading, spacing: 14) {
-            SectionLabel(text: "Tonight’s pick", color: Theme.accentText)
+            SectionLabel(text: "Your pick", color: Theme.accentText)
             VStack(alignment: .leading, spacing: 4) {
                 Text(place.name).font(Theme.display(24)).foregroundStyle(Theme.text)
                 Text(isTyped ? "From your wheel" : "\(place.category) · \(place.distanceLabel)")
@@ -473,7 +473,7 @@ private struct SpinStage: View {
             isSpinning = false
             if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
             UsageStats.record(.spins)
-            AccessibilityNotification.Announcement("Tonight’s pick: \(pick.name)").post()
+            AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
         }
     }
 

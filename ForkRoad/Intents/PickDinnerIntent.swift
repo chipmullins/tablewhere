@@ -22,9 +22,9 @@ enum DinnerSource: String, AppEnum {
     }
 }
 
-/// "Pick dinner": answers with a random place from the shared caches without opening the app.
+/// "Pick a place to eat": answers with a random place from the shared caches without opening the app.
 struct PickDinnerIntent: AppIntent {
-    static var title: LocalizedStringResource = "Pick dinner"
+    static var title: LocalizedStringResource = "Pick a place to eat"
     static var description = IntentDescription(
         "Picks a random restaurant from your Favorites, Want to try, or nearby places."
     )
@@ -37,7 +37,7 @@ struct PickDinnerIntent: AppIntent {
     var source: DinnerSource?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Pick dinner from \(\.$source)")
+        Summary("Pick a place to eat from \(\.$source)")
     }
 
     init() {}

@@ -103,7 +103,7 @@ targets:
           - DMSans-SemiBold.ttf
           - DMSans-Bold.ttf
         NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
-        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s dinner plan to your calendar when you ask."
+        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s plan to your calendar when you ask."
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:
       path: ForkRoad/ForkRoad.entitlements
@@ -143,8 +143,8 @@ targets:
       properties:
         CFBundleDisplayName: ForkRoad
         UIAppFonts: *appFonts
-        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to work out when you should leave for dinner. It stays on your phone."
-        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s dinner plan to your calendar when you ask."
+        NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to work out when you should leave to meet your group. It stays on your phone."
+        NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s plan to your calendar when you ask."
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController

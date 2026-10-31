@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Sheet for starting a group pick: name it, choose vote or spin, pick places.
+/// Sheet for starting a group plan: name it, choose vote or spin, pick places.
 struct CreateGroupView: View {
     var onCreated: (GroupSession) -> Void
 
@@ -100,7 +100,7 @@ struct CreateGroupView: View {
             .background(Theme.night)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants or cravings")
-            .navigationTitle("New group pick")
+            .navigationTitle("New group plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

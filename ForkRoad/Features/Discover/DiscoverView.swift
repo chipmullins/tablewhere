@@ -28,7 +28,7 @@ struct DiscoverView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                Text("Which way\nto dinner?")
+                Text("Which way\nto eat?")
                     .font(Theme.display(36))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -170,7 +170,7 @@ struct DiscoverView: View {
             model.selectedTab = .spin
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: "dice")
+                Image(systemName: "sparkles")
                     .font(Theme.body(22, .semibold))
                     .foregroundStyle(Theme.saffron)
                     .frame(width: 48, height: 48)

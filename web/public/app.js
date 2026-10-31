@@ -239,7 +239,7 @@ function render() {
 
   const name = myName();
   if (!name) {
-    $("name-title").textContent = session.title || "Help pick dinner";
+    $("name-title").textContent = session.title || "Help pick where to eat";
     $("name-sub").textContent = `${session.createdByName || "A friend"} wants help deciding where to eat.`;
     show("name-step");
     return;
@@ -850,7 +850,7 @@ async function addOption(option) {
       duplicate: isSpin() ? "That place is already in the wheel." : "That place is already in the vote.",
       full: "This pick already has 12 places, the most it can hold.",
       closed: "Voting has closed, so places can’t be added.",
-      ended: "This group pick has ended.",
+      ended: "This group plan has ended.",
       picked: "You’ve already added your pick. Everyone gets one.",
     };
     setStatus(messages[error?.message] || "Couldn’t add it. Check your connection and try again.", true);

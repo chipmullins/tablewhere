@@ -55,7 +55,7 @@ struct TonightsPickWidget: Widget {
                 .containerBackground(for: .widget) { Theme.night }
                 .widgetURL(URL(string: "forkroad://spin"))
         }
-        .configurationDisplayName("Tonight's Pick")
+        .configurationDisplayName("Your Pick")
         .description("A random place from your Favorites, Want to try, or nearby list.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
@@ -138,7 +138,7 @@ struct TonightsPickView: View {
     // Lock Screen: system-tinted text only (no button; tapping opens the Spin tab).
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("TONIGHT'S PICK")
+            Text("YOUR PICK")
                 .font(.system(size: 11, weight: .bold))
                 .widgetAccentable()
             if let pick = entry.pick {
@@ -159,7 +159,7 @@ struct TonightsPickView: View {
     }
 
     private var header: some View {
-        Text("FORKROAD · TONIGHT'S PICK")
+        Text("FORKROAD · YOUR PICK")
             .font(Theme.body(10, .bold))
             .tracking(0.8)
             .foregroundStyle(Theme.accentText)
@@ -177,7 +177,7 @@ struct TonightsPickView: View {
 
     private func spinButton(compact: Bool) -> some View {
         Button(intent: SpinAgainIntent()) {
-            Label("Spin again", systemImage: "dice")
+            Label("Spin again", systemImage: "sparkles")
                 .font(Theme.body(compact ? 12 : 13, .bold))
                 .foregroundStyle(Theme.onSaffron)
                 .lineLimit(1)

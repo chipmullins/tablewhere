@@ -13,7 +13,7 @@ enum Hint: String, CaseIterable {
 
     var icon: String {
         switch self {
-        case .spinFirst: return "dice.fill"
+        case .spinFirst: return "sparkles"
         case .discoverMap: return "hand.tap.fill"
         case .myWheel: return "circle.dashed"
         case .listsAdd: return "plus.circle.fill"
@@ -23,7 +23,7 @@ enum Hint: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .spinFirst: return "Tap Spin for tonight’s pick"
+        case .spinFirst: return "Tap Spin and let it pick"
         case .discoverMap: return "Look somewhere else"
         case .myWheel: return "Make a custom spin"
         case .listsAdd: return "Add any place"

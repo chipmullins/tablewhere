@@ -109,8 +109,8 @@ struct CustomPlaceForm: View {
                     Text("Where is it?")
                 } footer: {
                     Text(trimmedAddress.isEmpty
-                         ? "No address? It’ll show up in that area’s lists and spins. Add one to get directions and use it in group picks."
-                         : "With an address you get directions, and you can add it to group picks.")
+                         ? "No address? It’ll show up in that area’s lists and spins. Add one to get directions and use it in group plans."
+                         : "With an address you get directions, and you can add it to group plans.")
                 }
                 .listRowBackground(Theme.surface)
 

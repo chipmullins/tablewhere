@@ -31,7 +31,7 @@ enum GroupWording {
     static func inviteText(_ session: GroupSession) -> String {
         session.mode == .vote
             ? "Help pick where we eat! Vote here, or join in ForkRoad with code \(JoinCode.display(session.joinCode))."
-            : "Add your pick for the dinner spin! Add it here, or join in ForkRoad with code \(JoinCode.display(session.joinCode))."
+            : "Add your pick for the group spin! Add it here, or join in ForkRoad with code \(JoinCode.display(session.joinCode))."
     }
 
     /// Locking in with nobody voting, or spinning one place, is probably a slip.

@@ -5,7 +5,7 @@ import Foundation
 /// place; WidgetKit reloads the widget's timeline after an interactive intent finishes.
 struct SpinAgainIntent: AppIntent {
     static var title: LocalizedStringResource = "Spin again"
-    static var description = IntentDescription("Shows a different place on the Tonight's Pick widget.")
+    static var description = IntentDescription("Shows a different place on the Your Pick widget.")
     static var isDiscoverable: Bool = false
 
     init() {}

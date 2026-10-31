@@ -22,7 +22,7 @@ struct RootTabView: View {
                 .tag(AppTab.discover)
 
             NavigationStack { SpinView() }
-                .tabItem { Label("Spin", systemImage: "dice") }
+                .tabItem { Label("Spin", systemImage: "sparkles") }
                 .tag(AppTab.spin)
 
             NavigationStack { ListsView() }
