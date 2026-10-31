@@ -51,7 +51,9 @@ enum LeaveBy {
         let fromCurrentLocation: Bool
 
         var driveMinutes: Int { max(1, Int((travel / 60).rounded())) }
-        var isTimeToGo: Bool { leaveAt <= .now }
+        // Compared as seconds, not with Date's operators: comparing Dates
+        // through Comparable crashed on device (null witness, iOS 17 target).
+        var isTimeToGo: Bool { leaveAt.timeIntervalSinceNow <= 0 }
 
         /// Minutes you'd be late leaving right now (0 if you'd make it).
         var minutesLateIfLeavingNow: Int {
@@ -63,14 +65,19 @@ enum LeaveBy {
     static func plan(to destination: CLLocationCoordinate2D, meetTime: Date,
                      from origin: CLLocationCoordinate2D, isGPS: Bool) async -> Plan? {
         // First guess, then again for the real departure time so traffic matches.
-        let firstGuess = max(Date.now, meetTime.addingTimeInterval(-30 * 60))
+        let firstGuess = notBeforeNow(meetTime.addingTimeInterval(-30 * 60))
         guard let first = await driveTime(from: origin, to: destination, departing: firstGuess) else { return nil }
-        let departure = max(Date.now, meetTime.addingTimeInterval(-first - buffer))
+        let departure = notBeforeNow(meetTime.addingTimeInterval(-first - buffer))
         let travel = await driveTime(from: origin, to: destination, departing: departure) ?? first
         let leaveAt = meetTime.addingTimeInterval(-travel - buffer)
         // Round down to the minute ("6:38", not "6:38:41").
         let clean = Date(timeIntervalSinceReferenceDate: (leaveAt.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
         return Plan(leaveAt: clean, meetTime: meetTime, travel: travel, fromCurrentLocation: isGPS)
+    }
+
+    /// The date, or now if it's already passed (without Date's comparison operators).
+    private static func notBeforeNow(_ date: Date) -> Date {
+        date.timeIntervalSinceNow > 0 ? date : Date()
     }
 
     private static func driveTime(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D,
@@ -94,7 +101,7 @@ enum LeaveBy {
     static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption, mayAsk: Bool = true) async {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
-        guard remindersOn, plan.leaveAt > Date.now.addingTimeInterval(60) else { return }
+        guard remindersOn, plan.leaveAt.timeIntervalSinceNow > 60 else { return }
 
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {

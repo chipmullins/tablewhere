@@ -21,7 +21,7 @@ extension LeaveBy {
         for id in SharedCache.recentSessionIDs().prefix(5) {
             guard let session = try? await GroupService.shared.sessionRef(id).getDocument(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
-                  let meet = session.meetTime, meet > .now else {
+                  let meet = session.meetTime, meet.timeIntervalSinceNow > 0 else {
                 cancel(sessionID: id)
                 continue
             }

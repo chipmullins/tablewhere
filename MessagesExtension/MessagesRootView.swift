@@ -269,7 +269,7 @@ struct MessageVoteView: View {
                         } else if let note = session.trimmedNote {
                             PlanNoteCard(note: note, author: session.createdByName)
                         }
-                        if let meet = session.meetTime, meet > .now.addingTimeInterval(-15 * 60) {
+                        if let meet = session.meetTime, meet.timeIntervalSinceNow > -15 * 60 {
                             AddToCalendarButton(session: session, winner: winner, meetTime: meet)
                             LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet,
                                         origin: { await MessageLeaveOrigin.current() },

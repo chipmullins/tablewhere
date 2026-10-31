@@ -41,7 +41,7 @@ public enum MeetTimes {
         parts.minute = minute
         parts.second = 0
         let today = calendar.date(from: parts) ?? now
-        if today > now { return today }
+        if today.timeIntervalSince(now) > 0 { return today }
         return calendar.date(byAdding: .day, value: 1, to: today) ?? today
     }
 }
