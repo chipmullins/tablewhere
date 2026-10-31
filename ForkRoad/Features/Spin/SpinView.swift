@@ -23,6 +23,7 @@ struct SpinView: View {
     /// Increments each time a spin lands; drives the bounce and burst.
     @State private var landCount = 0
     @State private var showLocationPicker = false
+    @State private var showWheelPicker = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var actions: ListActions { ListActions(context: context) }
@@ -42,6 +43,8 @@ struct SpinView: View {
         let source: [Place]
         switch model.spinSource {
         case .nearby: source = model.places
+        // You chose these on purpose, so blacklist/repeat rules don't apply.
+        case .picked: return model.pickedWheel
         case .favorites, .interested:
             let list = model.spinSource.savedList
             source = saved.filter { $0.list == list && !$0.skipInSpins }
@@ -124,6 +127,10 @@ struct SpinView: View {
                     .onChange(of: model.radiusMiles) { reset() }
 
                     CuisineChips(selection: $model.cuisines, diet: $model.diet)
+                } else if model.spinSource == .picked {
+                    PickedWheelEditor(showPicker: $showWheelPicker)
+                        .onChange(of: model.pickedWheel.map(\.id)) { reset() }
+                        .sheet(isPresented: $showWheelPicker) { WheelPickerSheet() }
                 } else {
                     HStack(spacing: 8) {
                         CityMenu(metros: saved.filter { $0.list == model.spinSource.savedList }.metros)
@@ -172,7 +179,8 @@ struct SpinView: View {
     // MARK: Pieces
 
     private func rulesSummary(count: Int) -> some View {
-        let parts: [String?] = [
+        let picked = model.spinSource == .picked
+        let parts: [String?] = picked ? ["Your hand-picked wheel", "\(count) in the wheel"] : [
             model.spinSource == .nearby ? "Within \(model.radiusLabel)"
                 : (model.spinSource == .favorites ? "From your favorites" : "Places you want to try"),
             model.spinSource != .nearby ? areaChip : nil,
@@ -260,6 +268,7 @@ struct SpinView: View {
     private var emptyReelText: String {
         switch model.spinSource {
         case .nearby: return "No places in range"
+        case .picked: return "Add a few places to your wheel"
         case .favorites:
             return model.listCity == .all ? "Heart some favorites first" : "No favorites around here yet"
         case .interested:
@@ -284,14 +293,25 @@ struct SpinView: View {
     }
 
     private func resultCard(_ place: Place) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Something you typed onto your wheel ("Leftovers") isn't a real place.
+        let isTyped = place.id.hasPrefix("typed|")
+        return VStack(alignment: .leading, spacing: 14) {
             SectionLabel(text: "Tonight’s pick", color: Theme.accentText)
             VStack(alignment: .leading, spacing: 4) {
                 Text(place.name).font(Theme.display(24)).foregroundStyle(Theme.text)
-                Text("\(place.category) · \(place.distanceLabel)")
+                Text(isTyped ? "From your wheel" : "\(place.category) · \(place.distanceLabel)")
                     .font(Theme.body(14))
                     .foregroundStyle(Theme.muted)
             }
+            if !isTyped { resultActions(place) }
+        }
+        .padding(18)
+        .card(radius: 24)
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+    }
+
+    @ViewBuilder
+    private func resultActions(_ place: Place) -> some View {
             HStack(spacing: 8) {
                 ActionTile(title: "Call", systemImage: "phone") {
                     if let url = PlaceLinks.phoneURL(place) { openURL(url) }
@@ -314,6 +334,7 @@ struct SpinView: View {
                 }
                 ActionTile(title: "Nope", systemImage: "nosign") {
                     actions.block(place)
+                    if model.spinSource == .picked { model.togglePicked(place) }
                     winner = nil
                 }
             }
@@ -323,10 +344,6 @@ struct SpinView: View {
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .buttonStyle(.plain)
-        }
-        .padding(18)
-        .card(radius: 24)
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
     }
 
     // MARK: Logic
@@ -359,7 +376,7 @@ struct SpinView: View {
             winner = pick
             landCount += 1
             isSpinning = false
-            actions.recordSpin(pick)
+            if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
             UsageStats.record(.spins)
         }
     }

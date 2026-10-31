@@ -10,12 +10,14 @@ enum SpinSource: String, CaseIterable, Identifiable {
     case nearby = "Nearby"
     case favorites = "Favorites"
     case interested = "Interested"
+    /// A wheel you build yourself: any places, plus anything you type.
+    case picked = "Pick"
     var id: Self { self }
 
     /// The saved list this source spins from, if it's one.
     var savedList: SavedList? {
         switch self {
-        case .nearby: return nil
+        case .nearby, .picked: return nil
         case .favorites: return .favorites
         case .interested: return .interested
         }
@@ -33,6 +35,39 @@ enum SpinSource: String, CaseIterable, Identifiable {
 final class AppModel {
     var selectedTab: AppTab = .discover
     var spinSource: SpinSource = .nearby
+
+    /// The hand-picked wheel (Spin → Pick). Saved on this device.
+    var pickedWheel: [Place] = AppModel.savedWheel {
+        didSet {
+            if let data = try? JSONEncoder().encode(pickedWheel) {
+                UserDefaults.standard.set(data, forKey: "spin.pickedWheel")
+            }
+        }
+    }
+    private static var savedWheel: [Place] {
+        guard let data = UserDefaults.standard.data(forKey: "spin.pickedWheel") else { return [] }
+        return (try? JSONDecoder().decode([Place].self, from: data)) ?? []
+    }
+    /// Most places on a hand-picked wheel.
+    static let maxPicked = 20
+
+    func togglePicked(_ place: Place) {
+        if let index = pickedWheel.firstIndex(where: { $0.id == place.id }) {
+            pickedWheel.remove(at: index)
+        } else if pickedWheel.count < Self.maxPicked {
+            pickedWheel.append(place)
+        }
+    }
+
+    /// Adds anything you type ("Mom's", "Leftovers") as a wheel slot.
+    /// It has no real location, so it's placed at your search center.
+    func addTypedPick(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, pickedWheel.count < Self.maxPicked,
+              !pickedWheel.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+        pickedWheel.append(Place(id: "typed|" + UUID().uuidString, name: trimmed, category: "Your pick",
+                                 latitude: center.latitude, longitude: center.longitude, distanceMeters: 0))
+    }
 
     /// Remembered between launches (also settable in Settings).
     var radiusMiles: Double = AppModel.savedRadius {

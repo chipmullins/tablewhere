@@ -75,7 +75,7 @@ struct OnboardingView: View {
                  ]),
         TourStop(icon: "dice.fill", eyebrow: "Spin", title: "Can’t decide? Spin.",
                  points: [
-                    TourPoint("dice", "Spin from what’s nearby, your Favorites, or places you want to try."),
+                    TourPoint("dice", "Spin from what’s nearby, your Favorites, places you want to try, or a wheel you build yourself."),
                     TourPoint("arrow.triangle.2.circlepath", "It won’t repeat places you landed on this week."),
                     TourPoint("pause.circle", "Tired of a place? Leave it out of spins without removing it.")
                  ]),
