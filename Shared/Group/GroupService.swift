@@ -93,6 +93,7 @@ final class GroupService {
             rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil
         )
         var data = try Firestore.Encoder().encode(session)
+        if mode == .plan { data["announced"] = true }
         // The server's "Meet at…" pushes read this label (it doesn't know time zones).
         if let time = session.meetTime { data["meetTimeLabel"] = MeetTimes.label(for: time) }
         try await ref.setData(data)
@@ -340,12 +341,25 @@ final class GroupService {
     /// Locks in the result. Votes: most votes wins, with a fair tie-break.
     /// Spin: a fair random pick among all options.
     /// Places someone in the group blacklisted (`ruledOut`) can't win.
-    func decide(session: GroupSession, votes: [GroupVote], ruledOut: Set<String> = []) async throws -> String? {
+    /// `announce: false` holds the "It's decided!" push until `announce(_:)`
+    /// (a spin while its wheel plays, or iMessage until you tap Send).
+    func decide(session: GroupSession, votes: [GroupVote], ruledOut: Set<String> = [],
+                announce: Bool = true) async throws -> String? {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         guard let winner = session.pickWinner(votes: votes, ruledOut: ruledOut) else { return nil }
-        try await sessionRef(session.id).updateData(["status": GroupStatus.decided.rawValue, "winnerID": winner])
+        try await sessionRef(session.id).updateData([
+            "status": GroupStatus.decided.rawValue,
+            "winnerID": winner,
+            "announced": announce
+        ])
         return winner
+    }
+
+    /// Shares a held result: the server sends "It's decided!" now.
+    func announce(sessionID: String) async throws {
+        _ = try await userID()
+        try await sessionRef(sessionID).updateData(["announced": true])
     }
 
     /// The creator takes a place out of an open group. Its votes are cleared,

@@ -130,7 +130,7 @@ final class MessagesState {
 
     /// What the bubble shows: open or decided, the winner, and the time.
     private static func bubbleKey(_ session: GroupSession) -> String {
-        "\(session.status.rawValue)|\(session.winnerID ?? "")|\(Int(session.meetTime?.timeIntervalSince1970 ?? 0))"
+        "\(session.status.rawValue)|\(session.winnerID ?? "")|\(Int(session.meetTime?.timeIntervalSince1970 ?? 0))|\(session.trimmedNote ?? "")"
     }
 
     private static func rememberPosted(_ session: GroupSession) {

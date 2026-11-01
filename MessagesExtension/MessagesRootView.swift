@@ -293,13 +293,23 @@ struct MessageVoteView: View {
         withDialogs(withEffects(content))
     }
 
+    /// The plan's status as this person may see it: a result the creator is
+    /// holding (spin reveal, or iMessage before Send) still looks open to
+    /// everyone else until it's shared.
+    private var visiblePhase: GroupStatus? {
+        guard let session = live.session else { return nil }
+        if session.status == .decided && session.announced == false && !live.isOwner { return .open }
+        return session.status
+    }
+
     /// The plan as this view shows it. While a Group Spin's reveal plays (and
     /// in the moment before it starts), it still looks open, so the winner
     /// behind the wheel doesn't give the answer away.
     private var shownSession: GroupSession? {
         guard var session = live.session else { return nil }
         let justDecided = lastStatus == .open || reveal != nil
-        if session.mode == .spin && session.status == .decided && justDecided {
+        let held = session.status == .decided && session.announced == false && !live.isOwner
+        if held || (session.mode == .spin && session.status == .decided && justDecided) {
             session.status = .open
             session.winnerID = nil
         }
@@ -386,13 +396,24 @@ struct MessageVoteView: View {
         }
         if live.isOwner {
             let _ = postedTick
+            // Time and note first, then one bubble with all of it.
+            MessagePlanControls(session: session)
             if MessagesState.bubbleIsOutdated(session) {
+                if session.announced == false {
+                    Text("Only you can see this so far. Add a time or note if you like, then send it.")
+                        .font(Theme.body(13, .medium))
+                        .foregroundStyle(Theme.muted)
+                }
                 // One bubble when you're ready, not one per tap.
                 Button {
                     state.sendUpdate(session, tally: live.tally, memberCount: live.members.count)
                     postedTick += 1
+                    if session.announced == false {
+                        Task { try? await GroupService.shared.announce(sessionID: session.id) }
+                    }
                 } label: {
-                    Label("Post the plan to the chat", systemImage: "paperplane.fill")
+                    Label(session.announced == false ? "Send to the group" : "Post the updated plan",
+                          systemImage: "paperplane.fill")
                         .font(Theme.display(16))
                         .foregroundStyle(Theme.onSaffron)
                         .frame(maxWidth: .infinity, minHeight: 50)
@@ -400,7 +421,6 @@ struct MessageVoteView: View {
                 }
                 .buttonStyle(.plain)
             }
-            MessagePlanControls(session: session)
         } else if let note = session.trimmedNote {
             PlanNoteCard(note: note, author: session.createdByName)
         }
@@ -527,7 +547,7 @@ struct MessageVoteView: View {
         view
         // When it's decided while you watch (not on opening a decided plan, or on
         // reopening). A Group Spin's reveal plays its own when the wheel lands.
-        .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
+        .sensoryFeedback(Haptic.decided, trigger: visiblePhase) { old, new in
             old == .open && new == .decided && live.session?.mode != .spin
         }
         .sensoryFeedback(Haptic.commit, trigger: lockInTaps)
@@ -542,7 +562,7 @@ struct MessageVoteView: View {
             try? await Task.sleep(for: .seconds(wait + 0.5))
             if !Task.isCancelled { timeUpTick += 1 }
         }
-        .onChange(of: live.session?.status) { old, new in
+        .onChange(of: visiblePhase) { old, new in
             defer { lastStatus = new }
             guard new == .decided else { return }
             state.expand()
@@ -722,15 +742,12 @@ struct MessageVoteView: View {
         Task {
             defer { isWorking = false }
             do {
-                if let winnerID = try await GroupService.shared.decide(session: session, votes: live.votes,
-                                                                       ruledOut: live.ruledOutIDs) {
-                    // Send right away (still part of the tap) rather than waiting
-                    // for the listener, so Messages treats it as a user action.
-                    var decided = session
-                    decided.status = .decided
-                    decided.winnerID = winnerID
-                    state.sendUpdate(decided, tally: live.tally, memberCount: live.members.count)
-                }
+                // The result shows here first (with the spin's reveal); the
+                // chat hears it when you tap Send to the group, with the time
+                // and note in the same bubble. The push waits for that too.
+                _ = try await GroupService.shared.decide(session: session, votes: live.votes,
+                                                         ruledOut: live.ruledOutIDs, announce: false)
+                state.expand()
             } catch { errorMessage = GroupService.message(for: error) }
         }
     }

@@ -116,6 +116,10 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var asksRSVP: Bool?
     /// Replies close at this time (nil: no cutoff).
     public var rsvpBy: Date?
+    /// The result has been shared with the group ("It's decided!" push sent).
+    /// False while the creator is still watching the spin or setting the time
+    /// in iMessage; nil on older sessions (treated as shared).
+    public var announced: Bool?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,

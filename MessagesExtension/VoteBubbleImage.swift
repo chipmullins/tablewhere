@@ -41,6 +41,18 @@ private struct VoteBubbleCard: View {
                 Text(session.meetTime.map { "\(MeetTimes.label(for: $0)) · \(winner.category)" } ?? winner.category)
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
+                if let note = session.trimmedNote {
+                    // The plan's note, so one bubble says it all.
+                    HStack(alignment: .top, spacing: 8) {
+                        Capsule().fill(Theme.saffron).frame(width: 3)
+                        Text("“\(note)”")
+                            .font(Theme.body(13, .semibold))
+                            .italic()
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(2)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             } else if session.mode == .spin {
                 Text("Everyone adds one place, then \(session.createdByName) spins.")
                     .font(Theme.body(13, .semibold))

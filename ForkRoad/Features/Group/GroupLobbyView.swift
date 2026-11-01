@@ -50,13 +50,23 @@ struct GroupLobbyView: View {
         withEffects(withDialogs(withChrome(content)))
     }
 
+    /// The plan's status as this person may see it: a result the creator is
+    /// holding (spin reveal, or iMessage before Send) still looks open to
+    /// everyone else until it's shared.
+    private var visiblePhase: GroupStatus? {
+        guard let session = live.session else { return nil }
+        if session.status == .decided && session.announced == false && !live.isOwner { return .open }
+        return session.status
+    }
+
     /// The plan as this screen shows it. While a Group Spin's reveal plays (and
     /// in the moment before it starts), it still looks open, so the winner card
     /// behind the wheel doesn't give the answer away.
     private var shownSession: GroupSession? {
         guard var session = live.session else { return nil }
         let justDecided = lastStatus == .open || reveal != nil
-        if session.mode == .spin && session.status == .decided && justDecided {
+        let held = session.status == .decided && session.announced == false && !live.isOwner
+        if held || (session.mode == .spin && session.status == .decided && justDecided) {
             session.status = .open
             session.winnerID = nil
         }
@@ -201,7 +211,7 @@ struct GroupLobbyView: View {
         }
         // When it's decided while you watch (not on opening a decided plan, or on
         // reopening). A Group Spin's reveal plays its own when the wheel lands.
-        .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
+        .sensoryFeedback(Haptic.decided, trigger: visiblePhase) { old, new in
             old == .open && new == .decided && live.session?.mode != .spin
         }
         .sensoryFeedback(Haptic.commit, trigger: commitTaps)
@@ -209,7 +219,7 @@ struct GroupLobbyView: View {
         .sensoryFeedback(Haptic.tick, trigger: timeTaps)
         .sensoryFeedback(Haptic.commit, trigger: rsvpTaps)
         // Everyone watching a Group Spin sees the wheel land.
-        .onChange(of: live.session?.status) { old, new in
+        .onChange(of: visiblePhase) { old, new in
             if old == .open, new == .decided, let session = live.session, session.mode == .spin,
                let winner = session.winner {
                 reveal = winner
@@ -223,6 +233,8 @@ struct GroupLobbyView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .onChange(of: reveal == nil) { _, done in if done { announceIfHeld() } }
+        .onDisappear { announceIfHeld() }
     }
 
     // MARK: Header
@@ -776,9 +788,21 @@ struct GroupLobbyView: View {
         isWorking = true
         Task {
             defer { isWorking = false }
-            do { _ = try await GroupService.shared.decide(session: session, votes: live.votes, ruledOut: live.ruledOutIDs) }
-            catch { errorMessage = GroupService.message(for: error) }
+            // A spin's result goes out when the wheel lands (see the reveal's end).
+            do {
+                _ = try await GroupService.shared.decide(session: session, votes: live.votes,
+                                                         ruledOut: live.ruledOutIDs, announce: session.mode != .spin)
+            } catch { errorMessage = GroupService.message(for: error) }
         }
+    }
+
+    /// The creator's held spin result: share it once the wheel has landed
+    /// (or when they leave the screen, so it never stays unshared).
+    private func announceIfHeld() {
+        // Spins only: an iMessage result waits for Send in Messages.
+        guard live.isOwner, let session = live.session, session.mode == .spin,
+              session.status == .decided, session.announced == false else { return }
+        Task { try? await GroupService.shared.announce(sessionID: session.id) }
     }
 
     private func setMeetTime(_ date: Date) {

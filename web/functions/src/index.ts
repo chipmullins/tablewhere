@@ -276,8 +276,13 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     const winner = optionName(after, after.winnerID) ?? "the winning pick";
     const label = str(after.meetTimeLabel);
 
-    // 1. Just locked in.
-    if (before.status !== "decided" && after.status === "decided") {
+    // 1. Just shared: locked in (older apps), or a held result going out
+    //    (after the spin's reveal, or when the creator taps Send in iMessage).
+    //    `announced === false` means the creator hasn't shared it yet.
+    const nowDecided = before.status !== "decided" && after.status === "decided";
+    const released = before.status === "decided" && after.status === "decided"
+      && before.announced === false && after.announced === true;
+    if ((nowDecided && after.announced !== false) || released) {
       const to = await recipients(sessionId, { except });
       const body = `We're going to ${winner}` + (label ? ` · ${label}` : "");
       await send(sessionId, to, "It's decided!", body);
@@ -288,6 +293,9 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     //    app writes it with meetTime, so notify when the label changes to a new value.
     //    (A bare meetTime write with no label is skipped, so nobody gets a push twice.)
     if (before.status === "decided" && after.status === "decided") {
+      // Still held (the creator is setting the time before sending): the
+      // group hears it all at once when it's shared.
+      if (after.announced === false) return;
       // An "I'll pick" plan moved to a different place.
       if (before.winnerID !== after.winnerID && after.winnerID) {
         const to = await recipients(sessionId, { except });

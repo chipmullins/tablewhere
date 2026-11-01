@@ -256,8 +256,12 @@ function render() {
   $("code").textContent = formatCode(session.joinCode);
   $("footer").hidden = false;
 
+  // The organizer has the result but hasn't shared it yet (watching the spin,
+  // or setting the time in iMessage): show the places, locked, for a moment.
+  const held = session.status === "decided" && session.announced === false;
+
   // Anyone opening the link after the group decided sees the result right away.
-  if (session.status === "decided" && session.winnerID) {
+  if (session.status === "decided" && session.winnerID && !held) {
     // Tapped I'm in / Can't make it without a name yet: ask for it first.
     if (pendingRSVP && !myName()) {
       $("name-title").textContent = session.title || "The plan";
@@ -288,6 +292,9 @@ function render() {
   }
 
   renderVote();
+  if (held) {
+    $("vote-help").textContent = `${session.createdByName || "The organizer"} is locking it in. The result shows here in a moment.`;
+  }
 }
 
 function tally() {
