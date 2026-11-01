@@ -122,15 +122,18 @@ struct ListsView: View {
         .listRowInsets(EdgeInsets())
 
         if all.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(list == .favorites
-                     ? "Tap the heart on a restaurant you love to add it here."
-                     : "Tap the bookmark on a restaurant you want to try to save it here.")
-                    .font(Theme.body(15))
-                    .foregroundStyle(Theme.muted)
-                addPlaceLink
-            }
+            EmptyState(
+                art: .plate,
+                title: list == .favorites ? "Your plate’s empty" : "Nothing on deck yet",
+                message: list == .favorites
+                    ? "Tap the heart on a place you love and it lands here. Then spin just your favorites when you can’t decide."
+                    : "Tap the bookmark on a place you want to try and it lands here. Then spin something new.",
+                primary: ("Find places nearby", { model.selectedTab = .discover }),
+                secondary: ("Or add one that’s not on the map", { showAddPlace = true })
+            )
+            .padding(.vertical, 24)
             .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         } else if rows.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("No \(list == .favorites ? "favorites" : "saved places") \(areaName.map { "in \($0)" } ?? "around here") yet.")

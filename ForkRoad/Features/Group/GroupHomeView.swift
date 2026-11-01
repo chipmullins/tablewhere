@@ -9,6 +9,8 @@ struct GroupHomeView: View {
     @State private var showNamePrompt = false
     @State private var pendingAction: PendingAction?
     @State private var joinCode = ""
+    /// The empty state's "Got a code?" link opens the usual cards.
+    @State private var showJoin = false
     @State private var isJoining = false
     @State private var errorMessage: String?
     @State private var recentIDs = SharedCache.recentSessionIDs()
@@ -38,8 +40,18 @@ struct GroupHomeView: View {
 
                 if !FirebaseSetup.isConfigured {
                     setupNotice
+                } else if recentIDs.isEmpty && !showJoin {
+                    // First time here: a friendly empty state instead of two cards.
+                    EmptyState(
+                        art: .chat,
+                        title: "No more “idk, you pick”",
+                        message: "Start a plan, send it to the group chat, and let everyone vote or add a pick. Friends don’t need the app.",
+                        primary: ("Start a group plan", { withName(.create) }),
+                        secondary: ("Got a code? Join the group", { withAnimation(.snappy) { showJoin = true } })
+                    )
+                    .padding(.top, 40)
                 } else {
-                    HintCard(.groupStart)
+                    if recentIDs.isEmpty { HintCard(.groupStart) }
                     startCard
                     joinCard
                     if let errorMessage {

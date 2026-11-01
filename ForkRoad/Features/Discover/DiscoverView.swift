@@ -266,7 +266,6 @@ extension DiscoverView {
     }
 
     /// Nothing to show: say why (blacklist, filters, radius) and offer the fix.
-    @ViewBuilder
     var emptyResults: some View {
         // Count only the blacklist here (No fast food is a filter, covered below).
         let blacklistRules: Randomizer.Rules = {
@@ -275,28 +274,37 @@ extension DiscoverView {
             return rules
         }()
         let hiddenByBlacklist = model.places.count - Randomizer.eligible(model.places, rules: blacklistRules).count
-        let reasons: [String] = [
-            hiddenByBlacklist > 0 ? "\(hiddenByBlacklist) \(hiddenByBlacklist == 1 ? "place is" : "places are") on your blacklist." : nil,
-            hasFilters ? "Your filters may be hiding some." : nil
-        ].compactMap { $0 }
-        let message = reasons.isEmpty
-            ? "No matches within \(model.radiusLabel). Try a bigger radius."
-            : "No matches within \(model.radiusLabel). " + reasons.joined(separator: " ")
-        if hasFilters {
-            StateCard(icon: "line.3.horizontal.decrease.circle",
-                      title: "Nothing matches",
-                      message: message,
-                      action: ("Clear filters", {
-                          model.cuisines = []
-                          model.diet = .none
-                          model.excludeFastFood = false
-                      }))
-        } else {
-            StateCard(icon: "fork.knife",
-                      title: "Nothing nearby yet",
-                      message: message,
-                      action: model.radiusMiles < 10 ? ("Search 10 mi", { model.radiusMiles = 10 }) : nil)
+        // "vegan Thai", "Mexican", or just places.
+        var what: [String] = []
+        if model.diet != .none { what.append(model.diet.label.lowercased()) }
+        if !model.cuisines.isEmpty { what.append(model.cuisineSummary) }
+        let bigger: Double? = [1.0, 2, 3, 5, 10].first { $0 >= model.radiusMiles * 1.5 } ?? (model.radiusMiles < 10 ? 10 : nil)
+        var message = what.isEmpty
+            ? "No restaurants within \(model.radiusLabel)."
+            : "Nothing \(what.joined(separator: " ")) within \(model.radiusLabel)."
+        if hiddenByBlacklist > 0 {
+            message += " \(hiddenByBlacklist) \(hiddenByBlacklist == 1 ? "is" : "are") on your blacklist."
         }
+        message += bigger != nil ? " Widen the road a little and there’s plenty." : " Try fewer filters."
+        let appModelForClear: AppModel = model
+        let clear: () -> Void = {
+            let model = appModelForClear
+            model.cuisines = []
+            model.diet = .none
+            model.excludeFastFood = false
+        }
+        var primary: (title: String, action: () -> Void)?
+        var secondary: (title: String, action: () -> Void)?
+        if let bigger {
+            let appModel: AppModel = model
+            primary = (title: "Search \(RadiusSlider.label(bigger)) instead", action: { appModel.radiusMiles = bigger })
+            if hasFilters { secondary = (title: "Clear filters", action: clear) }
+        } else if hasFilters {
+            primary = (title: "Clear filters", action: clear)
+        }
+        return EmptyState(art: .crossroads, title: "A dead end, for now", message: message,
+                          primary: primary, secondary: secondary)
+        .padding(.vertical, 16)
     }
 }
 

@@ -11,9 +11,25 @@ struct PickedWheelEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if model.pickedWheel.isEmpty {
-                Text("Build your own wheel: search any restaurant, grab some from your lists, or type anything, like “Leftovers.”")
-                    .font(Theme.body(14))
-                    .foregroundStyle(Theme.muted)
+                VStack(spacing: 14) {
+                    EmptyState(
+                        art: .wheel,
+                        title: "Build your own wheel",
+                        message: "Add a few spots from the map, your lists, or anything you type, even things like “Leftovers” or “Mom’s.”"
+                    )
+                    Button { showPicker = true } label: {
+                        Label("Add options to spin", systemImage: "plus")
+                            .font(Theme.body(15, .bold))
+                            .foregroundStyle(Theme.accentText)
+                            .padding(.horizontal, 20)
+                            .frame(minHeight: 48)
+                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
+                .card(radius: 28)
             } else {
                 FlowChips(items: model.pickedWheel) { place in
                     removeTaps += 1
@@ -24,9 +40,10 @@ struct PickedWheelEditor: View {
                     }
                 }
             }
+            if !model.pickedWheel.isEmpty {
             HStack(spacing: 8) {
                 Button { showPicker = true } label: {
-                    Label(model.pickedWheel.isEmpty ? "Add places" : "Add more", systemImage: "plus.circle.fill")
+                    Label("Add more", systemImage: "plus.circle.fill")
                         .font(Theme.body(14, .bold))
                         .foregroundStyle(Theme.accentText)
                         .padding(.horizontal, 14)
@@ -52,6 +69,7 @@ struct PickedWheelEditor: View {
                         .buttonStyle(.plain)
                 }
                 Spacer(minLength: 0)
+            }
             }
         }
         .sensoryFeedback(Haptic.destructive, trigger: removeTaps)

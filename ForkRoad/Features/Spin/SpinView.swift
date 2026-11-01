@@ -135,7 +135,7 @@ struct SpinView: View {
 
     /// One quiet line under the Spin button.
     private func footnote(count: Int) -> String {
-        if model.spinSource == .picked { return "\(count) on your wheel" }
+        if model.spinSource == .picked { return count < 2 ? "Add at least 2 to spin" : "\(count) on your wheel" }
         var parts = ["\(count) \(count == 1 ? "place" : "places")"]
         if model.spinSource != .nearby { parts.append(areaChip) }
         if skippedCount > 0 { parts.append("\(skippedCount) left out") }
@@ -219,6 +219,7 @@ private struct SpinStage: View {
 
     private var actions: ListActions { ListActions(context: context) }
     private var emptyReelText: String { emptyText }
+    private var minimumToSpin: Int { isPickedWheel ? 2 : 1 }
 
     var body: some View {
         // Copied out so the animation closure (which can run off the main
@@ -227,6 +228,8 @@ private struct SpinStage: View {
         let shown = (isSpinning || winner != nil) ? reelPool : pool
 
         VStack(alignment: .leading, spacing: 18) {
+            // An empty Custom wheel already shows its "Build your own wheel" card.
+            if !(isPickedWheel && shown.isEmpty) {
             reel(shown)
                 .keyframeAnimator(initialValue: 1.0, trigger: landCount) { content, scale in
                     content.scaleEffect(reduceMotion ? 1 : scale)
@@ -235,6 +238,7 @@ private struct SpinStage: View {
                     SpringKeyframe(1.0, duration: 0.35, spring: .bouncy)
                 }
                 .overlay { LandingBurst(trigger: landCount).allowsHitTesting(false) }
+            }
 
             HStack {
                 Spacer()
@@ -242,7 +246,7 @@ private struct SpinStage: View {
                 Spacer()
             }
 
-            if winner == nil && message == nil && !pool.isEmpty {
+            if winner == nil && message == nil && (!pool.isEmpty || isPickedWheel) {
                 Text(footnote)
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
@@ -378,8 +382,9 @@ private struct SpinStage: View {
                 .shadow(color: Theme.saffron.opacity(0.28), radius: 20, y: 12)
         }
         .buttonStyle(.plain)
-        .disabled(isSpinning || pool.isEmpty)
-        .opacity(pool.isEmpty ? 0.4 : 1)
+        // Your own wheel needs at least two to be a choice.
+        .disabled(isSpinning || pool.count < minimumToSpin)
+        .opacity(pool.count < minimumToSpin ? 0.4 : 1)
         .accessibilityLabel(isSpinning ? "Spinning" : (winner == nil ? "Spin" : "Spin again"))
     }
 
