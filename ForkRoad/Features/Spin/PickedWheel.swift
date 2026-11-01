@@ -6,6 +6,7 @@ import PickerCore
 struct PickedWheelEditor: View {
     @Binding var showPicker: Bool
     @Environment(AppModel.self) private var model
+    @State private var removeTaps = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -15,6 +16,7 @@ struct PickedWheelEditor: View {
                     .foregroundStyle(Theme.muted)
             } else {
                 FlowChips(items: model.pickedWheel) { place in
+                    removeTaps += 1
                     let before = model.pickedWheel
                     model.togglePicked(place)
                     UndoCenter.shared.show("Took \(place.name) off your wheel") { [model] in
@@ -35,6 +37,7 @@ struct PickedWheelEditor: View {
                 .disabled(model.pickedWheel.count >= AppModel.maxPicked)
                 if !model.pickedWheel.isEmpty {
                     Button("Clear") {
+                        removeTaps += 1
                         let before = model.pickedWheel
                         model.pickedWheel = []
                         UndoCenter.shared.show("Cleared your wheel") { [model] in
@@ -51,6 +54,7 @@ struct PickedWheelEditor: View {
                 Spacer(minLength: 0)
             }
         }
+        .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
     }
 }
 
@@ -121,6 +125,8 @@ struct WheelPickerSheet: View {
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
     @State private var query = ""
+    @State private var uncheckTaps = 0
+    @State private var typedTaps = 0
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private func savedPlaces(_ list: SavedList) -> [Place] {
@@ -135,7 +141,10 @@ struct WheelPickerSheet: View {
                 if trimmed.isEmpty && !model.pickedWheel.isEmpty {
                     Section("On your wheel") {
                         ForEach(model.pickedWheel) { place in
-                            Button { model.togglePicked(place) } label: {
+                            Button {
+                                uncheckTaps += 1
+                                model.togglePicked(place)
+                            } label: {
                                 HStack(spacing: 12) {
                                     MonogramTile(name: place.name, category: place.category, size: 36)
                                     VStack(alignment: .leading, spacing: 2) {
@@ -173,7 +182,11 @@ struct WheelPickerSheet: View {
                 // Below the results, for things that aren't restaurants.
                 if !trimmed.isEmpty {
                     Section {
-                        Button { model.addTypedPick(trimmed); query = "" } label: {
+                        Button {
+                            typedTaps += 1
+                            model.addTypedPick(trimmed)
+                            query = ""
+                        } label: {
                             Label("Add “\(trimmed)” as typed", systemImage: "text.cursor")
                                 .font(Theme.body(15, .semibold))
                                 .foregroundStyle(Theme.accentText)
@@ -189,6 +202,8 @@ struct WheelPickerSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
+            .sensoryFeedback(Haptic.tick, trigger: uncheckTaps)
+            .sensoryFeedback(Haptic.commit, trigger: typedTaps)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants, or type anything")
             .navigationTitle("Your wheel · \(model.pickedWheel.count)")

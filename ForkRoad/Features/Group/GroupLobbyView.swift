@@ -142,7 +142,11 @@ struct GroupLobbyView: View {
             if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
         }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
-        .sensoryFeedback(Haptic.decided, trigger: live.session?.winnerID)
+        // When it's decided while you watch (not on opening a decided plan, or on
+        // reopening). A Group Spin's reveal plays its own when the wheel lands.
+        .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
+            old == .open && new == .decided && live.session?.mode != .spin
+        }
         .sensoryFeedback(Haptic.commit, trigger: commitTaps)
         .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
         .sensoryFeedback(Haptic.tick, trigger: timeTaps)

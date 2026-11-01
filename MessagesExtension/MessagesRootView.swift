@@ -442,7 +442,11 @@ struct MessageVoteView: View {
             }
             .padding(16)
         }
-        .sensoryFeedback(Haptic.decided, trigger: live.session?.winnerID)
+        // When it's decided while you watch (not on opening a decided plan, or on
+        // reopening). A Group Spin's reveal plays its own when the wheel lands.
+        .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
+            old == .open && new == .decided && live.session?.mode != .spin
+        }
         .sensoryFeedback(Haptic.commit, trigger: lockInTaps)
         .sensoryFeedback(Haptic.commit, trigger: postedTick)
         .sensoryFeedback(Haptic.destructive, trigger: removeTaps)

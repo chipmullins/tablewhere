@@ -214,6 +214,8 @@ private struct SpinStage: View {
     @AppStorage("spinReveal") private var useReveal = true
     /// The pick waiting for the reveal to finish.
     @State private var pending: (place: Place, index: Int)?
+    /// The result card zooms into the details (iOS 18+).
+    @Namespace private var zoom
 
     private var actions: ListActions { ListActions(context: context) }
     private var emptyReelText: String { emptyText }
@@ -266,10 +268,12 @@ private struct SpinStage: View {
         }
         .animation(.spring(duration: 0.55, bounce: 0.35), value: winner)
         .navigationDestination(isPresented: $showDetail) {
-            if let winner { PlaceDetailView(place: winner) }
+            if let winner { PlaceDetailView(place: winner).zoomDestination(id: winner.id, ns: zoom) }
         }
-        .sensoryFeedback(.selection, trigger: reelIndex)
-        .sensoryFeedback(.success, trigger: winner)
+        .sensoryFeedback(Haptic.tick, trigger: reelIndex)
+        // Only when a pick lands (not when it's cleared by Blacklist or Not
+        // tonight). The full-screen reveal plays its own as it lands.
+        .sensoryFeedback(Haptic.decided, trigger: winner) { _, new in new != nil && !useReveal }
         .onChange(of: resetKey) { reset() }
         // The reveal finished (or was tapped away): land on the pick.
         .onChange(of: reveal == nil) {
@@ -395,6 +399,7 @@ private struct SpinStage: View {
         .padding(18)
         .card(radius: 24)
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+        .zoomSource(id: place.id, ns: zoom)
     }
 
     @ViewBuilder
@@ -412,23 +417,35 @@ private struct SpinStage: View {
                 ActionTile(title: "Favorite",
                            systemImage: onList == .favorites ? "heart.fill" : "heart",
                            tint: onList == .favorites ? Theme.accentText : Theme.text,
-                           isOn: onList == .favorites) {
+                           isOn: onList == .favorites,
+                           haptic: Haptic.tick) {
                     actions.toggle(place, in: .favorites)
                 }
                 ActionTile(title: "Try",
                            systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
                            tint: onList == .interested ? Theme.accentText : Theme.text,
-                           isOn: onList == .interested) {
+                           isOn: onList == .interested,
+                           haptic: Haptic.tick) {
                     actions.toggle(place, in: .interested)
                 }
-                ActionTile(title: "Blacklist", systemImage: "nosign") { blacklist(place) }
+                ActionTile(title: "Blacklist", systemImage: "nosign", haptic: Haptic.destructive) { blacklist(place) }
             }
-            Button("See details") { showDetail = true }
-                .font(Theme.body(15, .bold))
-                .foregroundStyle(Theme.night)
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .buttonStyle(.plain)
+            HStack(spacing: 8) {
+                Button("See details") { showDetail = true }
+                    .font(Theme.body(15, .bold))
+                    .foregroundStyle(Theme.night)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .buttonStyle(.plain)
+                SharePickButton(place: place, context: .spin) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(Theme.body(17, .semibold))
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 50, height: 50)
+                        .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .accessibilityLabel("Share your pick")
+            }
             // Closed, too far, not in the mood: pass for tonight (not forever) and spin again.
             Button { skipTonight(place) } label: {
                 Label("Not tonight · spin again", systemImage: "arrow.uturn.right")

@@ -99,7 +99,7 @@ struct PlaceDetailView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .sensoryFeedback(.impact(weight: .light), trigger: refresh)
+                .sensoryFeedback(Haptic.tick, trigger: refresh)
 
                 if let onList {
                     Toggle(isOn: Binding(
