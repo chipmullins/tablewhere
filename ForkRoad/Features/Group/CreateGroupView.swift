@@ -19,6 +19,9 @@ struct CreateGroupView: View {
     @State private var isCreating = false
     @State private var errorMessage: String?
     @State private var query = ""
+    /// The search field is open. On iOS 26 it covers the nav bar (and Start),
+    /// so a spin pick closes it and the bottom bar has its own Start.
+    @State private var isSearching = false
     @State private var startTaps = 0
 
     static let maxVoteOptions = GroupMode.maxStartingVoteOptions
@@ -101,8 +104,11 @@ struct CreateGroupView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+            .searchable(text: $query, isPresented: $isSearching,
+                        placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants or cravings")
+            // Don't lose your picks to a stray swipe.
+            .interactiveDismissDisabled(!selected.isEmpty)
             .sensoryFeedback(Haptic.commit, trigger: startTaps)
             .navigationTitle("New group plan")
             .navigationBarTitleDisplayMode(.inline)
@@ -118,18 +124,41 @@ struct CreateGroupView: View {
                     }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                Text(mode == .spin
-                     ? (selected.isEmpty ? "Pick your one place for the wheel" : "Your pick: \(selected[0].name)")
-                     : "\(selected.count) of up to \(maxOptions) selected")
-                    .font(Theme.body(13, .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Theme.night)
-            }
+            .safeAreaInset(edge: .bottom) { bottomBar }
         }
         .presentationBackground(Theme.night)
+    }
+
+    /// What's picked, and a Start that's always reachable (even mid-search).
+    private var bottomBar: some View {
+        VStack(spacing: 8) {
+            Text(mode == .spin
+                 ? (selected.isEmpty ? "Pick your one place for the wheel" : "Your pick: \(selected[0].name)")
+                 : "\(selected.count) of up to \(maxOptions) selected")
+                .font(Theme.body(13, .semibold))
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+            if canCreate {
+                Button { create() } label: {
+                    HStack(spacing: 8) {
+                        if isCreating { ProgressView().tint(Theme.onSaffron) }
+                        Text(mode == .spin ? "Start the spin" : "Start the vote")
+                    }
+                    .font(Theme.display(17))
+                    .foregroundStyle(Theme.onSaffron)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isCreating)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Theme.night)
+        .animation(.snappy, value: canCreate)
     }
 
     private var canCreate: Bool {
@@ -147,6 +176,9 @@ struct CreateGroupView: View {
             selected.remove(at: index)
         } else if mode == .spin {
             selected = [place]  // one pick: tapping another swaps it
+            // That's your one pick: close the search so you can see it and Start.
+            query = ""
+            isSearching = false
         } else if selected.count < maxOptions {
             selected.append(place)
         }

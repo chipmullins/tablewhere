@@ -6,8 +6,8 @@ import PickerCore
 enum PickShareContext: Equatable {
     /// Your own spin landed on it.
     case spin
-    /// The group decided on it (with the meeting time, if one's set).
-    case group(meetTime: Date?)
+    /// The group decided on it (with the meeting time and the plan's note, if set).
+    case group(meetTime: Date?, note: String? = nil)
 
     var eyebrow: String {
         switch self {
@@ -24,6 +24,8 @@ struct ShareCard: View {
     let name: String
     let detail: String
     let context: PickShareContext
+    /// The plan's note ("Bring a gift!"), shown as a callout.
+    let note: String?
 
     static let size = CGSize(width: 360, height: 450)  // 4:5, 1080×1350 at 3×
 
@@ -33,10 +35,14 @@ struct ShareCard: View {
         var parts = [place.category]
         if let area = Self.area(from: place.address) { parts.append(area) }
         var detail = parts.joined(separator: " · ")
-        if case .group(let meetTime?) = context {
-            detail += "\nMeet \(MeetTimes.phrase(for: meetTime))"
+        var note: String?
+        if case .group(let meetTime, let groupNote) = context {
+            if let meetTime { detail += "\nMeet \(MeetTimes.phrase(for: meetTime))" }
+            note = groupNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if note?.isEmpty == true { note = nil }
         }
         self.detail = detail
+        self.note = note
     }
 
     var body: some View {
@@ -80,6 +86,26 @@ struct ShareCard: View {
                     .font(Theme.body(17, .semibold))
                     .foregroundStyle(Color(hex: 0xA19FAA))
                     .lineLimit(3)
+                if let note {
+                    // The note, like a sticky on the invite: saffron bar, quoted.
+                    HStack(alignment: .top, spacing: 10) {
+                        Capsule()
+                            .fill(Theme.saffron)
+                            .frame(width: 3)
+                        Text("“\(note)”")
+                            .font(Theme.body(15, .semibold))
+                            .italic()
+                            .foregroundStyle(Color(hex: 0xF5F3EE))
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.top, 16)
+                }
 
                 Spacer(minLength: 0)
 
@@ -139,7 +165,7 @@ struct SharePickButton<LabelView: View>: View {
                 label().opacity(0.5)
             }
         }
-        .task(id: "\(card.name)|\(card.detail)|\(context.eyebrow)") { @MainActor in
+        .task(id: "\(card.name)|\(card.detail)|\(card.note ?? "")|\(context.eyebrow)") { @MainActor in
             image = card.rendered().map { Image(uiImage: $0) }
         }
     }

@@ -556,7 +556,7 @@ struct GroupLobbyView: View {
                         .simultaneousGesture(TapGesture().onEnded { commitTaps += 1 })
                         // The same news as a picture, for group chats and stories.
                         SharePickButton(place: winner.place,
-                                        context: .group(meetTime: session.meetTime)) {
+                                        context: .group(meetTime: session.meetTime, note: session.trimmedNote)) {
                             Image(systemName: "photo")
                                 .font(Theme.body(19, .semibold))
                                 .foregroundStyle(Theme.text)
