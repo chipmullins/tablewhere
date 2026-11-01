@@ -27,7 +27,7 @@ settingGroups:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
     MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "23"
+    CURRENT_PROJECT_VERSION: "24"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: "4XK3F69URN"
@@ -115,6 +115,9 @@ targets:
         com.apple.developer.icloud-container-identifiers: [iCloud.com.chipmullins.forkroad]
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
+        # Universal Links: https://forkroad-app.web.app/v/<id> opens the plan in
+        # the app (web/public/.well-known/apple-app-site-association).
+        com.apple.developer.associated-domains: ["applinks:forkroad-app.web.app"]
     settings:
       groups: [common]
       base:

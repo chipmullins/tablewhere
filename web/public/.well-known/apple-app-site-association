@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["4XK3F69URN.com.chipmullins.forkroad"],
+        "components": [
+          { "/": "/v/*", "comment": "Group plan links open the plan in the app" }
+        ]
+      }
+    ]
+  }
+}

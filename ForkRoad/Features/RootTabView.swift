@@ -46,6 +46,13 @@ struct RootTabView: View {
         // Keep the widget's, Siri's, and the iMessage app's copies of your lists current.
         .onChange(of: cacheKey, initial: true) { refreshSharedCaches() }
         .onOpenURL { url in
+            // https://forkroad-app.web.app/v/<id>: a group link (Universal Link),
+            // opened in the app instead of the web page.
+            if url.scheme == "https", url.host == AppConfig.webHost {
+                let parts = url.pathComponents.filter { $0 != "/" }
+                if parts.count >= 2, parts[0] == "v" { handle("group:\(parts[1])") }
+                return
+            }
             // forkroad://place?d=<base64url JSON>: the widget's pick, opened on Discover.
             if url.host == "place", let place = Self.place(from: url) {
                 model.selectedTab = .discover
