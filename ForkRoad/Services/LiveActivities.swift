@@ -53,6 +53,10 @@ enum LiveActivities {
             if activity.content.state != state { await activity.update(content) }
         } else {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            // iOS keeps a Live Activity for about 8 hours, so one started for a
+            // plan days out would vanish before dinner. Start it only in the
+            // last few hours; opening the app (or the leave-by reminder) then starts it.
+            guard plan.leaveAt.timeIntervalSinceNow < Self.startWindow else { return }
             let name = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let attributes = GroupPlanAttributes(sessionID: sessionID,
                                                  title: name.isEmpty ? "Group plan" : name,
@@ -110,6 +114,9 @@ enum LiveActivities {
             $0.attributes.sessionID == sessionID && ($0.activityState == .active || $0.activityState == .stale)
         }
     }
+
+    /// How long before leave-by a Live Activity may start (under iOS's ~8-hour limit).
+    static let startWindow: TimeInterval = 6 * 60 * 60
 
     private static var timers: [String: Task<Void, Never>] = [:]
 
