@@ -40,6 +40,11 @@ struct GroupLobbyView: View {
     }
 
     var body: some View {
+        withEffects(withDialogs(withChrome(content)))
+    }
+
+    // Split up so the compiler can type-check it in reasonable time.
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let session = live.session {
@@ -65,6 +70,10 @@ struct GroupLobbyView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 120)
         }
+    }
+
+    private func withChrome<V: View>(_ view: V) -> some View {
+        view
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -90,6 +99,19 @@ struct GroupLobbyView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) { bottomBar }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
+    }
+
+    private var removingBinding: Binding<Bool> {
+        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
+    }
+
+    private func withDialogs<V: View>(_ view: V) -> some View {
+        view
         .confirmationDialog("End this group plan?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End for everyone", role: .destructive) { endGroup() }
         } message: {
@@ -107,26 +129,41 @@ struct GroupLobbyView: View {
         } message: {
             Text(lockInWarning.message)
         }
-        .sheet(isPresented: $showNamePrompt, onDismiss: {
-            if let option = pendingVote, let session = live.session, Identity.displayName != nil {
-                Task {
-                    try? await GroupService.shared.join(sessionID: session.id, displayName: Identity.displayName ?? "")
-                    vote(for: option, in: session)
-                }
-            }
-            pendingVote = nil
-        }) {
+        .sheet(isPresented: $showNamePrompt, onDismiss: namePromptDismissed) {
             NamePromptView { _ in showNamePrompt = false }
                 .presentationDetents([.height(300)])
                 .presentationBackground(Theme.night)
         }
-        .alert("Something went wrong", isPresented: Binding(get: { errorMessage != nil },
-                                                             set: { if !$0 { errorMessage = nil } })) {
+        .alert("Something went wrong", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        .sheet(isPresented: $showAddPlace) {
+            if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
+        }
+        .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
+        .confirmationDialog("Remove \(removing?.name ?? "this place")?",
+                            isPresented: removingBinding,
+                            titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { removePlace() }
+        } message: {
+            Text("Its votes are cleared, and whoever added it can add a different place.")
+        }
+    }
+
+    private func namePromptDismissed() {
+        if let option = pendingVote, let session = live.session, Identity.displayName != nil {
+            Task {
+                try? await GroupService.shared.join(sessionID: session.id, displayName: Identity.displayName ?? "")
+                vote(for: option, in: session)
+            }
+        }
+        pendingVote = nil
+    }
+
+    private func withEffects<V: View>(_ view: V) -> some View {
+        view
         .task {
             await live.start()
             // Your blacklist may have changed since you joined.
@@ -138,10 +175,6 @@ struct GroupLobbyView: View {
             try? await Task.sleep(for: .seconds(wait + 0.5))
             if !Task.isCancelled { timeUpTick += 1 }
         }
-        .sheet(isPresented: $showAddPlace) {
-            if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
-        }
-        .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
         // When it's decided while you watch (not on opening a decided plan, or on
         // reopening). A Group Spin's reveal plays its own when the wheel lands.
         .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
@@ -164,13 +197,6 @@ struct GroupLobbyView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
-        .confirmationDialog("Remove \(removing?.name ?? "this place")?",
-                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                            titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { removePlace() }
-        } message: {
-            Text("Its votes are cleared, and whoever added it can add a different place.")
-        }
     }
 
     // MARK: Header
