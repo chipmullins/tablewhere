@@ -67,10 +67,11 @@ struct SpinView: View {
                 case .nearby:
                     Button { showFilters = true } label: {
                         FilterRow(icon: model.isUsingCurrentLocation ? "location.fill" : "mappin",
-                                  text: nearbyFilterText)
+                                  title: model.locationName,
+                                  detail: nearbyFilterDetail)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Filters: \(nearbyFilterText)")
+                    .accessibilityLabel("Filters: \(model.locationName), \(nearbyFilterDetail)")
                     .accessibilityHint("Change where, how far, and what kind of food")
                     .sheet(isPresented: $showFilters) { SpinFiltersSheet() }
                 case .picked:
@@ -121,9 +122,9 @@ struct SpinView: View {
 
     // MARK: Pieces
 
-    /// "Pittsburgh · 2 mi · All cuisines" for the filter row.
-    private var nearbyFilterText: String {
-        var parts = [model.locationName, model.radiusLabel,
+    /// "2 mi · All cuisines · No fast food", under the location in the filter row.
+    private var nearbyFilterDetail: String {
+        var parts = [model.radiusLabel,
                      model.cuisines.isEmpty ? "All cuisines" : model.cuisineSummary]
         if model.diet != .none { parts.append(model.diet.label) }
         if model.excludeFastFood { parts.append("No fast food") }
@@ -304,11 +305,27 @@ private struct SpinStage: View {
         let previous = count > 1 ? pool[(reelIndex - 1 + count) % count].name : " "
         let next = count > 1 ? pool[(reelIndex + 1) % count].name : " "
         let landed = winner != nil && !isSpinning
+        // Before a spin: no names yet, so it never looks like it already picked.
+        let idle = !isSpinning && winner == nil && count > 0
 
         return VStack(spacing: 14) {
-            Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            if idle {
+                IdleBar(width: 190)
+            } else {
+                Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            }
             HStack(spacing: 12) {
-                if let current {
+                if idle {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .frame(width: 40, height: 40)
+                        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+                    Text("Ready to spin")
+                        .font(Theme.display(24))
+                        .foregroundStyle(Theme.muted)
+                } else if let current {
                     MonogramTile(name: current.name, category: current.category, size: 40)
                     Text(current.name)
                         .font(Theme.display(24))
@@ -329,12 +346,16 @@ private struct SpinStage: View {
                     .strokeBorder(landed ? Theme.saffron : Theme.hairline, lineWidth: 1.5)
             )
             .padding(.horizontal, 14)
-            Text(next).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            if idle {
+                IdleBar(width: 150)
+            } else {
+                Text(next).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 250)
         .card(radius: 28)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(current.map { "Reel showing \($0.name)" } ?? "Reel is empty")
+        .accessibilityLabel(idle ? "Ready to spin, \(count) places" : (current.map { "Reel showing \($0.name)" } ?? "Reel is empty"))
     }
 
     private func spinButton(_ pool: [Place]) -> some View {
@@ -538,21 +559,39 @@ private struct LandingBurst: View {
     }
 }
 
-/// The tappable "📍 Pittsburgh · 2 mi · All cuisines  Filters ›" row.
+/// A blank line on the reel before the first spin.
+private struct IdleBar: View {
+    let width: CGFloat
+    var body: some View {
+        Capsule()
+            .fill(Theme.track)
+            .frame(width: width, height: 12)
+            .frame(height: 22)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The tappable filter row: where on top, everything else under it.
 private struct FilterRow: View {
     let icon: String
-    let text: String
+    let title: String
+    let detail: String
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.accentText)
-            Text(text)
-                .font(Theme.body(15, .semibold))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Theme.body(15, .semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 4)
             Text("Filters")
                 .font(Theme.body(13))
@@ -562,7 +601,8 @@ private struct FilterRow: View {
                 .foregroundStyle(Theme.muted)
         }
         .padding(.horizontal, 14)
-        .frame(minHeight: 48)
+        .padding(.vertical, 8)
+        .frame(minHeight: 56)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
         .contentShape(Rectangle())
