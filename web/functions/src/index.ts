@@ -5,6 +5,7 @@
  *   sessions/{sessionId}                 the session (title, createdBy, status, options, winnerID, meetTime, meetTimeLabel)
  *   sessions/{sessionId}/members/{uid}   { id, name, joinedAt, fcmToken? }
  *   sessions/{sessionId}/votes/{uid}     { voterID, voterName, optionID, votedAt }
+ *   sessions/{sessionId}/rsvps/{uid}     { userID, name, going, guests, answeredAt }  ("I'll pick" plans)
  *
  * Every handler catches its own errors: a failed push is logged, never retried or thrown.
  */
@@ -12,7 +13,9 @@ import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, type DocumentData, type DocumentSnapshot } from "firebase-admin/firestore";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { Timestamp } from "firebase-admin/firestore";
 
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
@@ -285,11 +288,115 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     //    app writes it with meetTime, so notify when the label changes to a new value.
     //    (A bare meetTime write with no label is skipped, so nobody gets a push twice.)
     if (before.status === "decided" && after.status === "decided") {
+      // An "I'll pick" plan moved to a different place.
+      if (before.winnerID !== after.winnerID && after.winnerID) {
+        const to = await recipients(sessionId, { except });
+        const when = label ? ` · ${label}` : "";
+        await send(sessionId, to, "Change of plans", `We're going to ${winner} instead${when}`);
+        return;
+      }
       if (!label || before.meetTimeLabel === after.meetTimeLabel) return;
       const to = await recipients(sessionId, { except });
       await send(sessionId, to, sessionTitle(after), `Meet: ${label} · ${winner}`);
     }
   } catch (err) {
     logger.error("onSessionUpdated failed", { params: event.params, err });
+  }
+});
+
+// MARK: - RSVPs ("I'll pick" plans) → the creator
+
+interface Headcount {
+  people: number;
+  guests: number;
+  cant: number;
+}
+
+/** The creator counts as coming unless they said otherwise (same as the app). */
+async function headcount(sessionId: string, creator: string | undefined): Promise<Headcount> {
+  const snap = await db.collection("sessions").doc(sessionId).collection("rsvps").get();
+  let people = 0, guests = 0, cant = 0, creatorAnswered = false;
+  for (const doc of snap.docs) {
+    const r = doc.data();
+    if (doc.id === creator) creatorAnswered = true;
+    if (r.going === true) {
+      people += 1;
+      guests += typeof r.guests === "number" ? Math.max(0, Math.min(4, r.guests)) : 0;
+    } else {
+      cant += 1;
+    }
+  }
+  if (creator && !creatorAnswered) people += 1;
+  return { people, guests, cant };
+}
+
+function headcountText(c: Headcount): string {
+  let text = `${c.people + c.guests} coming`;
+  if (c.guests > 0) text += ` (${c.people} + ${c.guests} guest${c.guests === 1 ? "" : "s"})`;
+  if (c.cant > 0) text += ` · ${c.cant} can't make it`;
+  return text;
+}
+
+export const onRSVPWritten = onDocumentWritten(
+  "sessions/{sessionId}/rsvps/{uid}",
+  async (event) => {
+    try {
+      const after = event.data?.after.data();
+      if (!after) return;  // taken back: no push
+      const before = event.data?.before.data();
+      // First answer, or in ↔ out. Guest +/- taps don't each send a push.
+      if (before && before.going === after.going) return;
+
+      const sessionId = event.params.sessionId;
+      const session = (await db.collection("sessions").doc(sessionId).get()).data();
+      if (!session) return;
+      const creator = str(session.createdBy);
+      if (!creator || creator === event.params.uid) return;
+      const to = await recipients(sessionId, { only: [creator] });
+      if (to.length === 0) return;
+
+      const who = str(after.name) ?? "Someone";
+      const guests = typeof after.guests === "number" && after.guests > 0 ? ` (+${after.guests})` : "";
+      const what = after.going === true ? `${who}'s in${guests}` : `${who} can't make it`;
+      const count = headcountText(await headcount(sessionId, creator));
+      await send(sessionId, to, sessionTitle(session), `${what} · ${count}`);
+    } catch (err) {
+      logger.error("onRSVPWritten failed", { params: event.params, err });
+    }
+  },
+);
+
+/**
+ * When a plan's reply-by time passes, tell the creator the final headcount
+ * (once). Runs every 15 minutes and looks back a day, so a slow run still
+ * catches it. A single-field range query, so no extra index is needed.
+ */
+export const closeRSVPs = onSchedule("every 15 minutes", async () => {
+  try {
+    const now = Timestamp.now();
+    const dayAgo = Timestamp.fromMillis(now.toMillis() - 24 * 60 * 60 * 1000);
+    const due = await db.collection("sessions")
+      .where("rsvpBy", ">", dayAgo)
+      .where("rsvpBy", "<=", now)
+      .get();
+    for (const doc of due.docs) {
+      const session = doc.data();
+      if (session.asksRSVP !== true || session.rsvpClosedNotified === true) continue;
+      // Mark first, so two runs never both send it.
+      const claimed = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        if (!fresh.exists || fresh.get("rsvpClosedNotified") === true) return false;
+        tx.update(doc.ref, { rsvpClosedNotified: true });
+        return true;
+      });
+      if (!claimed) continue;
+      const creator = str(session.createdBy);
+      if (!creator) continue;
+      const to = await recipients(doc.id, { only: [creator] });
+      const count = headcountText(await headcount(doc.id, creator));
+      await send(doc.id, to, "RSVPs are closed", `${sessionTitle(session)}: ${count}`);
+    }
+  } catch (err) {
+    logger.error("closeRSVPs failed", { err });
   }
 });

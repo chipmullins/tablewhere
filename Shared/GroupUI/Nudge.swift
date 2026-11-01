@@ -14,6 +14,8 @@ enum Nudge {
         case .vote:
             let voted = Set(votes.map(\.voterID))
             return others.filter { !voted.contains($0.id) }
+        case .plan:
+            return []  // decided from the start; nothing to wait on
         }
     }
 

@@ -150,8 +150,10 @@ final class MessagesState {
         layout.image = VoteBubbleImage.render(session: session, tally: tally)
         if let winner = session.winner {
             layout.caption = "We’re going to \(winner.name)"
-            layout.subcaption = session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" }
-                ?? (session.mode == .spin ? "Picked by the spin · tap for directions" : "Tap for directions")
+            let meet = session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" }
+            layout.subcaption = session.rsvpOpen
+                ? [meet, "Tap to RSVP"].compactMap { $0 }.joined(separator: " · ")
+                : meet ?? (session.mode == .spin ? "Picked by the spin · tap for directions" : "Tap for directions")
             message.summaryText = "Picked \(winner.name)"
         } else {
             layout.caption = session.title

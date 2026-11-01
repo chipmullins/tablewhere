@@ -32,6 +32,7 @@ enum GroupError: LocalizedError {
 ///   sessions/{id}                 the GroupSession
 ///   sessions/{id}/members/{uid}   who's in
 ///   sessions/{id}/votes/{uid}     one vote per person
+///   sessions/{id}/rsvps/{uid}     one RSVP per person ("I'll pick" plans)
 ///
 /// Everyone signs in anonymously, so there are no accounts or passwords.
 @MainActor
@@ -56,9 +57,13 @@ final class GroupService {
 
     // MARK: Create & join
 
+    /// Starts a group. An "I'll pick" plan (`.plan`) starts decided on its one
+    /// place, with `meetTime` (required), the note, and the RSVP settings.
     func createSession(title: String, mode: GroupMode, options: [GroupOption],
                        closesInMinutes: Int?, displayName: String,
-                       area: GroupArea? = nil) async throws -> GroupSession {
+                       area: GroupArea? = nil,
+                       meetTime: Date? = nil, note: String? = nil,
+                       asksRSVP: Bool = false, rsvpBy: Date? = nil) async throws -> GroupSession {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
@@ -76,18 +81,36 @@ final class GroupService {
             createdAt: Date(),
             closesAt: closesInMinutes.map { Date().addingTimeInterval(TimeInterval($0 * 60)) },
             mode: mode,
+            status: mode == .plan ? .decided : .open,
             options: options,
+            winnerID: mode == .plan ? options.first?.id : nil,
+            meetTime: mode == .plan ? meetTime : nil,
             // A spin creator's starting place is their one pick.
             picksBy: mode == .spin ? options.first.map { [uid: $0.id] } : nil,
-            area: area
+            note: Self.cleanNote(note),
+            area: area,
+            asksRSVP: mode == .plan && asksRSVP ? true : nil,
+            rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil
         )
-        try await ref.setData(Firestore.Encoder().encode(session))
+        var data = try Firestore.Encoder().encode(session)
+        // The server's "Meet at…" pushes read this label (it doesn't know time zones).
+        if let time = session.meetTime { data["meetTimeLabel"] = MeetTimes.label(for: time) }
+        try await ref.setData(data)
         // joinCodes/{code} → session, so codes can be looked up without
         // letting anyone list every session.
         try await joinCodeRef(code).setData(["sessionId": session.id, "createdBy": uid])
         try await join(sessionID: session.id, displayName: displayName)
-        UsageStats.record(mode == .spin ? .groupsSpin : .groupsVote)
+        switch mode {
+        case .vote: UsageStats.record(.groupsVote)
+        case .spin: UsageStats.record(.groupsSpin)
+        case .plan: UsageStats.record(.groupsPlan)
+        }
         return session
+    }
+
+    private static func cleanNote(_ note: String?) -> String? {
+        let text = String((note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(GroupSession.maxNoteLength))
+        return text.isEmpty ? nil : text
     }
 
     func findSession(joinCode: String) async throws -> GroupSession {
@@ -261,6 +284,57 @@ final class GroupService {
         UsageStats.record(.groupPicks)
     }
 
+    // MARK: RSVPs ("I'll pick" plans)
+
+    /// Answers a plan: in (with guests) or can't make it. Joins the group too,
+    /// so you get "change of plans" pushes. Answering again replaces it.
+    func rsvp(sessionID: String, going: Bool, guests: Int, displayName: String) async throws {
+        let uid = try await userID()
+        if (try? await sessionRef(sessionID).collection("members").document(uid).getDocument().exists) != true {
+            try await join(sessionID: sessionID, displayName: displayName)
+        }
+        let answer = GroupRSVP(userID: uid, name: Self.name(in: sessionID, fallback: displayName),
+                               going: going, guests: guests)
+        try await sessionRef(sessionID).collection("rsvps").document(uid).setData([
+            "userID": uid,
+            "name": String(answer.name.prefix(40)),
+            "going": answer.going,
+            "guests": answer.guests,
+            "answeredAt": FieldValue.serverTimestamp()
+        ])
+        UsageStats.record(.rsvps)
+    }
+
+    func removeRSVP(sessionID: String) async throws {
+        let uid = try await userID()
+        try await sessionRef(sessionID).collection("rsvps").document(uid).delete()
+    }
+
+    /// The creator turns RSVPs on or off, or changes the reply-by time.
+    func setRSVP(sessionID: String, asks: Bool, by date: Date?) async throws {
+        _ = try await userID()
+        let rsvpBy: Any
+        if !asks { rsvpBy = FieldValue.delete() }
+        else if let date { rsvpBy = Timestamp(date: date) }
+        else { rsvpBy = NSNull() }
+        try await sessionRef(sessionID).updateData([
+            "asksRSVP": asks,
+            "rsvpBy": rsvpBy,
+            // A new reply-by time gets its own "RSVPs are closed" push.
+            "rsvpClosedNotified": FieldValue.delete()
+        ])
+    }
+
+    /// The creator moves an "I'll pick" plan to a different place.
+    func changePlanPlace(sessionID: String, to place: Place, displayName: String) async throws {
+        let uid = try await userID()
+        let option = GroupOption(place: place, addedBy: displayName, addedByID: uid)
+        try await sessionRef(sessionID).updateData([
+            "options": [try Firestore.Encoder().encode(option)],
+            "winnerID": option.id
+        ])
+    }
+
     // MARK: Owner actions
 
     /// Locks in the result. Votes: most votes wins, with a fair tie-break.
@@ -351,7 +425,7 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         let ref = sessionRef(session.id)
-        for name in ["votes", "members"] {
+        for name in ["votes", "rsvps", "members"] {
             let docs = try await ref.collection(name).getDocuments().documents
             for doc in docs { try await doc.reference.delete() }
         }
@@ -365,6 +439,7 @@ final class GroupService {
         let uid = try await userID()
         let ref = sessionRef(sessionID)
         try? await ref.collection("votes").document(uid).delete()
+        try? await ref.collection("rsvps").document(uid).delete()
         try await ref.collection("members").document(uid).delete()
         // Voting again after leaving has to join again.
         joinedSessions.remove(sessionID)

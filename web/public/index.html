@@ -58,6 +58,17 @@
     footer { margin-top: 28px; font-size: 13px; color: var(--muted); text-align: center; }
     .note { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,178,63,0.14); border-radius: 18px; padding: 14px; margin-top: 14px; }
     .note .by { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .rsvp { margin-top: 14px; }
+    .rsvp-count { font: 700 22px 'Outfit', 'DM Sans', sans-serif; }
+    .rsvp-deadline { font-size: 13px; font-weight: 600; margin-top: 4px; }
+    .rsvp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .rsvp-actions .btn[aria-pressed="true"] { background: var(--saffron); color: var(--on-saffron); }
+    .rsvp-guests { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding: 6px 6px 6px 14px; background: var(--surface-high); border-radius: 14px; font-weight: 600; }
+    .stepper { display: flex; gap: 6px; }
+    .stepper button { width: 44px; height: 40px; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); font: 700 20px 'DM Sans', sans-serif; cursor: pointer; }
+    .stepper button:disabled { opacity: .4; }
+    .rsvp-names { margin-top: 12px; font-size: 14px; }
+    .rsvp-names .who { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--muted); margin-top: 8px; }
     .section-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
     .breakdown { background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px; padding: 0 14px; }
     .breakdown .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
@@ -123,7 +134,7 @@
 
     <section id="decided-step" hidden>
       <div class="winner">
-        <div class="label">THE GROUP PICKED</div>
+        <div class="label" id="winner-label">THE GROUP PICKED</div>
         <h2 id="winner-name"></h2>
         <div id="winner-detail" style="font-weight:600"></div>
       </div>
@@ -131,6 +142,25 @@
         <a class="btn light" id="apple-maps" target="_blank" rel="noopener">Directions in Apple Maps</a>
         <a class="btn ghost" id="google-maps" target="_blank" rel="noopener">Directions in Google Maps</a>
         <a class="btn ghost" id="website" target="_blank" rel="noopener" hidden>Menu &amp; hours</a>
+        <button class="btn ghost" id="calendar" type="button" hidden>Add to Calendar</button>
+      </div>
+      <div class="card rsvp" id="rsvp" hidden>
+        <div class="section-label" style="margin-top:0">Who’s coming</div>
+        <div class="rsvp-count" id="rsvp-count"></div>
+        <div class="muted rsvp-deadline" id="rsvp-deadline"></div>
+        <div class="rsvp-actions" id="rsvp-actions">
+          <button class="btn ghost" id="rsvp-in" type="button" aria-pressed="false">👍 I’m in</button>
+          <button class="btn ghost" id="rsvp-out" type="button" aria-pressed="false">Can’t make it</button>
+        </div>
+        <div class="rsvp-guests" id="rsvp-guests" hidden>
+          <span id="rsvp-guests-text">Just me</span>
+          <span class="stepper">
+            <button type="button" id="guests-minus" aria-label="One fewer guest">−</button>
+            <button type="button" id="guests-plus" aria-label="One more guest">+</button>
+          </span>
+        </div>
+        <div class="rsvp-names" id="rsvp-names"></div>
+        <div class="muted" id="rsvp-help" role="status"></div>
       </div>
       <div class="note" id="note" hidden>
         <span aria-hidden="true">💬</span>

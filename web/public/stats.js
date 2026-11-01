@@ -34,6 +34,8 @@ const FIELDS = [
   ["spins", "Spins"],
   ["groupsVote", "Group votes"],
   ["groupsSpin", "Group spins"],
+  ["groupsPlan", "Plans sent (I’ll pick)"],
+  ["rsvps", "RSVPs"],
   ["groupPicks", "Places added to groups"],
   ["customPlaces", "Own restaurants added"],
   ["webVisitors", "Web visitors"],
@@ -160,8 +162,8 @@ function renderTiles() {
     tile("Daily active", avg < 10 ? avg.toFixed(1) : fmt(Math.round(avg)), `average, ${range}`),
     tile("New devices", fmt(sum("newDevices")), range),
     tile("Spins", fmt(sum("spins")), range),
-    tile("Groups started", fmt(sum("groupsVote") + sum("groupsSpin")),
-      `${plural(sum("groupsVote"), "vote")} · ${plural(sum("groupsSpin"), "spin")}`),
+    tile("Groups started", fmt(sum("groupsVote") + sum("groupsSpin") + sum("groupsPlan")),
+      `${plural(sum("groupsVote"), "vote")} · ${plural(sum("groupsSpin"), "spin")} · ${plural(sum("groupsPlan"), "plan")}`),
     tile("Web visitors", fmt(sum("webVisitors")), `friends without the app, ${range}`),
   );
 }
@@ -171,7 +173,7 @@ function renderTiles() {
 const CHARTS = [
   { title: "Active devices", key: "activeDevices" },
   { title: "Spins", key: "spins" },
-  { title: "Groups started", key: (r) => r.groupsVote + r.groupsSpin, note: "votes + spins" },
+  { title: "Groups started", key: (r) => r.groupsVote + r.groupsSpin + (r.groupsPlan || 0), note: "votes + spins + plans" },
   { title: "Web visitors", key: "webVisitors" },
 ];
 

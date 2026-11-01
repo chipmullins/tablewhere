@@ -57,9 +57,14 @@ public enum MeetTimes {
         switch days {
         case 0: return time
         case 1: return "Tomorrow \(time)"
-        default:
+        case 2...6:
             var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
             style = style.weekday(.abbreviated)
+            return "\(date.formatted(style)) \(time)"
+        default:
+            // A week or more out (plans made ahead): "Sat, Nov 14 7:00 PM".
+            var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+            style = style.weekday(.abbreviated).month(.abbreviated).day()
             return "\(date.formatted(style)) \(time)"
         }
     }

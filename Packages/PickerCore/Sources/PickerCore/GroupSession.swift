@@ -11,10 +11,17 @@ public enum GroupMode: String, Codable, Sendable, CaseIterable {
     case vote
     /// Everyone adds a place; the app picks one at random.
     case spin
+    /// "I'll pick": the creator already chose the place and time, and just
+    /// sends the plan (optionally asking who's coming). Created decided.
+    case plan
 
     /// The name a group gets if you don't type one (app and iMessage alike).
     public var defaultTitle: String {
-        self == .spin ? "Spin for where to eat" : "Where should we eat?"
+        switch self {
+        case .vote: return "Where should we eat?"
+        case .spin: return "Spin for where to eat"
+        case .plan: return "Dinner plans"
+        }
     }
 
     /// Most places you can start a vote with (you can add more later, up to
@@ -105,12 +112,17 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var note: String?
     /// Where the group is looking (the creator's area). Nil on older sessions.
     public var area: GroupArea?
+    /// "I'll pick" plans: the creator asked who's coming. Nil/false: no RSVPs.
+    public var asksRSVP: Bool?
+    /// Replies close at this time (nil: no cutoff).
+    public var rsvpBy: Date?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
                 winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
-                note: String? = nil, area: GroupArea? = nil) {
+                note: String? = nil, area: GroupArea? = nil,
+                asksRSVP: Bool? = nil, rsvpBy: Date? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -126,6 +138,18 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.picksBy = picksBy
         self.note = note
         self.area = area
+        self.asksRSVP = asksRSVP
+        self.rsvpBy = rsvpBy
+    }
+
+    /// The creator asked who's coming.
+    public var hasRSVP: Bool { asksRSVP == true }
+
+    /// People can still reply: RSVPs are on and the reply-by time (if any) hasn't passed.
+    public var rsvpOpen: Bool {
+        guard hasRSVP else { return false }
+        guard let rsvpBy else { return true }
+        return rsvpBy.timeIntervalSinceNow > 0
     }
 
     /// The note, trimmed, or nil when it's blank.
@@ -164,7 +188,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var acceptsChanges: Bool { status == .open && !isTimeUp }
 
     public func canAdd(userID: String) -> Bool {
-        guard acceptsChanges, options.count < GroupSession.maxOptions else { return false }
+        guard mode != .plan, acceptsChanges, options.count < GroupSession.maxOptions else { return false }
         if mode == .vote && isOwned(by: userID) { return true }
         return pick(of: userID) == nil
     }
@@ -224,6 +248,8 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
             return eligible.randomElement(using: &generator)?.id
         case .spin:
             return eligible.randomElement(using: &generator)?.id
+        case .plan:
+            return options.first?.id
         }
     }
 
@@ -265,6 +291,58 @@ public struct GroupVote: Codable, Hashable, Sendable {
         self.voterName = voterName
         self.optionID = optionID
         self.votedAt = votedAt
+    }
+}
+
+/// One person's answer to an "I'll pick" plan. Stored one per person
+/// (sessions/{id}/rsvps/{uid}), so answering again replaces it.
+public struct GroupRSVP: Codable, Hashable, Identifiable, Sendable {
+    public var userID: String
+    public var name: String
+    public var going: Bool
+    /// People they're bringing (0–`GroupRSVP.maxGuests`), when going.
+    public var guests: Int
+    public var answeredAt: Date?
+
+    public var id: String { userID }
+
+    public static let maxGuests = 4
+
+    public init(userID: String, name: String, going: Bool, guests: Int = 0, answeredAt: Date? = nil) {
+        self.userID = userID
+        self.name = name
+        self.going = going
+        self.guests = going ? min(max(guests, 0), Self.maxGuests) : 0
+        self.answeredAt = answeredAt
+    }
+}
+
+/// The headcount for a plan: "6 coming (4 + 2 guests) · 1 can't".
+public struct RSVPCount: Equatable, Sendable {
+    public let going: [GroupRSVP]
+    public let notGoing: [GroupRSVP]
+
+    /// `creatorID` counts as coming (they made the plan) unless they said otherwise.
+    public init(_ rsvps: [GroupRSVP], creatorID: String? = nil, creatorName: String? = nil) {
+        var all = rsvps
+        if let creatorID, !rsvps.contains(where: { $0.userID == creatorID }) {
+            all.append(GroupRSVP(userID: creatorID, name: creatorName ?? "Host", going: true))
+        }
+        going = all.filter(\.going).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        notGoing = all.filter { !$0.going }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    public var people: Int { going.count }
+    public var guests: Int { going.reduce(0) { $0 + $1.guests } }
+    /// The number to book for.
+    public var total: Int { people + guests }
+
+    /// "6 coming (4 + 2 guests) · 1 can’t make it".
+    public var summary: String {
+        var text = "\(total) coming"
+        if guests > 0 { text += " (\(people) + \(guests) guest\(guests == 1 ? "" : "s"))" }
+        if !notGoing.isEmpty { text += " · \(notGoing.count) can’t make it" }
+        return text
     }
 }
 

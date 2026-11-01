@@ -32,10 +32,20 @@ service cloud.firestore {
       // ...but nobody can list them. Codes are looked up through joinCodes/.
       allow list: if false;
 
+      // An "I'll pick" plan starts decided: exactly one place, which is the
+      // winner, and a meeting time.
+      function isNewPlan(data) {
+        return data.mode == 'plan'
+          && data.status == 'decided'
+          && data.options.size() == 1
+          && data.winnerID == data.options[0].id
+          && data.meetTime is timestamp;
+      }
+
       // You can only create a session as yourself.
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.status == 'open'
+        && (request.resource.data.status == 'open' || isNewPlan(request.resource.data))
         && request.resource.data.options.size() <= 12;
 
       function addsMyOnePick() {
@@ -103,6 +113,36 @@ service cloud.firestore {
         );
       }
 
+      // RSVPs for an "I'll pick" plan: one per person, written only by that
+      // person, while the creator is asking and before the reply-by time.
+      function rsvpOpen(sessionId) {
+        let s = session(sessionId);
+        return s.get('asksRSVP', false) == true
+          && (s.get('rsvpBy', null) == null || request.time < s.rsvpBy);
+      }
+
+      function validRSVP(userId) {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['userID', 'name', 'going', 'guests', 'answeredAt'])
+          && d.userID == userId
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+          && d.going is bool
+          && d.guests is int && d.guests >= 0 && d.guests <= 4
+          && (d.going || d.guests == 0);
+      }
+
+      match /rsvps/{userId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == userId
+          && rsvpOpen(sessionId) && validRSVP(userId);
+        // Take back your own answer while replies are open; the creator can
+        // clear them all when ending the plan.
+        allow delete: if signedIn() && (
+          (request.auth.uid == userId && rsvpOpen(sessionId))
+          || session(sessionId).createdBy == request.auth.uid
+        );
+      }
+
       // Members list: you can only add or edit yourself.
       match /members/{userId} {
         allow read: if signedIn();
@@ -119,7 +159,7 @@ service cloud.firestore {
     // per day (UTC). Anyone signed in can add exactly 1 to one known count,
     // for today (give or take a day for time zones). Only admins can read.
     function statFields() {
-      return ['activeDevices', 'newDevices', 'spins', 'groupsVote', 'groupsSpin',
+      return ['activeDevices', 'newDevices', 'spins', 'groupsVote', 'groupsSpin', 'groupsPlan', 'rsvps',
               'groupPicks', 'customPlaces', 'webVisitors', 'webVotes', 'webPicks'];
     }
 

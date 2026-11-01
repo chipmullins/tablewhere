@@ -7,7 +7,11 @@ enum GroupWording {
     /// "Waiting on Sam, Alex", "Everyone has voted", "Locked in by Chip".
     static func line(_ session: GroupSession, nonVoterNames: [String]) -> String {
         if session.status == .decided {
-            return session.mode == .spin ? "Spun by \(session.createdByName)" : "Locked in by \(session.createdByName)"
+            switch session.mode {
+            case .vote: return "Locked in by \(session.createdByName)"
+            case .spin: return "Spun by \(session.createdByName)"
+            case .plan: return "Planned by \(session.createdByName)"
+            }
         }
         switch session.mode {
         case .vote:
@@ -17,21 +21,33 @@ enum GroupWording {
             // Who's still picking shows just below (SpinProgressLine).
             let count = session.options.count
             return "\(count) place\(count == 1 ? "" : "s") in the wheel"
+        case .plan:
+            return "Planned by \(session.createdByName)"
         }
     }
 
     /// Who decides, for everyone who isn't the creator.
     static func whoDecides(_ session: GroupSession) -> String {
-        session.mode == .vote
-            ? "\(session.createdByName) will lock in the result"
-            : "\(session.createdByName) will spin when everyone’s ready"
+        switch session.mode {
+        case .vote: return "\(session.createdByName) will lock in the result"
+        case .spin: return "\(session.createdByName) will spin when everyone’s ready"
+        case .plan: return "\(session.createdByName) picked the place"
+        }
     }
 
     /// The message that goes with an invite link.
     static func inviteText(_ session: GroupSession) -> String {
-        session.mode == .vote
-            ? "Help pick where we eat! Vote here, or join in ForkRoad with code \(JoinCode.display(session.joinCode))."
-            : "Add your pick for the group spin! Add it here, or join in ForkRoad with code \(JoinCode.display(session.joinCode))."
+        let code = JoinCode.display(session.joinCode)
+        switch session.mode {
+        case .vote:
+            return "Help pick where we eat! Vote here, or join in ForkRoad with code \(code)."
+        case .spin:
+            return "Add your pick for the group spin! Add it here, or join in ForkRoad with code \(code)."
+        case .plan:
+            return session.hasRSVP
+                ? "Here’s the plan! Let me know if you’re in here, or in ForkRoad with code \(code)."
+                : "Here’s the plan! Details and directions here, or in ForkRoad with code \(code)."
+        }
     }
 
     /// Locking in with nobody voting, or spinning one place, is probably a slip.

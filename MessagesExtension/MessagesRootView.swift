@@ -67,11 +67,31 @@ struct NewVoteView: View {
     @State private var title = ""
     @State private var closesIn: Int? = nil
     @State private var sendTaps = 0
+    // "I'll pick"
+    @State private var meetTime = PlanSetupRows.defaultMeetTime()
+    @State private var note = ""
+    @State private var asksRSVP = false
+    @State private var hasReplyBy = false
+    @State private var replyBy = PlanSetupRows.defaultReplyBy(for: PlanSetupRows.defaultMeetTime())
 
-    /// A vote starts with 2–8 of your places; a spin starts with your one pick.
-    private var maxOptions: Int { mode == .spin ? 1 : GroupMode.maxStartingVoteOptions }
-    private var minOptions: Int { mode == .spin ? 1 : 2 }
-    private var canSend: Bool { selected.count >= minOptions && !isSending }
+    /// A vote starts with 2–8 of your places; a spin starts with your one
+    /// pick; an "I'll pick" plan has its one place.
+    private var maxOptions: Int { mode == .vote ? GroupMode.maxStartingVoteOptions : 1 }
+    private var minOptions: Int { mode == .vote ? 2 : 1 }
+    private var canSend: Bool {
+        selected.count >= minOptions && !isSending && (mode != .plan || meetTime.timeIntervalSinceNow > 0)
+    }
+
+    private var modeFooter: String {
+        switch mode {
+        case .vote:
+            return "Start with 2–\(GroupMode.maxStartingVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
+        case .spin:
+            return "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random."
+        case .plan:
+            return "You choose the place and time. Everyone gets the plan, and can say if they’re in if you ask."
+        }
+    }
 
     var body: some View {
         if !state.isExpanded {
@@ -84,7 +104,7 @@ struct NewVoteView: View {
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Start a group plan").font(Theme.display(18))
-                        Text("Vote on a few places, or everyone adds one and you spin").font(Theme.body(12, .medium))
+                        Text("Vote, spin, or send a plan you’ve already picked").font(Theme.body(12, .medium))
                     }
                     Spacer()
                 }
@@ -98,14 +118,15 @@ struct NewVoteView: View {
             VStack(spacing: 0) {
                 List {
                     Section {
-                        Picker("How to decide", selection: $mode) {
+                        Picker("Who picks", selection: $mode) {
                             Text("Vote").tag(GroupMode.vote)
                             Text("Spin").tag(GroupMode.spin)
+                            Text("I’ll pick").tag(GroupMode.plan)
                         }
                         .pickerStyle(.segmented)
                         .sensoryFeedback(Haptic.tick, trigger: mode)
                         .onChange(of: mode) {
-                            if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
+                            if mode != .vote && selected.count > 1 { selected = Array(selected.prefix(1)) }
                         }
                         TextField("Name (\(mode.defaultTitle))", text: $title)
                             .foregroundStyle(Theme.text)
@@ -120,9 +141,7 @@ struct NewVoteView: View {
                             .tint(Theme.accentText)
                         }
                     } footer: {
-                        Text(mode == .vote
-                             ? "Start with 2–\(GroupMode.maxStartingVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
-                             : "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random.")
+                        Text(modeFooter)
                     }
                     .listRowBackground(Theme.surface)
                     Section {
@@ -130,7 +149,7 @@ struct NewVoteView: View {
                     }
                     .listRowBackground(Theme.surface)
                     if !selected.isEmpty {
-                        Section(mode == .spin ? "Your pick" : "Picked (\(selected.count) of \(maxOptions))") {
+                        Section(mode == .vote ? "Picked (\(selected.count) of \(maxOptions))" : (mode == .plan ? "The place" : "Your pick")) {
                             ForEach(selected) { place in
                                 Button { toggle(place) } label: {
                                     HStack(spacing: 12) {
@@ -143,6 +162,10 @@ struct NewVoteView: View {
                             }
                         }
                         .listRowBackground(Theme.surface)
+                    }
+                    if mode == .plan {
+                        PlanSetupRows(meetTime: $meetTime, note: $note, asksRSVP: $asksRSVP,
+                                      hasReplyBy: $hasReplyBy, replyBy: $replyBy)
                     }
                     MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
                                        accessory: { .check(isOn: selected.contains($0)) },
@@ -190,12 +213,13 @@ struct NewVoteView: View {
         switch mode {
         case .vote: return selected.count < 2 ? "Pick at least 2 places" : "Send vote · \(selected.count) places"
         case .spin: return selected.first.map { "Start the spin · \($0.name)" } ?? "Pick your place"
+        case .plan: return selected.isEmpty ? "Pick the place" : "Send the plan · \(MeetTimes.label(for: meetTime))"
         }
     }
 
     private func toggle(_ place: Place) {
         if let i = selected.firstIndex(of: place) { selected.remove(at: i) }
-        else if mode == .spin { selected = [place] }  // one pick: tapping another swaps it
+        else if mode != .vote { selected = [place] }  // one pick: tapping another swaps it
         else if selected.count < maxOptions { selected.append(place) }
     }
 
@@ -222,7 +246,11 @@ struct NewVoteView: View {
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
                     closesInMinutes: mode == .vote ? closesIn : nil,
                     displayName: name,
-                    area: await groupArea(creatorName: name)
+                    area: await groupArea(creatorName: name),
+                    meetTime: mode == .plan ? meetTime : nil,
+                    note: mode == .plan ? note : nil,
+                    asksRSVP: mode == .plan && asksRSVP,
+                    rsvpBy: mode == .plan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
@@ -338,7 +366,8 @@ struct MessageVoteView: View {
     @ViewBuilder
     private func decidedSection(_ session: GroupSession, winner: GroupOption) -> some View {
         WinnerCard(option: winner,
-                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category)
+                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category,
+                   eyebrow: session.mode == .plan ? "THE PLAN" : "THE GROUP PICKED")
         HStack(spacing: 8) {
             ActionTile(title: "Directions", systemImage: "location.north.line",
                        tint: Theme.accentText, background: Theme.surface) {
@@ -381,13 +410,20 @@ struct MessageVoteView: View {
                         origin: { await MessageLeaveOrigin.current() },
                         askForLocation: { await OneShotLocation.shared.requestPermission() })
         }
+        if session.hasRSVP {
+            RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,
+                      isOwner: live.isOwner, isWorking: isWorking) { going, guests in
+                answer(going: going, guests: guests, session: session)
+            }
+        }
         if session.mode == .vote {
             VoteBreakdown(options: session.options,
                           tally: live.tally,
                           winnerID: session.winnerID,
                           nonVoters: live.nonVoterNames)
         }
-        if live.isOwner {
+        // A plan was never open, so there's nothing to reopen.
+        if live.isOwner && session.mode != .plan {
             Button {
                 Task {
                     do {
@@ -617,6 +653,23 @@ struct MessageVoteView: View {
                 try await GroupService.shared.leaveSession(sessionID)
                 state.showNewVote()
             } catch { errorMessage = GroupService.message(for: error) }
+        }
+    }
+
+    private func answer(going: Bool, guests: Int, session: GroupSession) {
+        guard let name = Identity.displayName else {
+            errorMessage = "Open ForkRoad and add your name to reply."
+            return
+        }
+        if !state.isExpanded { state.expand() }
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            do {
+                try await GroupService.shared.rsvp(sessionID: session.id, going: going, guests: guests, displayName: name)
+            } catch {
+                errorMessage = GroupService.message(for: error)
+            }
         }
     }
 
@@ -859,13 +912,19 @@ struct MessagePlanControls: View {
 
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: session.meetTime == nil ? "Set a meeting time" : "Meet at")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                ForEach(slots, id: \.self) { slot in
-                    timeButton(slot.formatted(date: .omitted, time: .shortened), isOn: isSlot(slot)) { setTime(slot) }
+            if session.mode == .plan {
+                // A plan can be days out: any date and time.
+                timeButton(session.meetTime.map { "\(MeetTimes.label(for: $0)) · Change" } ?? "Set a time",
+                           isOn: false) { showPicker = true }
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(slots, id: \.self) { slot in
+                        timeButton(slot.formatted(date: .omitted, time: .shortened), isOn: isSlot(slot)) { setTime(slot) }
+                    }
                 }
+                timeButton(isCustom ? "Custom: \(session.meetTime.map { MeetTimes.label(for: $0) } ?? "")" : "Pick another time…",
+                           isOn: isCustom) { showPicker = true }
             }
-            timeButton(isCustom ? "Custom: \(session.meetTime.map { MeetTimes.label(for: $0) } ?? "")" : "Pick another time…",
-                       isOn: isCustom) { showPicker = true }
 
             SectionLabel(text: "Note for the group")
                 .padding(.top, 6)
@@ -899,7 +958,11 @@ struct MessagePlanControls: View {
             if noteDraft.count > GroupSession.maxNoteLength { noteDraft = String(noteDraft.prefix(GroupSession.maxNoteLength)) }
         }
         .sheet(isPresented: $showPicker) {
-            MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
+            if session.mode == .plan {
+                PlanTimeSheet(initial: session.meetTime ?? PlanSetupRows.defaultMeetTime()) { setTime($0) }
+            } else {
+                MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
+            }
         }
         .sensoryFeedback(Haptic.tick, trigger: timeTaps)
     }

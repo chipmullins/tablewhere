@@ -88,3 +88,38 @@ final class GroupTests: XCTestCase {
         XCTAssertEqual(decoded.options, session.options)
     }
 }
+
+final class PlanRSVPTests: XCTestCase {
+    func testHeadcountCountsGuestsAndCreator() {
+        let rsvps = [
+            GroupRSVP(userID: "a", name: "Amy", going: true, guests: 2),
+            GroupRSVP(userID: "b", name: "Ben", going: false, guests: 3),
+        ]
+        let count = RSVPCount(rsvps, creatorID: "host", creatorName: "Chip")
+        XCTAssertEqual(count.people, 2)
+        XCTAssertEqual(count.guests, 2)
+        XCTAssertEqual(count.total, 4)
+        XCTAssertEqual(count.notGoing.map(\.name), ["Ben"])
+        XCTAssertEqual(count.summary, "4 coming (2 + 2 guests) · 1 can’t make it")
+    }
+
+    func testCreatorWhoSaysNoIsNotCounted() {
+        let count = RSVPCount([GroupRSVP(userID: "host", name: "Chip", going: false)], creatorID: "host")
+        XCTAssertEqual(count.total, 0)
+    }
+
+    func testGuestsAreClampedAndZeroWhenNotGoing() {
+        XCTAssertEqual(GroupRSVP(userID: "a", name: "A", going: true, guests: 9).guests, GroupRSVP.maxGuests)
+        XCTAssertEqual(GroupRSVP(userID: "a", name: "A", going: false, guests: 2).guests, 0)
+    }
+
+    func testPlanWinnerIsItsPlaceAndNobodyAdds() {
+        let place = Place(id: "p", name: "Label", category: "Restaurant", latitude: 0, longitude: 0, distanceMeters: 0)
+        let session = GroupSession(id: "s", title: "Dinner", joinCode: "ABC123", createdBy: "host",
+                                   createdByName: "Chip", mode: .plan, status: .decided,
+                                   options: [GroupOption(place: place, addedBy: "Chip")], winnerID: "p")
+        XCTAssertEqual(session.pickWinner(votes: []), "p")
+        XCTAssertFalse(session.canAdd(userID: "host"))
+        XCTAssertFalse(session.rsvpOpen)
+    }
+}

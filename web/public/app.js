@@ -42,7 +42,9 @@ function formatTime(ts) {
   const days = Math.round((startOf(date) - startOf(new Date())) / 86400000);
   if (days <= 0) return `at ${time}`;
   if (days === 1) return `tomorrow at ${time}`;
-  return `${date.toLocaleDateString([], { weekday: "short" })} at ${time}`;
+  if (days <= 6) return `${date.toLocaleDateString([], { weekday: "short" })} at ${time}`;
+  // A week or more out (plans made ahead): "Sat, Nov 14 at 7:00 PM".
+  return `${date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} at ${time}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +123,10 @@ let uid = null;
 let session = null;
 let votes = [];
 let members = [];
+let rsvps = [];
 let busy = false;
+// An RSVP tapped before we knew your name: sent once you've typed it.
+let pendingRSVP = null;
 const NAME_KEY = "forkroad.name";
 let membersLoaded = false;
 
@@ -170,6 +175,26 @@ function start() {
     votes = snap.docs.map((d) => d.data());
     render();
   });
+
+  onSnapshot(collection(sessionRef, "rsvps"), (snap) => {
+    rsvps = snap.docs.map((d) => d.data());
+    render();
+  }, () => {});
+
+  $("rsvp-in").addEventListener("click", () => {
+    const mine = rsvps.find((r) => r.userID === uid);
+    answerRSVP(true, mine?.going ? mine.guests || 0 : 0);
+  });
+  $("rsvp-out").addEventListener("click", () => answerRSVP(false, 0));
+  $("guests-minus").addEventListener("click", () => {
+    const mine = rsvps.find((r) => r.userID === uid);
+    answerRSVP(true, Math.max(0, (mine?.guests || 0) - 1));
+  });
+  $("guests-plus").addEventListener("click", () => {
+    const mine = rsvps.find((r) => r.userID === uid);
+    answerRSVP(true, Math.min(MAX_GUESTS, (mine?.guests || 0) + 1));
+  });
+  $("calendar").addEventListener("click", downloadCalendar);
 
   onSnapshot(collection(sessionRef, "members"), (snap) => {
     members = snap.docs.map((d) => d.data());
@@ -233,7 +258,19 @@ function render() {
 
   // Anyone opening the link after the group decided sees the result right away.
   if (session.status === "decided" && session.winnerID) {
+    // Tapped I'm in / Can't make it without a name yet: ask for it first.
+    if (pendingRSVP && !myName()) {
+      $("name-title").textContent = session.title || "The plan";
+      $("name-sub").textContent = `Your name, so ${session.createdByName || "the organizer"} knows who’s coming.`;
+      show("name-step");
+      return;
+    }
     renderDecided();
+    if (pendingRSVP && myName()) {
+      const { going, guests } = pendingRSVP;
+      pendingRSVP = null;
+      answerRSVP(going, guests);
+    }
     return;
   }
 
@@ -269,6 +306,7 @@ function tally() {
 }
 
 function isSpin() { return session.mode === "spin"; }
+function isPlan() { return session.mode === "plan"; }
 
 function statusText() {
   if (isSpin()) {
@@ -463,8 +501,10 @@ function renderDecided() {
   const winner = (session.options || []).find((o) => o.id === session.winnerID);
   if (!winner) return renderVote();
   $("winner-name").textContent = winner.name;
+  $("winner-label").textContent = isPlan() ? "THE PLAN" : "THE GROUP PICKED";
   const time = formatTime(session.meetTime);
-  const how = isSpin() ? `Picked by the spin · ${winner.addedBy ? winner.addedBy + "’s pick" : winner.category}` : winner.category;
+  const how = isPlan() ? `Picked by ${session.createdByName || "the organizer"} · ${winner.category}`
+    : isSpin() ? `Picked by the spin · ${winner.addedBy ? winner.addedBy + "’s pick" : winner.category}` : winner.category;
   $("winner-detail").textContent = time ? `Meet ${time} · ${how}` : how;
 
   const q = encodeURIComponent(winner.name);
@@ -484,8 +524,168 @@ function renderDecided() {
   $("note-text").textContent = note;
   $("note-by").textContent = note ? `— ${session.createdByName || "the organizer"}` : "";
 
+  const meet = toDate(session.meetTime);
+  $("calendar").hidden = !meet || meet.getTime() < Date.now() - 15 * 60 * 1000;
+  renderRSVP();
   renderBreakdown(winner.id);
   show("decided-step");
+}
+
+function toDate(ts) {
+  if (!ts) return null;
+  return ts.toDate ? ts.toDate() : new Date(ts);
+}
+
+// ---------------------------------------------------------------------------
+// RSVPs ("I'll pick" plans). Same rules as the app: one answer each, guests
+// 0–4 when you're in, until the reply-by time. The organizer counts as coming.
+
+const MAX_GUESTS = 4;
+
+function rsvpOpen() {
+  if (session.asksRSVP !== true) return false;
+  const by = toDate(session.rsvpBy);
+  return !by || by.getTime() > Date.now();
+}
+
+function headcount() {
+  const all = [...rsvps];
+  if (session.createdBy && !all.some((r) => r.userID === session.createdBy)) {
+    all.push({ userID: session.createdBy, name: session.createdByName || "Host", going: true, guests: 0 });
+  }
+  const byName = (a, b) => String(a.name).localeCompare(String(b.name));
+  const going = all.filter((r) => r.going).sort(byName);
+  const notGoing = all.filter((r) => !r.going).sort(byName);
+  const people = going.length;
+  const guests = going.reduce((n, r) => n + (r.guests || 0), 0);
+  let summary = `${people + guests} coming`;
+  if (guests) summary += ` (${people} + ${guests} guest${guests === 1 ? "" : "s"})`;
+  if (notGoing.length) summary += ` · ${notGoing.length} can’t make it`;
+  return { going, notGoing, summary };
+}
+
+function renderRSVP() {
+  const box = $("rsvp");
+  if (session.asksRSVP !== true) { box.hidden = true; return; }
+  box.hidden = false;
+  const count = headcount();
+  $("rsvp-count").textContent = count.summary;
+
+  const open = rsvpOpen();
+  const by = toDate(session.rsvpBy);
+  $("rsvp-deadline").textContent = by ? (open ? `Reply by ${formatTime(by).replace(/^at /, "today at ")}` : "Replies are closed") : "";
+
+  const isOrganizer = uid === session.createdBy;
+  const mine = rsvps.find((r) => r.userID === uid);
+  $("rsvp-actions").hidden = !open || isOrganizer;
+  $("rsvp-in").setAttribute("aria-pressed", mine?.going ? "true" : "false");
+  $("rsvp-out").setAttribute("aria-pressed", mine && !mine.going ? "true" : "false");
+  $("rsvp-in").disabled = $("rsvp-out").disabled = busy;
+
+  const showGuests = open && !isOrganizer && !!mine?.going;
+  $("rsvp-guests").hidden = !showGuests;
+  if (showGuests) {
+    const g = mine.guests || 0;
+    $("rsvp-guests-text").textContent = g ? `Bringing ${g} guest${g === 1 ? "" : "s"}` : "Just me";
+    $("guests-minus").disabled = busy || g <= 0;
+    $("guests-plus").disabled = busy || g >= MAX_GUESTS;
+  }
+
+  const names = $("rsvp-names");
+  names.replaceChildren();
+  const group = (title, list) => {
+    if (!list.length) return;
+    const who = document.createElement("div");
+    who.className = "who";
+    who.textContent = title.toUpperCase();
+    const line = document.createElement("div");
+    line.textContent = list.join(", ");
+    names.append(who, line);
+  };
+  group("Coming", count.going.map((r) => r.name + (r.guests ? ` +${r.guests}` : "")));
+  group("Can’t make it", count.notGoing.map((r) => r.name));
+
+  if (!open && !isOrganizer && mine) {
+    $("rsvp-help").textContent = mine.going ? "You said you’re in." : "You said you can’t make it.";
+  } else if (!$("rsvp-help").dataset.error) {
+    $("rsvp-help").textContent = "";
+  }
+}
+
+async function answerRSVP(going, guests) {
+  if (busy || !rsvpOpen()) return;
+  const name = myName();
+  if (!name) {
+    pendingRSVP = { going, guests };
+    render();
+    $("name-input").focus();
+    return;
+  }
+  busy = true;
+  delete $("rsvp-help").dataset.error;
+  renderRSVP();
+  try {
+    if (!members.some((m) => m.id === uid)) await join(name);
+    await setDoc(doc(sessionRef, "rsvps", uid), {
+      userID: uid,
+      name: String(myName() || name).slice(0, 40),
+      going,
+      guests: going ? Math.max(0, Math.min(MAX_GUESTS, guests)) : 0,
+      answeredAt: serverTimestamp(),
+    });
+    bumpStat("rsvps");
+  } catch {
+    $("rsvp-help").dataset.error = "1";
+    $("rsvp-help").textContent = navigator.onLine === false
+      ? "You’re offline. Check your connection and try again."
+      : "That didn’t go through. Replies may have closed. Reload to see the latest.";
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add to Calendar: an .ics file, which phones and computers open in their
+// calendar app. 90 minutes, like the app's.
+
+function icsDate(date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+function icsText(text) {
+  return String(text).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+}
+
+function downloadCalendar() {
+  const winner = (session.options || []).find((o) => o.id === session.winnerID);
+  const start = toDate(session.meetTime);
+  if (!winner || !start) return;
+  const end = new Date(start.getTime() + 90 * 60 * 1000);
+  const note = typeof session.note === "string" && session.note.trim()
+    ? `Note from ${session.createdByName || "the organizer"}: ${session.note.trim()}\n` : "";
+  const lines = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ForkRoad//Plan//EN", "BEGIN:VEVENT",
+    `UID:${sessionId}@forkroad`,
+    `DTSTAMP:${icsDate(new Date())}`,
+    `DTSTART:${icsDate(start)}`,
+    `DTEND:${icsDate(end)}`,
+    `SUMMARY:${icsText(`${winner.name} · ${session.title || "Dinner"}`)}`,
+    `LOCATION:${icsText(winner.address || winner.name)}`,
+    `GEO:${winner.latitude};${winner.longitude}`,
+    `DESCRIPTION:${icsText(`${note}Details: ${location.href}`)}`,
+    `URL:${location.href}`,
+    "END:VEVENT", "END:VCALENDAR",
+  ];
+  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "forkroad-plan.ics";
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 // After the vote closes: every place, who voted for it, and who didn't vote.

@@ -17,6 +17,20 @@ final class MeetTimesTests: XCTestCase {
         return String(format: "%02d:%02d:%02d", p.hour!, p.minute!, p.second!)
     }
 
+    func testPlansAWeekOutIncludeTheDate() {
+        let en = Locale(identifier: "en_US")
+        let now = date(12, 0)  // Mon, Oct 26
+        // Mon, Nov 2 is 7 days out: the weekday alone would be ambiguous.
+        let nov2 = calendar.date(from: DateComponents(year: 2026, month: 11, day: 2, hour: 19, minute: 0))!
+        let label = MeetTimes.label(for: nov2, now: now, calendar: calendar, locale: en)
+        XCTAssertTrue(label.contains("Nov") && label.contains("2"), label)
+        XCTAssertTrue(label.hasSuffix("7:00\u{202F}PM"), label)
+        let phrase = MeetTimes.phrase(for: nov2, now: now, calendar: calendar, locale: en)
+        XCTAssertTrue(phrase.hasSuffix(" at 7:00\u{202F}PM") && phrase.contains("Nov"), phrase)
+        // Six days out still reads as just the weekday.
+        XCTAssertTrue(MeetTimes.label(for: date(19, 0, day: 31), now: now, calendar: calendar, locale: en).hasPrefix("Sat "))
+    }
+
     func testLabelSaysTomorrowOrTheDay() {
         let en = Locale(identifier: "en_US")
         let now = date(23, 10)  // Monday night

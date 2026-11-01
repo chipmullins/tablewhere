@@ -13,6 +13,8 @@ final class LiveSession {
     private(set) var session: GroupSession?
     private(set) var votes: [GroupVote] = []
     private(set) var members: [GroupMember] = []
+    /// Answers to an "I'll pick" plan.
+    private(set) var rsvps: [GroupRSVP] = []
     private(set) var errorMessage: String?
     private(set) var isLoaded = false
     /// The group was ended (its document is gone), as opposed to a network hiccup.
@@ -55,6 +57,16 @@ final class LiveSession {
         return members.filter { !voted.contains($0.id) }.map { $0.id == me ? "you" : $0.name }
     }
 
+    /// "6 coming (4 + 2 guests)": the creator counts as coming unless they said no.
+    var rsvpCount: RSVPCount {
+        RSVPCount(rsvps, creatorID: session?.createdBy, creatorName: session?.createdByName)
+    }
+
+    var myRSVP: GroupRSVP? {
+        guard let uid = GroupService.shared.currentUserID else { return nil }
+        return rsvps.first { $0.userID == uid }
+    }
+
     var isOwner: Bool {
         guard let session, let uid = GroupService.shared.currentUserID else { return false }
         return session.isOwned(by: uid)
@@ -86,7 +98,9 @@ final class LiveSession {
                     self.isLoaded = true
                     return  // keep showing what we had; it's likely just the connection
                 }
-                self.errorMessage = exists ? nil : GroupError.sessionNotFound.localizedDescription
+                // It's there but this version can't read it (a newer kind of plan).
+                self.errorMessage = !exists ? GroupError.sessionNotFound.localizedDescription
+                    : decoded == nil ? "This plan needs a newer version of ForkRoad. Update the app to see it." : nil
                 self.isGone = !exists
                 self.session = decoded
                 self.isLoaded = true
@@ -101,6 +115,11 @@ final class LiveSession {
         listeners.append(ref.collection("votes").addSnapshotListener { [weak self] snapshot, _ in
             let votes = snapshot?.documents.compactMap { try? $0.data(as: GroupVote.self) } ?? []
             Task { @MainActor in self?.votes = votes }
+        })
+
+        listeners.append(ref.collection("rsvps").addSnapshotListener { [weak self] snapshot, _ in
+            let rsvps = snapshot?.documents.compactMap { try? $0.data(as: GroupRSVP.self) } ?? []
+            Task { @MainActor in self?.rsvps = rsvps }
         })
 
         listeners.append(ref.collection("members").addSnapshotListener { [weak self] snapshot, _ in

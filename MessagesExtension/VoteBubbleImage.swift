@@ -23,7 +23,8 @@ private struct VoteBubbleCard: View {
             // Messages draws ForkRoad's app icon over the bubble's top-left
             // corner, so no icon of our own here, and room to its right.
             HStack(spacing: 8) {
-                Text(session.winner != nil ? "FORKROAD · DECIDED"
+                Text(session.mode == .plan ? "FORKROAD · THE PLAN"
+                     : session.winner != nil ? "FORKROAD · DECIDED"
                      : session.mode == .spin ? "FORKROAD · SPIN" : "FORKROAD · VOTE")
                     .font(Theme.body(11, .bold))
                     .tracking(0.8)
@@ -37,7 +38,7 @@ private struct VoteBubbleCard: View {
                     .font(Theme.display(26))
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
-                Text(winner.category)
+                Text(session.meetTime.map { "\(MeetTimes.label(for: $0)) · \(winner.category)" } ?? winner.category)
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.muted)
             } else if session.mode == .spin {

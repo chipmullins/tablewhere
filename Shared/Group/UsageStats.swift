@@ -4,7 +4,7 @@ import FirebaseFirestore
 /// What ForkRoad counts. Matches `statFields()` in web/firestore.rules and
 /// the stats page (web/public/stats.js).
 enum UsageStat: String {
-    case activeDevices, newDevices, spins, groupsVote, groupsSpin, groupPicks, customPlaces
+    case activeDevices, newDevices, spins, groupsVote, groupsSpin, groupsPlan, rsvps, groupPicks, customPlaces
 }
 
 /// Anonymous daily usage counts for Chip's stats page: one number per thing

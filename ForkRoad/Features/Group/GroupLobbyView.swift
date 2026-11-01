@@ -16,6 +16,11 @@ struct GroupLobbyView: View {
     @State private var confirmLeave = false
     @State private var live: LiveSession
     @State private var showAddPlace = false
+    /// "I'll pick" plans: the creator moves it somewhere else.
+    @State private var showChangePlace = false
+    @State private var rsvpTaps = 0
+    /// An RSVP tapped before you'd set a name: sent once you have.
+    @State private var pendingRSVP: (going: Bool, guests: Int)?
     @State private var browserURL: URL?
     @State private var errorMessage: String?
     @State private var isWorking = false
@@ -104,7 +109,7 @@ struct GroupLobbyView: View {
                                 confirmLeave = true
                             }
                         }
-                        if session.status == .decided && live.isOwner {
+                        if session.status == .decided && live.isOwner && session.mode != .plan {
                             Button("Reopen voting", systemImage: "arrow.uturn.backward") { reopen(session) }
                         }
                     } label: {
@@ -175,6 +180,10 @@ struct GroupLobbyView: View {
             }
         }
         pendingVote = nil
+        if let rsvp = pendingRSVP, let session = live.session, Identity.displayName != nil {
+            answer(going: rsvp.going, guests: rsvp.guests, in: session)
+        }
+        pendingRSVP = nil
     }
 
     private func withEffects<V: View>(_ view: V) -> some View {
@@ -198,6 +207,7 @@ struct GroupLobbyView: View {
         .sensoryFeedback(Haptic.commit, trigger: commitTaps)
         .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
         .sensoryFeedback(Haptic.tick, trigger: timeTaps)
+        .sensoryFeedback(Haptic.commit, trigger: rsvpTaps)
         // Everyone watching a Group Spin sees the wheel land.
         .onChange(of: live.session?.status) { old, new in
             if old == .open, new == .decided, let session = live.session, session.mode == .spin,
@@ -221,7 +231,7 @@ struct GroupLobbyView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    SectionLabel(text: session.status == .decided ? "Decided" : (session.mode == .vote ? "Live vote" : "Group spin"))
+                    SectionLabel(text: headerLabel(session))
                     Text(session.title)
                         .font(Theme.display(32))
                         .foregroundStyle(Theme.text)
@@ -267,6 +277,12 @@ struct GroupLobbyView: View {
             .card()
         }
         .padding(.top, 8)
+    }
+
+    private func headerLabel(_ session: GroupSession) -> String {
+        if session.mode == .plan { return "The plan" }
+        if session.status == .decided { return "Decided" }
+        return session.mode == .vote ? "Live vote" : "Group spin"
     }
 
     private var memberAvatars: some View {
@@ -394,9 +410,10 @@ struct GroupLobbyView: View {
     private func decided(_ session: GroupSession, winner: GroupOption) -> some View {
         let count = live.tally.count(for: winner.id)
         // The meet day leads when there is one ("Meet tomorrow at 7:00 PM").
-        let how = session.mode == .vote ? "\(count) of \(live.tally.totalVotes) votes" : "Picked by the spin"
+        let how = howDecided(session, votes: count)
         WinnerCard(option: winner,
-                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0)) · \(how)" } ?? "\(how) · \(winner.category)")
+                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0)) · \(how)" } ?? "\(how) · \(winner.category)",
+                   eyebrow: session.mode == .plan ? "THE PLAN" : "THE GROUP PICKED")
 
         HStack(spacing: 8) {
             ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
@@ -413,7 +430,11 @@ struct GroupLobbyView: View {
             .disabled(winner.websiteURL == nil)
         }
 
-        meetTimeSection(session)
+        if session.mode == .plan {
+            planSections(session)
+        } else {
+            meetTimeSection(session)
+        }
         if let meet = session.meetTime, meet.timeIntervalSinceNow > -15 * 60 {
             AddToCalendarButton(session: session, winner: winner, meetTime: meet)
             LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet, title: session.title) {
@@ -431,6 +452,107 @@ struct GroupLobbyView: View {
                           tally: live.tally,
                           winnerID: session.winnerID,
                           nonVoters: live.nonVoterNames)
+        }
+    }
+
+    private func howDecided(_ session: GroupSession, votes: Int) -> String {
+        switch session.mode {
+        case .vote: return "\(votes) of \(live.tally.totalVotes) votes"
+        case .spin: return "Picked by the spin"
+        case .plan: return "Picked by \(session.createdByName)"
+        }
+    }
+
+    // MARK: "I'll pick" plans
+
+    /// The time (any day), changing the place, and who's coming.
+    @ViewBuilder
+    private func planSections(_ session: GroupSession) -> some View {
+        if live.isOwner {
+            HStack(spacing: 8) {
+                planButton(session.meetTime.map { MeetTimes.label(for: $0) } ?? "Set a time",
+                           systemImage: "clock") { showTimePicker = true }
+                planButton("Change place", systemImage: "arrow.triangle.2.circlepath") { showChangePlace = true }
+            }
+            .sheet(isPresented: $showTimePicker) {
+                PlanTimeSheet(initial: session.meetTime ?? PlanSetupRows.defaultMeetTime()) { setMeetTime($0) }
+            }
+            .sheet(isPresented: $showChangePlace) {
+                ChangePlanPlaceView(session: session)
+            }
+            rsvpSettings(session)
+        }
+        if session.hasRSVP {
+            RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,
+                      isOwner: live.isOwner, isWorking: isWorking) { going, guests in
+                answer(going: going, guests: guests, in: session)
+            }
+        }
+    }
+
+    private func planButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(Theme.body(14, .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(Theme.accentText)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The creator can turn RSVPs on or off, and set or clear the reply-by time.
+    private func rsvpSettings(_ session: GroupSession) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Ask who’s coming", isOn: Binding(
+                get: { session.hasRSVP },
+                set: { saveRSVP(asks: $0, by: $0 ? session.rsvpBy : nil) }))
+            if session.hasRSVP {
+                Toggle("Reply-by time", isOn: Binding(
+                    get: { session.rsvpBy != nil },
+                    set: { on in
+                        saveRSVP(asks: true, by: on ? PlanSetupRows.defaultReplyBy(for: session.meetTime ?? .now) : nil)
+                    }))
+                if let by = session.rsvpBy {
+                    DatePicker("Reply by", selection: Binding(get: { by }, set: {
+                        saveRSVP(asks: true, by: PlanSetupRows.clampedReplyBy($0, meetTime: session.meetTime ?? $0))
+                    }),
+                               in: Date()...max(session.meetTime ?? by, Date()),
+                               displayedComponents: [.date, .hourAndMinute])
+                }
+            }
+        }
+        .font(Theme.body(15, .semibold))
+        .foregroundStyle(Theme.text)
+        .tint(Theme.saffron)
+        .padding(14)
+        .card(radius: 18)
+    }
+
+    private func saveRSVP(asks: Bool, by date: Date?) {
+        Task {
+            do { try await GroupService.shared.setRSVP(sessionID: sessionID, asks: asks, by: date) }
+            catch { errorMessage = GroupService.message(for: error) }
+        }
+    }
+
+    private func answer(going: Bool, guests: Int, in session: GroupSession) {
+        guard let name = Identity.displayName else {
+            pendingRSVP = (going, guests)
+            showNamePrompt = true
+            return
+        }
+        rsvpTaps += 1
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            do {
+                try await GroupService.shared.rsvp(sessionID: session.id, going: going, guests: guests, displayName: name)
+            } catch {
+                errorMessage = GroupService.message(for: error)
+            }
         }
     }
 
@@ -715,7 +837,8 @@ struct GroupLobbyView: View {
         // One link to the plan page: Apple and Google Maps, the website, and
         // it stays current if the time changes. Apple Maps if there's no page.
         if let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
-            text += ".\nDetails & directions: \(url.absoluteString)"
+            let what = session.rsvpOpen ? "Let me know if you’re in" : "Details & directions"
+            text += ".\n\(what): \(url.absoluteString)"
         } else {
             let name = winner.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
             text += ".\nDirections: https://maps.apple.com/?daddr=\(winner.latitude),\(winner.longitude)&q=\(name)"
@@ -800,6 +923,73 @@ private struct AddOptionView: View {
                 errorMessage = GroupService.message(for: error)
             } catch {
                 errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
+            }
+        }
+    }
+}
+
+/// "I'll pick" plans: the creator moves the plan to a different place.
+private struct ChangePlanPlaceView: View {
+    let session: GroupSession
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
+    @Query private var blockedPlaces: [BlockedPlace]
+    @Query private var blockedCategories: [BlockedCategory]
+    @State private var query = ""
+    @State private var errorMessage: String?
+    @State private var changing: String?
+
+    private var center: CLLocationCoordinate2D { session.area.map(\.coordinate) ?? model.center }
+
+    private func savedPlaces(_ list: SavedList) -> [Place] {
+        saved.filter { $0.list == list && $0.isShareable }.map { $0.asPlace(from: center) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
+                }
+                GroupPlacePicker(
+                    query: query,
+                    center: center,
+                    centerName: session.area.map { "Group area: \($0.name)" } ?? model.locationName,
+                    favorites: savedPlaces(.favorites),
+                    interested: savedPlaces(.interested),
+                    startingFilters: PlacePickerFilters(model.searchArea),
+                    startingNearby: session.area == nil ? model.places : [],
+                    rules: model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories),
+                    excludedIDs: Set(session.options.map(\.id)),
+                    search: model.placeSearch,
+                    accessory: { .add(isBusy: changing == $0.id) },
+                    isDisabled: { _ in changing != nil },
+                    onTap: change
+                )
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.night)
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search restaurants or cravings")
+            .navigationTitle("Change the place")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .presentationBackground(Theme.night)
+    }
+
+    private func change(_ place: Place) {
+        changing = place.id
+        Task {
+            defer { changing = nil }
+            do {
+                try await GroupService.shared.changePlanPlace(sessionID: session.id, to: place,
+                                                              displayName: session.createdByName)
+                dismiss()
+            } catch {
+                errorMessage = GroupService.message(for: error)
             }
         }
     }

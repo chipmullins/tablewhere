@@ -238,10 +238,12 @@ struct GroupPlanSkeleton: View {
 struct WinnerCard: View {
     let option: GroupOption
     let detail: String
+    /// "THE PLAN" for an "I'll pick" plan.
+    var eyebrow = "THE GROUP PICKED"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("THE GROUP PICKED")
+            Text(eyebrow)
                 .font(Theme.body(12, .heavy))
                 .tracking(1.2)
             Text(option.name)
@@ -256,7 +258,7 @@ struct WinnerCard: View {
         .padding(20)
         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("The group picked \(option.name). \(detail)")
+        .accessibilityLabel("\(eyebrow.capitalized): \(option.name). \(detail)")
         .accessibilityAddTraits(.isHeader)
     }
 }
@@ -420,6 +422,7 @@ struct AddPlaceButton: View {
     private var title: String {
         switch session.mode {
         case .spin: return "Add your pick to the wheel"
+        case .plan: return "Change the place"
         case .vote:
             if let userID, session.isOwned(by: userID) { return "Add another place" }
             return "Suggest a place (one each)"

@@ -2,7 +2,8 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Sheet for starting a group plan: name it, choose vote or spin, pick places.
+/// Sheet for starting a group plan: name it, choose vote, spin, or "I'll
+/// pick" (you already know where: set the time and send it), pick places.
 struct CreateGroupView: View {
     var onCreated: (GroupSession) -> Void
 
@@ -25,10 +26,17 @@ struct CreateGroupView: View {
     /// An area picked in the place picker; saved on the plan for everyone.
     @State private var pickedArea: PickerArea?
     @State private var startTaps = 0
+    // "I'll pick"
+    @State private var meetTime = PlanSetupRows.defaultMeetTime()
+    @State private var note = ""
+    @State private var asksRSVP = false
+    @State private var hasReplyBy = false
+    @State private var replyBy = PlanSetupRows.defaultReplyBy(for: PlanSetupRows.defaultMeetTime())
 
     static let maxVoteOptions = GroupMode.maxStartingVoteOptions
-    /// In a spin everyone adds one place, starting with you.
-    private var maxOptions: Int { mode == .spin ? 1 : Self.maxVoteOptions }
+    /// In a spin everyone adds one place, starting with you; a plan has one.
+    private var maxOptions: Int { mode == .vote ? Self.maxVoteOptions : 1 }
+    private var isSingle: Bool { mode != .vote }
 
     private var rules: Randomizer.Rules {
         model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
@@ -40,34 +48,10 @@ struct CreateGroupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Name (\(mode.defaultTitle))", text: $title)
-                    Picker("How to decide", selection: $mode) {
-                        Text("Vote").tag(GroupMode.vote)
-                        Text("Spin").tag(GroupMode.spin)
-                    }
-                    .pickerStyle(.segmented)
-                    .sensoryFeedback(Haptic.tick, trigger: mode)
-                    .onChange(of: mode) {
-                        if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
-                    }
-                    if mode == .vote {
-                        Picker("Voting closes", selection: $closesIn) {
-                            Text("When I lock it in").tag(Int?.none)
-                            Text("In 5 min").tag(Int?.some(5))
-                            Text("In 15 min").tag(Int?.some(15))
-                            Text("In 30 min").tag(Int?.some(30))
-                        }
-                    }
-                } footer: {
-                    Text(mode == .vote
-                         ? "Start with 2–\(Self.maxVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
-                         : "Everyone adds one place, starting with you. Then you spin and the app picks one at random.")
-                }
-                .listRowBackground(Theme.surface)
+                modeSection
 
                 if !selected.isEmpty {
-                    Section("Picked (\(selected.count))") {
+                    Section(mode == .plan ? "The place" : "Picked (\(selected.count))") {
                         ForEach(selected) { place in
                             Button { toggle(place) } label: {
                                 HStack(spacing: 12) {
@@ -82,6 +66,11 @@ struct CreateGroupView: View {
                         }
                     }
                     .listRowBackground(Theme.surface)
+                }
+
+                if mode == .plan {
+                    PlanSetupRows(meetTime: $meetTime, note: $note, asksRSVP: $asksRSVP,
+                                  hasReplyBy: $hasReplyBy, replyBy: $replyBy)
                 }
 
                 GroupPlacePicker(
@@ -132,12 +121,65 @@ struct CreateGroupView: View {
         .presentationBackground(Theme.night)
     }
 
+    /// Name, and how the group decides.
+    private var modeSection: some View {
+        Section {
+            TextField("Name (\(mode.defaultTitle))", text: $title)
+            Picker("Who picks", selection: $mode) {
+                Text("Vote").tag(GroupMode.vote)
+                Text("Spin").tag(GroupMode.spin)
+                Text("I’ll pick").tag(GroupMode.plan)
+            }
+            .pickerStyle(.segmented)
+            .sensoryFeedback(Haptic.tick, trigger: mode)
+            .onChange(of: mode) {
+                if isSingle && selected.count > 1 { selected = Array(selected.prefix(1)) }
+            }
+            if mode == .vote {
+                Picker("Voting closes", selection: $closesIn) {
+                    Text("When I lock it in").tag(Int?.none)
+                    Text("In 5 min").tag(Int?.some(5))
+                    Text("In 15 min").tag(Int?.some(15))
+                    Text("In 30 min").tag(Int?.some(30))
+                }
+            }
+        } footer: {
+            Text(modeFooter)
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    private var modeFooter: String {
+        switch mode {
+        case .vote:
+            return "Start with 2–\(Self.maxVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
+        case .spin:
+            return "Everyone adds one place, starting with you. Then you spin and the app picks one at random."
+        case .plan:
+            return "You choose the place and time. Everyone gets the plan, and can say if they’re in if you ask."
+        }
+    }
+
+    private var pickedLine: String {
+        switch mode {
+        case .vote: return "\(selected.count) of up to \(maxOptions) selected"
+        case .spin: return selected.first.map { "Your pick: \($0.name)" } ?? "Pick your one place for the wheel"
+        case .plan: return selected.first.map { "\($0.name) · \(MeetTimes.label(for: meetTime))" } ?? "Pick the place"
+        }
+    }
+
+    private var startTitle: String {
+        switch mode {
+        case .vote: return "Start the vote"
+        case .spin: return "Start the spin"
+        case .plan: return "Send the plan"
+        }
+    }
+
     /// What's picked, and a Start that's always reachable (even mid-search).
     private var bottomBar: some View {
         VStack(spacing: 8) {
-            Text(mode == .spin
-                 ? (selected.isEmpty ? "Pick your one place for the wheel" : "Your pick: \(selected[0].name)")
-                 : "\(selected.count) of up to \(maxOptions) selected")
+            Text(pickedLine)
                 .font(Theme.body(13, .semibold))
                 .foregroundStyle(Theme.muted)
                 .lineLimit(1)
@@ -145,7 +187,7 @@ struct CreateGroupView: View {
                 Button { create() } label: {
                     HStack(spacing: 8) {
                         if isCreating { ProgressView().tint(Theme.onSaffron) }
-                        Text(mode == .spin ? "Start the spin" : "Start the vote")
+                        Text(startTitle)
                     }
                     .font(Theme.display(17))
                     .foregroundStyle(Theme.onSaffron)
@@ -165,7 +207,11 @@ struct CreateGroupView: View {
     }
 
     private var canCreate: Bool {
-        (mode == .spin ? selected.count >= 1 : selected.count >= 2)
+        switch mode {
+        case .vote: return selected.count >= 2
+        case .spin: return selected.count >= 1
+        case .plan: return selected.count == 1 && meetTime.timeIntervalSinceNow > 0
+        }
     }
 
     /// What you typed, or the default name.
@@ -177,7 +223,7 @@ struct CreateGroupView: View {
     private func toggle(_ place: Place) {
         if let index = selected.firstIndex(of: place) {
             selected.remove(at: index)
-        } else if mode == .spin {
+        } else if isSingle {
             selected = [place]  // one pick: tapping another swaps it
             // That's your one pick: close the search so you can see it and Start.
             query = ""
@@ -212,7 +258,11 @@ struct CreateGroupView: View {
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
                     closesInMinutes: mode == .vote ? closesIn : nil,
                     displayName: name,
-                    area: groupArea(creatorName: name)
+                    area: groupArea(creatorName: name),
+                    meetTime: mode == .plan ? meetTime : nil,
+                    note: mode == .plan ? note : nil,
+                    asksRSVP: mode == .plan && asksRSVP,
+                    rsvpBy: mode == .plan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil
                 )
                 onCreated(session)
             } catch {
