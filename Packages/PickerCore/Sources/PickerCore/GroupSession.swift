@@ -65,6 +65,21 @@ public struct GroupOption: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// Where a group plan is looking for places: set by the creator when they
+/// start it, so everyone's picker starts there (not wherever each phone is).
+public struct GroupArea: Codable, Hashable, Sendable {
+    /// "Johnson City, TN", "Chevy Chase", or "Near you".
+    public var name: String
+    public var latitude: Double
+    public var longitude: Double
+
+    public init(name: String, latitude: Double, longitude: Double) {
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
 /// One group decision: "Friday dinner".
 public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var id: String
@@ -88,12 +103,14 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     /// Short note from the creator sent with the plan ("Bring a gift!").
     /// Optional, so sessions from older app versions still decode.
     public var note: String?
+    /// Where the group is looking (the creator's area). Nil on older sessions.
+    public var area: GroupArea?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
                 winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
-                note: String? = nil) {
+                note: String? = nil, area: GroupArea? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -108,6 +125,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.meetTime = meetTime
         self.picksBy = picksBy
         self.note = note
+        self.area = area
     }
 
     /// The note, trimmed, or nil when it's blank.

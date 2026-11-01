@@ -57,7 +57,8 @@ final class GroupService {
     // MARK: Create & join
 
     func createSession(title: String, mode: GroupMode, options: [GroupOption],
-                       closesInMinutes: Int?, displayName: String) async throws -> GroupSession {
+                       closesInMinutes: Int?, displayName: String,
+                       area: GroupArea? = nil) async throws -> GroupSession {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
@@ -77,7 +78,8 @@ final class GroupService {
             mode: mode,
             options: options,
             // A spin creator's starting place is their one pick.
-            picksBy: mode == .spin ? options.first.map { [uid: $0.id] } : nil
+            picksBy: mode == .spin ? options.first.map { [uid: $0.id] } : nil,
+            area: area
         )
         try await ref.setData(Firestore.Encoder().encode(session))
         // joinCodes/{code} → session, so codes can be looked up without

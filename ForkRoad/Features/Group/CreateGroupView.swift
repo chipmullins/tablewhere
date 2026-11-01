@@ -22,6 +22,8 @@ struct CreateGroupView: View {
     /// The search field is open. On iOS 26 it covers the nav bar (and Start),
     /// so a spin pick closes it and the bottom bar has its own Start.
     @State private var isSearching = false
+    /// An area picked in the place picker; saved on the plan for everyone.
+    @State private var pickedArea: PickerArea?
     @State private var startTaps = 0
 
     static let maxVoteOptions = GroupMode.maxStartingVoteOptions
@@ -94,6 +96,7 @@ struct CreateGroupView: View {
                     search: model.placeSearch,
                     accessory: { .check(isOn: selected.contains($0)) },
                     isDisabled: { mode == .vote && !selected.contains($0) && selected.count >= maxOptions },
+                    onAreaChange: { pickedArea = $0 },
                     onTap: toggle
                 )
 
@@ -184,6 +187,17 @@ struct CreateGroupView: View {
         }
     }
 
+    /// Where everyone else's picker starts: the area you picked here, else
+    /// where you're searching. ("Near you" would mean them, so it gets a real name.)
+    private func groupArea(creatorName: String) -> GroupArea? {
+        if let pickedArea { return pickedArea.groupArea }
+        guard model.hasLocation else { return nil }
+        let name = model.isUsingCurrentLocation
+            ? (model.location.placeName ?? model.currentCity ?? "\(creatorName)’s area")
+            : model.locationName
+        return GroupArea(name: name, latitude: model.center.latitude, longitude: model.center.longitude)
+    }
+
     private func create() {
         guard let name = Identity.displayName else { return }
         startTaps += 1
@@ -197,7 +211,8 @@ struct CreateGroupView: View {
                     mode: mode,
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
                     closesInMinutes: mode == .vote ? closesIn : nil,
-                    displayName: name
+                    displayName: name,
+                    area: groupArea(creatorName: name)
                 )
                 onCreated(session)
             } catch {

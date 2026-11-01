@@ -585,7 +585,8 @@ function updateSuggest() {
 function wireSuggest() {
   suggestWired = true;
   $("suggest-open").addEventListener("click", async () => {
-    $("suggest-input").placeholder = myPick() ? "Search for a place to swap in" : "A name or a craving, like “tacos”";
+    const near = session.area?.name ? ` near ${session.area.name}` : "";
+    $("suggest-input").placeholder = myPick() ? `Search for a place to swap in${near}` : `A name or craving${near}, like “tacos”`;
     $("suggest-panel").hidden = false;
     $("suggest-open").hidden = true;
     $("suggest-input").focus();
@@ -644,8 +645,13 @@ function loadMapKit() {
   return mapkitReady;
 }
 
-// The middle of the places already in the vote: that's where the group is eating.
+// Where the group is eating: the area its creator set, else the middle of
+// the places already in the vote (older plans have no area).
 function groupCenter() {
+  const area = session.area;
+  if (area && Number.isFinite(area.latitude) && Number.isFinite(area.longitude)) {
+    return { lat: area.latitude, lon: area.longitude };
+  }
   const opts = (session.options || []).filter((o) => Number.isFinite(o.latitude) && Number.isFinite(o.longitude));
   if (!opts.length) return null;
   const lat = opts.reduce((a, o) => a + o.latitude, 0) / opts.length;

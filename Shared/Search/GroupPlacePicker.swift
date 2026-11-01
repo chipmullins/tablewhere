@@ -71,6 +71,8 @@ struct GroupPlacePicker: View {
     var search: PlaceSearching = MapKitPlaceSearch()
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
+    /// Told when you pick a different area (nil: back to `center`).
+    var onAreaChange: (PickerArea?) -> Void = { _ in }
     let onTap: (Place) -> Void
 
     @State private var filters: PlacePickerFilters?
@@ -178,6 +180,7 @@ struct GroupPlacePicker: View {
                 .listRowBackground(Color.clear)
                 // On one row, not the Section (a List can repeat Section modifiers per row).
                 .task(id: nearbyKey) { await loadNearby() }
+                .onChange(of: pickedArea) { onAreaChange(pickedArea) }
                 .sheet(isPresented: $showAreaSheet) {
                     PickerAreaSheet(defaultCenter: center, defaultName: centerName,
                                     current: pickedArea) { pickedArea = $0 }

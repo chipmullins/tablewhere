@@ -55,6 +55,8 @@ struct NewVoteView: View {
     @Bindable var state: MessagesState
 
     @State private var selected: [Place] = []
+    /// An area picked in the place picker; saved on the plan for everyone.
+    @State private var pickedArea: PickerArea?
     @State private var includeWebLink = true
     @State private var isSending = false
     @State private var errorMessage: String?
@@ -145,6 +147,7 @@ struct NewVoteView: View {
                     MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
                                        accessory: { .check(isOn: selected.contains($0)) },
                                        isDisabled: { mode == .vote && !selected.contains($0) && selected.count >= maxOptions },
+                                       onAreaChange: { pickedArea = $0 },
                                        onTap: toggle)
                     Section {
                         Toggle("Also send a web link for friends without ForkRoad", isOn: $includeWebLink)
@@ -196,6 +199,15 @@ struct NewVoteView: View {
         else if selected.count < maxOptions { selected.append(place) }
     }
 
+    /// Where everyone else's picker starts: the area picked here, else the
+    /// app's last search area (named, since the extension doesn't know it).
+    private func groupArea(creatorName: String) async -> GroupArea? {
+        if let pickedArea { return pickedArea.groupArea }
+        guard let center = SharedCache.loadSearchArea()?.center else { return nil }
+        let name = await PickerArea.cityName(for: center) ?? "\(creatorName)’s area"
+        return GroupArea(name: name, latitude: center.latitude, longitude: center.longitude)
+    }
+
     private func send() {
         guard let name = Identity.displayName else { return }
         sendTaps += 1
@@ -209,7 +221,8 @@ struct NewVoteView: View {
                     mode: mode,
                     options: selected.map { GroupOption(place: $0, addedBy: name) },
                     closesInMinutes: mode == .vote ? closesIn : nil,
-                    displayName: name
+                    displayName: name,
+                    area: await groupArea(creatorName: name)
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
@@ -707,6 +720,7 @@ struct MessageAddPlaceView: View {
                                    excludedIDs: Set(session.options.map(\.id)),
                                    groupBlockedHashes: groupBlockedHashes,
                                    sessionID: session.id,
+                                   groupArea: session.area,
                                    accessory: { .add(isBusy: adding == $0.id) },
                                    isDisabled: { _ in adding != nil },
                                    onTap: add)
@@ -747,8 +761,12 @@ struct MessagePlacePicker: View {
     var excludedIDs: Set<String> = []
     var groupBlockedHashes: Set<String> = []
     var sessionID: String?
+    /// The group's area (set by its creator): start there instead of the
+    /// app's last search area.
+    var groupArea: GroupArea?
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
+    var onAreaChange: (PickerArea?) -> Void = { _ in }
     let onTap: (Place) -> Void
 
     // Read once per sheet, not on every redraw.
@@ -766,18 +784,20 @@ struct MessagePlacePicker: View {
     var body: some View {
         GroupPlacePicker(
             query: query,
-            center: area?.center,
-            centerName: "Last search area",
+            center: groupArea?.coordinate ?? area?.center,
+            centerName: groupArea.map { "Group area: \($0.name)" } ?? "Last search area",
             favorites: favorites,
             interested: interested,
             startingFilters: area.map { PlacePickerFilters($0) } ?? PlacePickerFilters(),
-            startingNearby: nearby,
+            // The app's last results only fit when there's no group area.
+            startingNearby: groupArea == nil ? nearby : [],
             rules: rules,
             excludedIDs: excludedIDs,
             groupBlockedHashes: groupBlockedHashes,
             sessionID: sessionID,
             accessory: accessory,
             isDisabled: isDisabled,
+            onAreaChange: onAreaChange,
             onTap: onTap
         )
     }

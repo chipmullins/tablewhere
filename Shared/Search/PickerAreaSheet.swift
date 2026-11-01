@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import PickerCore
 
 /// A spot a group place picker searches around instead of its usual center.
 /// Only that picker uses it: Discover and Spin keep their own location.
@@ -16,6 +17,15 @@ struct PickerArea: Equatable {
 
     var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 
+    init(_ area: GroupArea) {
+        name = area.name
+        latitude = area.latitude
+        longitude = area.longitude
+    }
+
+    /// Saved on a group plan, so everyone else's picker starts here.
+    var groupArea: GroupArea { GroupArea(name: name, latitude: latitude, longitude: longitude) }
+
     /// "Chevy Chase", "Near S Limestone", or the city, for a spot on the map.
     static func spotName(for coordinate: CLLocationCoordinate2D) async -> String? {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -24,6 +34,18 @@ struct PickerArea: Equatable {
         if let street = mark.thoroughfare { return "Near \(street)" }
         return mark.locality
     }
+
+    /// "Lexington, KY", for naming a whole search area.
+    static func cityName(for coordinate: CLLocationCoordinate2D) async -> String? {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard let mark = try? await CLGeocoder().reverseGeocodeLocation(location).first,
+              let city = mark.locality else { return nil }
+        return [city, mark.administrativeArea].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+extension GroupArea {
+    var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
 }
 
 /// Where a group picker looks: back to the usual area, a spot on the map, or
@@ -77,7 +99,7 @@ struct PickerAreaSheet: View {
                         if defaultCenter != nil {
                             Button { finish(nil) } label: {
                                 PickerAreaRow(icon: "location.fill", title: defaultName,
-                                              subtitle: "Where ForkRoad is searching", selected: current == nil)
+                                              subtitle: "Where this list started", selected: current == nil)
                             }
                         }
                         Button { showMap = true } label: {

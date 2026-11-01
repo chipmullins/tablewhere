@@ -740,7 +740,8 @@ private struct AddOptionView: View {
     }
 
     private func savedPlaces(_ list: SavedList) -> [Place] {
-        saved.filter { $0.list == list && $0.isShareable }.map { $0.asPlace(from: model.center) }
+        saved.filter { $0.list == list && $0.isShareable }
+            .map { $0.asPlace(from: session.area.map(\.coordinate) ?? model.center) }
     }
 
     var body: some View {
@@ -749,14 +750,16 @@ private struct AddOptionView: View {
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
                 }
+                // Start where the group is looking (the creator's area), not
+                // wherever this phone is. Discover's results only fit without one.
                 GroupPlacePicker(
                     query: query,
-                    center: model.center,
-                    centerName: model.locationName,
+                    center: session.area.map(\.coordinate) ?? model.center,
+                    centerName: session.area.map { "Group area: \($0.name)" } ?? model.locationName,
                     favorites: savedPlaces(.favorites),
                     interested: savedPlaces(.interested),
                     startingFilters: PlacePickerFilters(model.searchArea),
-                    startingNearby: model.places,
+                    startingNearby: session.area == nil ? model.places : [],
                     rules: model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories),
                     excludedIDs: Set(session.options.map(\.id)),
                     groupBlockedHashes: groupBlockedHashes,
