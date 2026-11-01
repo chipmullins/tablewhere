@@ -348,18 +348,21 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         guard let winner = session.pickWinner(votes: votes, ruledOut: ruledOut) else { return nil }
-        try await sessionRef(session.id).updateData([
+        var update: [String: Any] = [
             "status": GroupStatus.decided.rawValue,
             "winnerID": winner,
             "announced": announce
-        ])
+        ]
+        // When it was held: the server shares it anyway after 10 minutes.
+        update["heldAt"] = announce ? FieldValue.delete() : FieldValue.serverTimestamp()
+        try await sessionRef(session.id).updateData(update)
         return winner
     }
 
     /// Shares a held result: the server sends "It's decided!" now.
     func announce(sessionID: String) async throws {
         _ = try await userID()
-        try await sessionRef(sessionID).updateData(["announced": true])
+        try await sessionRef(sessionID).updateData(["announced": true, "heldAt": FieldValue.delete()])
     }
 
     /// The creator takes a place out of an open group. Its votes are cleared,
@@ -399,7 +402,8 @@ final class GroupService {
             "status": GroupStatus.open.rawValue,
             "winnerID": FieldValue.delete(),
             "closesAt": FieldValue.delete(),
-            "announced": FieldValue.delete()
+            "announced": FieldValue.delete(),
+            "heldAt": FieldValue.delete()
         ])
     }
 

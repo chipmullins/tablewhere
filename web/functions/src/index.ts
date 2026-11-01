@@ -312,6 +312,45 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
   }
 });
 
+// MARK: - Held results nobody sent
+
+/** How long a creator can sit on a result before it's shared for them. */
+const HOLD_LIMIT_MS = 10 * 60 * 1000;
+
+/**
+ * A result the creator held (iMessage: "Send to the group") but never sent.
+ * After 10 minutes, share it: setting `announced` fires the usual
+ * "It's decided!" push to everyone (onSessionUpdated), and the creator is
+ * told why. The iMessage bubble can only be updated by the creator's tap.
+ */
+export const releaseHeldResults = onSchedule("every 5 minutes", async () => {
+  try {
+    const cutoff = Timestamp.fromMillis(Date.now() - HOLD_LIMIT_MS);
+    const dayAgo = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+    const due = await db.collection("sessions")
+      .where("heldAt", ">", dayAgo)
+      .where("heldAt", "<=", cutoff)
+      .get();
+    for (const doc of due.docs) {
+      const released = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        if (!fresh.exists || fresh.get("status") !== "decided" || fresh.get("announced") !== false) return false;
+        tx.update(doc.ref, { announced: true, heldAt: FieldValue.delete() });
+        return true;
+      });
+      if (!released) continue;
+      const session = doc.data();
+      const creator = str(session.createdBy);
+      if (!creator) continue;
+      const to = await recipients(doc.id, { only: [creator] });
+      await send(doc.id, to, sessionTitle(session),
+        "We shared the result with the group for you. Open the plan in Messages to send it there with a time.");
+    }
+  } catch (err) {
+    logger.error("releaseHeldResults failed", { err });
+  }
+});
+
 // MARK: - RSVPs ("I'll pick" plans) → the creator
 
 interface Headcount {
