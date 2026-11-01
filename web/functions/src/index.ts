@@ -93,15 +93,6 @@ async function recipients(
   return out;
 }
 
-async function counts(sessionId: string): Promise<{ votes: number; members: number }> {
-  const ref = db.collection("sessions").doc(sessionId);
-  const [votes, members] = await Promise.all([
-    ref.collection("votes").count().get(),
-    ref.collection("members").count().get(),
-  ]);
-  return { votes: votes.data().count, members: members.data().count };
-}
-
 // MARK: - Sending
 
 async function send(
@@ -166,31 +157,55 @@ async function removeTokens(sessionId: string, dead: Recipient[]): Promise<void>
   );
 }
 
-// MARK: - Votes → the session creator
+// MARK: - "Everyone's in" → the session creator
 
-async function notifyCreatorOfVote(
-  sessionId: string,
-  voterUid: string,
-  vote: DocumentData,
-  changed: boolean,
-): Promise<void> {
-  const sessionSnap = await db.collection("sessions").doc(sessionId).get();
-  const session = sessionSnap.data();
-  if (!session) return;
+/**
+ * Whether everyone who joined (besides the creator) has done their part:
+ * voted, or (in a spin) added their pick. `others` is how many that is.
+ */
+async function everyoneIsIn(sessionId: string, session: DocumentData): Promise<{ ready: boolean; others: number }> {
   const creator = str(session.createdBy);
-  if (!creator || creator === voterUid || creator === vote.voterID) return;
+  const ref = db.collection("sessions").doc(sessionId);
+  const members = (await ref.collection("members").get()).docs.map((d) => d.id).filter((id) => id !== creator);
+  if (members.length === 0) return { ready: false, others: 0 };
+  let done: Set<string>;
+  if (session.mode === "spin") {
+    const picks = session.picksBy && typeof session.picksBy === "object" ? Object.keys(session.picksBy) : [];
+    done = new Set([...picks, ...optionsOf(session).map((o) => o.addedByID ?? "")]);
+  } else {
+    done = new Set((await ref.collection("votes").get()).docs.map((d) => d.id));
+  }
+  return { ready: members.every((id) => done.has(id)), others: members.length };
+}
 
+/**
+ * Claims the "everyone's in" push for this many people, once. If more people
+ * join later and they're all in again, it can go out again.
+ */
+async function claimReady(sessionId: string, others: number): Promise<boolean> {
+  const ref = db.collection("sessions").doc(sessionId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.get("status") !== "open") return false;
+    const sentFor = snap.get("readyNotifiedFor");
+    if (typeof sentFor === "number" && sentFor >= others) return false;
+    tx.update(ref, { readyNotifiedFor: others });
+    return true;
+  });
+}
+
+/** Votes no longer push one by one: the creator hears once, when everyone has voted. */
+async function notifyCreatorIfEveryoneVoted(sessionId: string, voterUid: string): Promise<void> {
+  const session = (await db.collection("sessions").doc(sessionId).get()).data();
+  if (!session || session.status !== "open" || session.mode === "spin") return;
+  const creator = str(session.createdBy);
+  if (!creator || creator === voterUid) return;
+
+  const { ready, others } = await everyoneIsIn(sessionId, session);
+  if (!ready || !(await claimReady(sessionId, others))) return;
   const to = await recipients(sessionId, { only: [creator] });
-  if (to.length === 0) return;
-
-  const voter = str(vote.voterName) ?? "Someone";
-  const place = optionName(session, vote.optionID) ?? "a place";
-  const { votes, members } = await counts(sessionId);
-  const tally = `${votes} of ${Math.max(members, votes)} voted`;
-  const body = changed
-    ? `${voter} changed their vote to ${place} · ${tally}`
-    : `${voter} voted for ${place} · ${tally}`;
-  await send(sessionId, to, sessionTitle(session), body);
+  const who = others === 1 ? "They've" : `All ${others} have`;
+  await send(sessionId, to, "Everyone's voted", `${who} voted on ${sessionTitle(session)}. Tap to lock it in.`);
 }
 
 export const onVoteCreated = onDocumentCreated(
@@ -199,7 +214,7 @@ export const onVoteCreated = onDocumentCreated(
     try {
       const vote = event.data?.data();
       if (!vote) return;
-      await notifyCreatorOfVote(event.params.sessionId, event.params.uid, vote, false);
+      await notifyCreatorIfEveryoneVoted(event.params.sessionId, event.params.uid);
     } catch (err) {
       logger.error("onVoteCreated failed", { params: event.params, err });
     }
@@ -213,7 +228,7 @@ export const onVoteUpdated = onDocumentUpdated(
       const before = event.data?.before.data();
       const after = event.data?.after.data();
       if (!before || !after || before.optionID === after.optionID) return;
-      await notifyCreatorOfVote(event.params.sessionId, event.params.uid, after, true);
+      await notifyCreatorIfEveryoneVoted(event.params.sessionId, event.params.uid);
     } catch (err) {
       logger.error("onVoteUpdated failed", { params: event.params, err });
     }
@@ -240,7 +255,16 @@ async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData,
 
   const isSpin = after.mode === "spin";
   const total = optionsOf(after).length;
-  const tally = isSpin ? `${total} on the wheel` : `${total} places in the vote`;
+  let tally = isSpin ? `${total} on the wheel` : `${total} places in the vote`;
+  // The last pick of a spin: say it's time, once.
+  let title = sessionTitle(after);
+  if (isSpin) {
+    const { ready, others } = await everyoneIsIn(sessionId, after);
+    if (ready && (await claimReady(sessionId, others))) {
+      tally = "everyone's in. Time to spin!";
+      title = "Everyone's in";
+    }
+  }
   for (const option of added) {
     const who = str(option.addedBy) ?? "Someone";
     const place = str(option.name) ?? "a place";
@@ -252,7 +276,7 @@ async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData,
       : isSpin
         ? `${who} added ${place} to the wheel · ${tally}`
         : `${who} suggested ${place} · ${tally}`;
-    await send(sessionId, to, sessionTitle(after), body);
+    await send(sessionId, to, title, body);
   }
 }
 
@@ -309,6 +333,39 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     }
   } catch (err) {
     logger.error("onSessionUpdated failed", { params: event.params, err });
+  }
+});
+
+// MARK: - Timed votes: a last call for whoever hasn't voted
+
+/**
+ * About two minutes before a timed vote closes, nudge members who haven't
+ * voted (not the creator). Once per vote.
+ */
+export const voteClosingSoon = onSchedule("every 1 minutes", async () => {
+  try {
+    const now = Date.now();
+    const due = await db.collection("sessions")
+      .where("closesAt", ">", Timestamp.fromMillis(now + 60 * 1000))
+      .where("closesAt", "<=", Timestamp.fromMillis(now + 3 * 60 * 1000))
+      .get();
+    for (const doc of due.docs) {
+      const session = doc.data();
+      if (session.status !== "open" || session.mode === "spin" || session.closingNudged === true) continue;
+      const claimed = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        if (!fresh.exists || fresh.get("closingNudged") === true) return false;
+        tx.update(doc.ref, { closingNudged: true });
+        return true;
+      });
+      if (!claimed) continue;
+      const voted = (await doc.ref.collection("votes").get()).docs.map((d) => d.id);
+      const creator = str(session.createdBy);
+      const to = await recipients(doc.id, { except: [...voted, ...(creator ? [creator] : [])] });
+      await send(doc.id, to, "Voting closes in 2 minutes", `Pick your spot for ${sessionTitle(session)} before it's locked in.`);
+    }
+  } catch (err) {
+    logger.error("voteClosingSoon failed", { err });
   }
 });
 

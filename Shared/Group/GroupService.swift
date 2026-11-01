@@ -403,7 +403,10 @@ final class GroupService {
             "winnerID": FieldValue.delete(),
             "closesAt": FieldValue.delete(),
             "announced": FieldValue.delete(),
-            "heldAt": FieldValue.delete()
+            "heldAt": FieldValue.delete(),
+            // A new round: "Everyone's in" and "closes soon" can go out again.
+            "readyNotifiedFor": FieldValue.delete(),
+            "closingNudged": FieldValue.delete()
         ])
     }
 
