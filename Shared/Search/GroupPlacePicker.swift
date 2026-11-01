@@ -10,6 +10,19 @@ enum PlacePickerAccessory {
     case add(isBusy: Bool)
 }
 
+/// Where a place picker looks when you're not searching by name.
+enum PickerSource: String, CaseIterable, Identifiable {
+    case nearby, favorites, interested
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .nearby: return "Nearby"
+        case .favorites: return "Favorites"
+        case .interested: return "Want to try"
+        }
+    }
+}
+
 /// The filters a group picker searches with. Starts from Discover's, but
 /// changing them here doesn't change Discover.
 struct PlacePickerFilters: Equatable {
@@ -57,6 +70,8 @@ struct GroupPlacePicker: View {
     let onTap: (Place) -> Void
 
     @State private var filters: PlacePickerFilters?
+    /// Nearby, Favorites, or Want to try. Remembered between pickers.
+    @AppStorage("placePickerSource") private var source: PickerSource = .nearby
     @State private var nearby: [Place] = []
     @State private var isLoadingNearby = false
     @State private var nearbyError: String?
@@ -83,11 +98,6 @@ struct GroupPlacePicker: View {
         }
     }
 
-    /// Saved places have no cuisine data, so the chips match on name and category.
-    private func savedMatching(_ places: [Place]) -> [Place] {
-        available(places).filter { CuisineFilter.matches(current.cuisines, name: $0.name, category: $0.category) }
-    }
-
     var body: some View {
         if isTextSearch {
             // Searching: results first (the filters don't apply to a name
@@ -108,37 +118,61 @@ struct GroupPlacePicker: View {
             .listRowBackground(Theme.surface)
             .task(id: trimmedQuery) { await runTextSearch() }
         } else {
+            // Pick where to look: nearby (with filters), or one of your lists.
             Section {
-                RadiusSlider(miles: filtersBinding.radiusMiles)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                    .listRowBackground(Color.clear)
-                CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-            } header: {
-                Text("Filters")
-            } footer: {
-                if !groupBlockedHashes.isEmpty {
-                    Text("Places anyone in the group has blacklisted are hidden.")
+                Picker("Show", selection: $source) {
+                    ForEach(PickerSource.allCases) { Text($0.title).tag($0) }
                 }
+                .pickerStyle(.segmented)
             }
-            .task(id: current) { await loadNearby() }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
 
-            let favs = savedMatching(favorites)
-            let wants = savedMatching(interested)
-            let savedIDs = Set((favorites + interested).map(\.id))
-            let near = available(nearby).filter { !savedIDs.contains($0.id) }
-            section("Your favorites", favs)
-            section("Want to try", wants)
-            section(nearbyTitle, near)
-            if isLoadingNearby && near.isEmpty {
-                statusRow("Looking nearby…", showsSpinner: true)
-            } else if let nearbyError {
-                statusRow(nearbyError)
-            } else if favs.isEmpty && wants.isEmpty && near.isEmpty {
-                statusRow(center == nil
-                          ? "Open ForkRoad and look around nearby first, or search above."
-                          : "Nothing matches. Try a bigger radius, fewer filters, or search above.")
+            switch source {
+            case .nearby:
+                Section {
+                    RadiusSlider(miles: filtersBinding.radiusMiles)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowBackground(Color.clear)
+                    CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                        .listRowBackground(Color.clear)
+                } header: {
+                    Text("Filters")
+                } footer: {
+                    if !groupBlockedHashes.isEmpty {
+                        Text("Places anyone in the group has blacklisted are hidden.")
+                    }
+                }
+                .task(id: current) { await loadNearby() }
+
+                let near = available(nearby)
+                section(nearbyTitle, near)
+                if isLoadingNearby && near.isEmpty {
+                    statusRow("Looking nearby…", showsSpinner: true)
+                } else if let nearbyError {
+                    statusRow(nearbyError)
+                } else if near.isEmpty {
+                    statusRow(center == nil
+                              ? "Open ForkRoad and look around nearby first, or search above."
+                              : "Nothing matches. Try a bigger radius, fewer filters, or search above.")
+                }
+            case .favorites:
+                let favs = available(favorites)
+                section("Your favorites", favs)
+                if favs.isEmpty {
+                    statusRow(favorites.isEmpty
+                              ? "Tap the heart on a restaurant to see it here."
+                              : "None of your favorites can be added here.")
+                }
+            case .interested:
+                let wants = available(interested)
+                section("Want to try", wants)
+                if wants.isEmpty {
+                    statusRow(interested.isEmpty
+                              ? "Tap the bookmark on a restaurant you want to try to see it here."
+                              : "None of your places to try can be added here.")
+                }
             }
         }
     }
