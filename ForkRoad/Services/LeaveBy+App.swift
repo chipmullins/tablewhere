@@ -19,20 +19,29 @@ extension LeaveBy {
     /// ahead (and clears ones that ended or changed). Run when the app opens,
     /// so you get reminded even if you never opened the group after the time was set.
     static func refreshAll(_ model: AppModel) async {
+        // Take down Live Activities whose meet time has passed, even offline.
+        await LiveActivities.tidyUp()
         guard FirebaseSetup.isConfigured, (try? await GroupService.shared.userID()) != nil else { return }
         for id in SharedCache.recentSessionIDs().prefix(5) {
             // Offline? Leave existing reminders alone rather than cancelling them.
             guard let snapshot = try? await GroupService.shared.sessionRef(id).getDocument() else { continue }
             guard snapshot.exists, let session = try? snapshot.data(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
-                  let meet = session.meetTime, meet.timeIntervalSinceNow > 0 else {
+                  let meet = session.meetTime,
+                  meet.timeIntervalSinceNow > -GroupPlanAttributes.lingerAfterMeet else {
                 cancel(sessionID: id)
+                continue
+            }
+            // Just past the meet time: nothing left to remind about, but the
+            // Live Activity stays on the Lock Screen until meet + 30 min.
+            guard meet.timeIntervalSinceNow > 0 else {
+                await LiveActivities.finish(sessionID: id)
                 continue
             }
             guard let from = origin(model) else { continue }
             if let plan = await plan(to: CLLocationCoordinate2D(latitude: winner.latitude, longitude: winner.longitude),
                                      meetTime: meet, from: from.coordinate, isGPS: from.isGPS) {
-                await schedule(plan, sessionID: id, winner: winner, mayAsk: false)
+                await schedule(plan, sessionID: id, winner: winner, title: session.title, mayAsk: false)
             }
         }
     }

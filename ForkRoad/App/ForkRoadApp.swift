@@ -12,6 +12,8 @@ struct ForkRoadApp: App {
         // Group voting needs Firebase; everything else works without it.
         FirebaseSetup.configureIfPossible()
         Theme.applyUIKitAppearance()
+        // Group plans show "Leave by" on the Lock Screen (app-only; see LeaveBy.activityUpdate).
+        LiveActivities.install()
     }
 
     var body: some Scene {

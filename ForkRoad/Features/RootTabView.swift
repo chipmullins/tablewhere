@@ -52,6 +52,12 @@ struct RootTabView: View {
                 model.pendingPlace = place
                 return
             }
+            // forkroad://spin?go=1: open Spin and spin (Control Center, Action Button, Siri).
+            if url.host == "spin", URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.contains(where: { $0.name == "go" && $0.value == "1" }) == true {
+                handle(SpinLink.autoSpin)
+                return
+            }
             // forkroad://spin, forkroad://discover, forkroad://lists, forkroad://group/<id>
             let parts = [url.host ?? ""] + url.pathComponents.filter { $0 != "/" }
             handle(parts.first == "group" && parts.count > 1 ? "group:\(parts[1])" : (parts.first ?? ""))
@@ -90,6 +96,9 @@ struct RootTabView: View {
     private func handle(_ link: String) {
         switch link {
         case "spin": model.selectedTab = .spin
+        case SpinLink.autoSpin:
+            model.selectedTab = .spin
+            model.pendingSpin = true
         case "discover": model.selectedTab = .discover
         case "lists": model.selectedTab = .lists
         case let group where group.hasPrefix("group:"):

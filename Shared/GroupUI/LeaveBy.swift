@@ -98,9 +98,14 @@ enum LeaveBy {
     /// `mayAsk`: whether this may show the notification permission prompt.
     /// Only the leave-by card asks (where it's clear why); the background
     /// refresh when the app opens never does.
-    static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption, mayAsk: Bool = true) async {
+    /// `title`: the group's name, for the Live Activity (nil shows "Group plan").
+    static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption, title: String? = nil,
+                         mayAsk: Bool = true) async {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
+        // Before the reminder checks: the Live Activity also covers "Time to go"
+        // after leave-by passes, and checks the reminder switch itself.
+        activityUpdate?(plan, sessionID, winner, title)
         guard remindersOn, plan.leaveAt.timeIntervalSinceNow > 60 else { return }
 
         // "Provisional" (quiet) permission from "How was it?" would deliver
@@ -127,5 +132,18 @@ enum LeaveBy {
 
     static func cancel(sessionID: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
+        activityEnd?(sessionID)
     }
+
+    // MARK: Live Activity
+
+    /// Shows or updates the plan's Live Activity (Lock Screen and Dynamic Island).
+    /// Set by the app at launch (`LiveActivities.install()`, in
+    /// ForkRoad/Services/LiveActivities.swift). Stays nil in the iMessage
+    /// extension, which can't start Live Activities, so there it does nothing.
+    static var activityUpdate: (@MainActor (_ plan: Plan, _ sessionID: String,
+                                            _ winner: GroupOption, _ title: String?) -> Void)?
+
+    /// Ends the plan's Live Activity. Nil (no-op) outside the app, like `activityUpdate`.
+    static var activityEnd: (@MainActor (_ sessionID: String) -> Void)?
 }

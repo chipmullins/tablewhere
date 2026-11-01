@@ -104,6 +104,8 @@ targets:
           - DMSans-Bold.ttf
         NSLocationWhenInUseUsageDescription: "ForkRoad uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
         NSCalendarsWriteOnlyAccessUsageDescription: "ForkRoad adds your group’s plan to your calendar when you ask."
+        # "Leave by" for group plans on the Lock Screen and Dynamic Island.
+        NSSupportsLiveActivities: true
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:
       path: ForkRoad/ForkRoad.entitlements
@@ -169,6 +171,10 @@ targets:
       - path: Shared/Support
       - path: Shared/Fonts
       - path: Shared/Resources
+      # The group plan Live Activity's attributes (shared with the app).
+      - path: Shared/Activity
+      # The Control Center "Spin" button's intent (shared with the app).
+      - path: ForkRoad/Intents/SpinNowIntent.swift
       - path: Config/Privacy/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
     dependencies:
