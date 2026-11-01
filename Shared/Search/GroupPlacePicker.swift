@@ -63,6 +63,8 @@ struct GroupPlacePicker: View {
     @State private var results: [Place] = []
     @State private var isSearching = false
     @State private var searchedQuery: String?
+    /// The filters `nearby` was loaded with (so clearing a search doesn't search again).
+    @State private var loadedFilters: PlacePickerFilters?
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
     private var isTextSearch: Bool { trimmedQuery.count >= 2 }
@@ -87,31 +89,41 @@ struct GroupPlacePicker: View {
     }
 
     var body: some View {
-        Section {
-            RadiusSlider(miles: filtersBinding.radiusMiles)
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                .listRowBackground(Color.clear)
-            CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color.clear)
-        } header: {
-            Text(isTextSearch ? "Filters (apply when the search is cleared)" : "Filters")
-        } footer: {
-            if !groupBlockedHashes.isEmpty {
-                Text("Places anyone in the group has blacklisted are hidden.")
-            }
-        }
-        .task(id: current) { await loadNearby() }
-        .task(id: trimmedQuery) { await runTextSearch() }
-
         if isTextSearch {
-            if isSearching && results.isEmpty {
-                statusRow("Searching…", showsSpinner: true)
-            } else if !isSearching && searchedQuery == trimmedQuery && available(results).isEmpty {
-                statusRow("No restaurants found for “\(trimmedQuery)”. Try a broader word like “pizza.”")
+            // Searching: results first (the filters don't apply to a name
+            // search, so they step aside until the search is cleared).
+            Section {
+                if isSearching && results.isEmpty {
+                    statusRow("Searching…", showsSpinner: true)
+                } else if !isSearching && searchedQuery == trimmedQuery && available(results).isEmpty {
+                    statusRow("No restaurants found for “\(trimmedQuery)”. Try a broader word like “pizza.”")
+                }
+                ForEach(available(results)) { place in
+                    Button { onTap(place) } label: { row(place) }
+                        .disabled(isDisabled(place))
+                }
+            } header: {
+                Text("Results")
             }
-            section("Results", available(results))
+            .listRowBackground(Theme.surface)
+            .task(id: trimmedQuery) { await runTextSearch() }
         } else {
+            Section {
+                RadiusSlider(miles: filtersBinding.radiusMiles)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+                CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+            } header: {
+                Text("Filters")
+            } footer: {
+                if !groupBlockedHashes.isEmpty {
+                    Text("Places anyone in the group has blacklisted are hidden.")
+                }
+            }
+            .task(id: current) { await loadNearby() }
+
             let favs = savedMatching(favorites)
             let wants = savedMatching(interested)
             let savedIDs = Set((favorites + interested).map(\.id))
@@ -191,6 +203,7 @@ struct GroupPlacePicker: View {
 
     private func loadNearby() async {
         let wanted = current
+        if loadedFilters == wanted && !nearby.isEmpty { return }
         // Discover already searched with these filters: reuse its results.
         if wanted == startingFilters && !startingNearby.isEmpty {
             nearby = startingNearby
@@ -217,6 +230,7 @@ struct GroupPlacePicker: View {
                                                 diet: wanted.diet)
             guard !Task.isCancelled else { return }
             nearby = found
+            loadedFilters = wanted
         } catch is CancellationError {
         } catch {
             guard !Task.isCancelled else { return }

@@ -131,16 +131,29 @@ struct WheelPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                if !trimmed.isEmpty {
-                    Section {
-                        Button { model.addTypedPick(trimmed); query = "" } label: {
-                            Label("Add “\(trimmed)” as typed", systemImage: "text.cursor")
-                                .font(Theme.body(15, .semibold))
-                                .foregroundStyle(Theme.accentText)
+                // What's on the wheel now (tap to take one off).
+                if trimmed.isEmpty && !model.pickedWheel.isEmpty {
+                    Section("On your wheel") {
+                        ForEach(model.pickedWheel) { place in
+                            Button { model.togglePicked(place) } label: {
+                                HStack(spacing: 12) {
+                                    MonogramTile(name: place.name, category: place.category, size: 36)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(place.name).foregroundStyle(Theme.text)
+                                        Text(place.id.hasPrefix("typed|") ? "Typed in" : place.category)
+                                            .font(Theme.body(12))
+                                            .foregroundStyle(Theme.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(Theme.body(22))
+                                        .foregroundStyle(Theme.accentText)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .accessibilityLabel("\(place.name), on your wheel")
+                            .accessibilityHint("Takes it off the wheel")
                         }
-                        .disabled(model.pickedWheel.count >= AppModel.maxPicked)
-                    } footer: {
-                        Text("For anything that isn’t a restaurant, like “Leftovers” or “Mom’s.”")
                     }
                     .listRowBackground(Theme.surface)
                 }
@@ -157,6 +170,22 @@ struct WheelPickerSheet: View {
                     isDisabled: { !pickedIDs.contains($0.id) && model.pickedWheel.count >= AppModel.maxPicked },
                     onTap: { model.togglePicked($0) }
                 )
+                // Below the results, for things that aren't restaurants.
+                if !trimmed.isEmpty {
+                    Section {
+                        Button { model.addTypedPick(trimmed); query = "" } label: {
+                            Label("Add “\(trimmed)” as typed", systemImage: "text.cursor")
+                                .font(Theme.body(15, .semibold))
+                                .foregroundStyle(Theme.accentText)
+                        }
+                        .disabled(model.pickedWheel.count >= AppModel.maxPicked)
+                    } header: {
+                        Text("Not a restaurant?")
+                    } footer: {
+                        Text("For anything else, like “Leftovers” or “Mom’s.”")
+                    }
+                    .listRowBackground(Theme.surface)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.night)
@@ -164,7 +193,20 @@ struct WheelPickerSheet: View {
                         prompt: "Search restaurants, or type anything")
             .navigationTitle("Your wheel · \(model.pickedWheel.count)")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.bold() } }
+            // Always reachable, even while the search field has the top bar.
+            .safeAreaInset(edge: .bottom) {
+                Button { dismiss() } label: {
+                    Text(model.pickedWheel.isEmpty ? "Done" : "Done · \(model.pickedWheel.count) on your wheel")
+                        .font(Theme.display(17))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Theme.night)
+            }
         }
         .presentationBackground(Theme.night)
     }
