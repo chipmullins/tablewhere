@@ -11,6 +11,7 @@ struct LocationPickerView: View {
     @State private var recent = ChosenLocation.recent
     @State private var isResolving = false
     @State private var errorMessage: String?
+    @State private var showMap = false
 
     var body: some View {
         NavigationStack {
@@ -34,6 +35,12 @@ struct LocationPickerView: View {
                                 selected: model.isUsingCurrentLocation)
                         }
                         .disabled(model.location.isDenied)
+                        Button { showMap = true } label: {
+                            row(icon: "map.fill",
+                                title: "Choose on map",
+                                subtitle: "Tap anywhere, like the other side of town",
+                                selected: false)
+                        }
                     }
                     .listRowBackground(Theme.surface)
 
@@ -77,6 +84,8 @@ struct LocationPickerView: View {
             .navigationTitle("Search near")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            // Back from the map: the spot you tapped is already in use, so close too.
+            .fullScreenCover(isPresented: $showMap, onDismiss: { dismiss() }) { FullMapView() }
         }
         .presentationBackground(Theme.night)
     }

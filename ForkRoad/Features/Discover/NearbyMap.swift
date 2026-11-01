@@ -188,7 +188,7 @@ struct NearbyMap: View {
 }
 
 /// The map, full screen: easier to move around and pick a spot.
-private struct FullMapView: View {
+struct FullMapView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Query private var blockedPlaces: [BlockedPlace]

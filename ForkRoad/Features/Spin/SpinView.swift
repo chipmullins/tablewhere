@@ -13,7 +13,7 @@ struct SpinView: View {
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
     @Query private var areas: [SavedArea]
 
-    @State private var showLocationPicker = false
+    @State private var showFilters = false
     @State private var showWheelPicker = false
     /// The full-screen reveal (same as Group Spin) while it plays.
     @State private var reveal: SpinRevealRequest?
@@ -51,9 +51,9 @@ struct SpinView: View {
         let pool = self.pool
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text("Can’t decide?\nWe got you.")
-                    .font(Theme.display(34))
+                    .font(Theme.display(30))
                     .foregroundStyle(Theme.text)
                     .padding(.top, 8)
 
@@ -62,78 +62,39 @@ struct SpinView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if model.spinSource == .nearby {
-                    // Where and how far, right here (same settings as Discover).
-                    HStack(spacing: 8) {
-                        Button { showLocationPicker = true } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
-                                    .foregroundStyle(Theme.accentText)
-                                Text(model.locationName).lineLimit(1)
-                                Image(systemName: "chevron.down")
-                                    .font(Theme.body(11, .bold))
-                                    .foregroundStyle(Theme.muted)
-                            }
-                            .font(Theme.body(14, .semibold))
-                            .foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14)
-                            .frame(height: 40)
-                            .background(Theme.surface, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Theme.hairline))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Spinning near \(model.locationName). Change location")
-
-                        Menu {
-                            Picker("Search radius", selection: $model.radiusMiles) {
-                                ForEach([0.5, 1, 2, 3, 5, 10], id: \.self) { miles in
-                                    Text(RadiusSlider.label(miles)).tag(miles)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "circle.dashed").foregroundStyle(Theme.accentText)
-                                Text(model.radiusLabel)
-                                Image(systemName: "chevron.down")
-                                    .font(Theme.body(11, .bold))
-                                    .foregroundStyle(Theme.muted)
-                            }
-                            .font(Theme.body(14, .semibold))
-                            .foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14)
-                            .frame(height: 40)
-                            .background(Theme.surface, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Theme.hairline))
-                        }
-                        .accessibilityLabel("Search radius, \(model.radiusLabel)")
-                        Spacer(minLength: 0)
+                // One row instead of a block of chips: the Spin button stays on screen.
+                switch model.spinSource {
+                case .nearby:
+                    Button { showFilters = true } label: {
+                        FilterRow(icon: model.isUsingCurrentLocation ? "location.fill" : "mappin",
+                                  text: nearbyFilterText)
                     }
-                    .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
-
-                    CuisineChips(selection: $model.cuisines, diet: $model.diet)
-                } else if model.spinSource == .picked {
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Filters: \(nearbyFilterText)")
+                    .accessibilityHint("Change where, how far, and what kind of food")
+                    .sheet(isPresented: $showFilters) { SpinFiltersSheet() }
+                case .picked:
                     PickedWheelEditor(showPicker: $showWheelPicker)
                         .sheet(isPresented: $showWheelPicker) { WheelPickerSheet() }
-                } else {
+                case .favorites, .interested:
                     HStack(spacing: 8) {
                         CityMenu(metros: saved.filter { $0.list == model.spinSource.savedList }.metros)
                         NoFastFoodChip()
                     }
                 }
 
-                rulesSummary(count: pool.count)
-
-                HintCard(.spinFirst)
-                HintCard(.myWheel)
-
                 // The reel, Spin button, and result live in their own view, so
                 // each reel tick redraws only them (not the lists and filters above).
                 SpinStage(pool: pool,
                           resetKey: resetKey,
                           emptyText: emptyReelText,
+                          footnote: footnote(count: pool.count),
                           isPickedWheel: model.spinSource == .picked,
                           rulesAtSpin: { rules },
                           reveal: $reveal)
+
+                HintCard(.spinFirst)
+                HintCard(.myWheel)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
@@ -160,37 +121,23 @@ struct SpinView: View {
 
     // MARK: Pieces
 
-    private func rulesSummary(count: Int) -> some View {
-        let parts: [String?]
-        if model.spinSource == .picked {
-            parts = ["Your hand-picked wheel", "\(count) in the wheel"]
-        } else {
-            parts = [
-            model.spinSource == .nearby ? "Within \(model.radiusLabel)"
-                : (model.spinSource == .favorites ? "From your favorites" : "From Want to try"),
-            model.spinSource != .nearby ? areaChip : nil,
-            skippedCount > 0 ? "Skipping \(skippedCount) you left out" : nil,
-            model.spinSource == .nearby && !model.cuisines.isEmpty ? model.cuisineSummary : nil,
-            "\(count) in the wheel",
-            blockedPlaces.isEmpty && blockedCategories.isEmpty ? nil : "Skips \(blockedPlaces.count + blockedCategories.count) blacklisted",
-            model.excludeFastFood ? "No fast food" : nil,
-            "Favors ones you haven’t had lately"
-            ]
-        }
-        let labels = parts.compactMap { $0 }
+    /// "Pittsburgh · 2 mi · All cuisines" for the filter row.
+    private var nearbyFilterText: String {
+        var parts = [model.locationName, model.radiusLabel,
+                     model.cuisines.isEmpty ? "All cuisines" : model.cuisineSummary]
+        if model.diet != .none { parts.append(model.diet.label) }
+        if model.excludeFastFood { parts.append("No fast food") }
+        return parts.joined(separator: " · ")
+    }
 
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(labels, id: \.self) { part in
-                    Text(part)
-                        .font(Theme.body(12, .semibold))
-                        .foregroundStyle(Theme.muted)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Theme.surface, in: Capsule())
-                }
-            }
-        }
+    /// One quiet line under the Spin button.
+    private func footnote(count: Int) -> String {
+        if model.spinSource == .picked { return "\(count) on your wheel" }
+        var parts = ["\(count) \(count == 1 ? "place" : "places")"]
+        if model.spinSource != .nearby { parts.append(areaChip) }
+        if skippedCount > 0 { parts.append("\(skippedCount) left out") }
+        parts.append("favors ones you haven’t spun lately")
+        return parts.joined(separator: " · ")
     }
 
     /// Saved places on the current list (and area) that are left out of spins.
@@ -237,6 +184,8 @@ private struct SpinStage: View {
     let pool: [Place]
     let resetKey: String
     let emptyText: String
+    /// "165 places · skips ones you had this week", under the button.
+    let footnote: String
     /// Your own wheel spins exactly what you chose (no rules at spin time).
     let isPickedWheel: Bool
     /// The rules for picking, worked out once when you tap Spin.
@@ -286,6 +235,14 @@ private struct SpinStage: View {
                 Spacer()
                 spinButton(pool)
                 Spacer()
+            }
+
+            if winner == nil && message == nil && !pool.isEmpty {
+                Text(footnote)
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
 
             if let message {
@@ -578,5 +535,106 @@ private struct LandingBurst: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The tappable "📍 Pittsburgh · 2 mi · All cuisines  Filters ›" row.
+private struct FilterRow: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(Theme.body(15, .semibold))
+                .foregroundStyle(Theme.accentText)
+            Text(text)
+                .font(Theme.body(15, .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 4)
+            Text("Filters")
+                .font(Theme.body(13))
+                .foregroundStyle(Theme.muted)
+            Image(systemName: "chevron.right")
+                .font(Theme.body(12, .bold))
+                .foregroundStyle(Theme.muted)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 48)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
+        .contentShape(Rectangle())
+    }
+}
+
+/// Spin → Nearby filters: where, how far, and what kind of food. The same
+/// settings as Discover (changing them here changes them there too).
+private struct SpinFiltersSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var showLocationPicker = false
+    @State private var showMap = false
+
+    var body: some View {
+        @Bindable var model = model
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Button { showLocationPicker = true } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
+                                .foregroundStyle(Theme.accentText)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Searching near").font(Theme.body(12)).foregroundStyle(Theme.muted)
+                                Text(model.locationName).font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(Theme.body(12, .bold)).foregroundStyle(Theme.muted)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 56)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Search for a city or neighborhood")
+
+                    HStack(spacing: 8) {
+                        if !model.isUsingCurrentLocation && !model.location.isDenied {
+                            chip("Use my location", icon: "location.fill") { model.useCurrentLocation() }
+                        }
+                        chip("Choose on map", icon: "map.fill") { showMap = true }
+                        Spacer(minLength: 0)
+                    }
+
+                    RadiusSlider(miles: $model.radiusMiles)
+                    CuisineChips(selection: $model.cuisines, diet: $model.diet)
+                }
+                .padding(16)
+            }
+            .background(Theme.night)
+            .navigationTitle("Filters")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.bold() } }
+            .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
+            .fullScreenCover(isPresented: $showMap) { FullMapView() }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Theme.night)
+    }
+
+    private func chip(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.accentText)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 40)
+                .background(Theme.accentSoft, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
