@@ -91,8 +91,26 @@ struct OnboardingView: View {
     private func stepPage(art: AnyView, title: String, titleView: AnyView? = nil, text: String,
                           primary: (String, () -> Void), secondary: (String, () -> Void)?,
                           footer: AnyView) -> some View {
+        // Normal sizes: the page fills the screen, with Spacers centering the
+        // copy and pinning the buttons low. If that doesn't fit (large Dynamic
+        // Type), the same content scrolls, with fixed gaps instead of Spacers.
+        ViewThatFits(in: .vertical) {
+            stepContent(art: art, title: title, titleView: titleView, text: text,
+                        primary: primary, secondary: secondary, footer: footer, flexible: true)
+            ScrollView {
+                stepContent(art: art, title: title, titleView: titleView, text: text,
+                            primary: primary, secondary: secondary, footer: footer, flexible: false)
+                    .padding(.top, 24)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private func stepContent(art: AnyView, title: String, titleView: AnyView?, text: String,
+                             primary: (String, () -> Void), secondary: (String, () -> Void)?,
+                             footer: AnyView, flexible: Bool) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Spacer()
+            if flexible { Spacer() }
             art
             if let titleView {
                 titleView
@@ -101,23 +119,26 @@ struct OnboardingView: View {
                     .font(Theme.display(32))
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
             }
             Text(text)
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer()
+            if flexible { Spacer() } else { Color.clear.frame(height: 8) }
             primaryButton(primary.0, action: primary.1)
             if let secondary {
                 Button(secondary.0, action: secondary.1)
                     .font(Theme.body(15, .semibold))
                     .foregroundStyle(Theme.accentText)
                     .frame(maxWidth: .infinity, minHeight: 44)
-            } else {
+            } else if flexible {
+                // Keeps both pages' layout the same height at normal sizes.
                 Color.clear.frame(height: 44)
             }
             footer
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
     }

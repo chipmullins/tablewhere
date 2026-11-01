@@ -12,12 +12,15 @@ struct NamePromptView: View {
             Text("What should friends call you?")
                 .font(Theme.display(22))
                 .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
             TextField("Your first name", text: $name)
                 .textContentType(.givenName)
                 .submitLabel(.done)
                 .focused($focused)
                 .padding(.horizontal, 14)
-                .frame(height: 50)
+                .padding(.vertical, 12)
+                .frame(minHeight: 50)
                 .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .foregroundStyle(Theme.text)
                 .onSubmit(save)
@@ -52,9 +55,9 @@ struct VoteOptionRow: View {
     let totalSlots: Int
     let voters: [String]
     let isMine: Bool
-    /// False in spin mode, where nobody votes: hides the count and bar.
     let isLeading: Bool
     let isEnabled: Bool
+    /// False in spin mode, where nobody votes: hides the count and bar.
     var showsVotes: Bool = true
     /// Someone in the group blacklisted it: shown, but it can't win.
     var isRuledOut: Bool = false
@@ -88,7 +91,7 @@ struct VoteOptionRow: View {
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 5))
-                            } else if isLeading && !isRuledOut {
+                            } else if isLeading && showsVotes && !isRuledOut {
                                 Text("LEADING")
                                     .font(Theme.body(10, .heavy))
                                     .tracking(0.6)
@@ -133,7 +136,26 @@ struct VoteOptionRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .accessibilityLabel("\(option.name), \(votes) votes\(isMine ? ", your vote" : "")\(isRuledOut ? ", ruled out" : "")")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// Vote: "Tacos, 2 votes, leading, your vote, voted by Amy, Ben".
+    /// Spin: "Tacos, Mexican, added by Amy" (no vote talk).
+    private var accessibilityText: String {
+        var parts = [option.name]
+        if showsVotes {
+            parts.append("\(votes) vote\(votes == 1 ? "" : "s")")
+            if isLeading && !isRuledOut { parts.append("leading") }
+            if isMine { parts.append("your vote") }
+        }
+        if isRuledOut {
+            parts.append("ruled out, someone in the group blacklisted it")
+        } else if showsVotes && !voters.isEmpty {
+            parts.append("voted by \(voters.joined(separator: ", "))")
+        } else {
+            parts.append("\(option.category), added by \(option.addedBy)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var fraction: CGFloat {
@@ -163,6 +185,9 @@ struct WinnerCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The group picked \(option.name). \(detail)")
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -201,6 +226,7 @@ struct VoteBreakdown: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: "moon.zzz")
                             .foregroundStyle(Theme.muted)
+                            .accessibilityHidden(true)
                         Text("Didn’t vote: \(nonVoters.joined(separator: ", "))")
                             .font(Theme.body(13))
                             .foregroundStyle(Theme.muted)
@@ -246,7 +272,7 @@ struct VoteBreakdown: View {
         }
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(option.name), \(count) vote\(count == 1 ? "" : "s")\(voters.isEmpty ? "" : ": " + voters.joined(separator: ", "))")
+        .accessibilityLabel("\(option.name)\(isWinner ? ", winner" : ""), \(count) vote\(count == 1 ? "" : "s")\(voters.isEmpty ? "" : ": " + voters.joined(separator: ", "))")
     }
 }
 
@@ -260,6 +286,7 @@ struct PlanNoteCard: View {
             Image(systemName: "quote.bubble.fill")
                 .font(Theme.body(16, .semibold))
                 .foregroundStyle(Theme.accentText)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(note)
                     .font(Theme.body(15, .semibold))

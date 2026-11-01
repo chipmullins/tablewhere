@@ -411,12 +411,14 @@ private struct SpinStage: View {
                 let onList = actions.list(for: place)
                 ActionTile(title: "Favorite",
                            systemImage: onList == .favorites ? "heart.fill" : "heart",
-                           tint: onList == .favorites ? Theme.accentText : Theme.text) {
+                           tint: onList == .favorites ? Theme.accentText : Theme.text,
+                           isOn: onList == .favorites) {
                     actions.toggle(place, in: .favorites)
                 }
                 ActionTile(title: "Try",
                            systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
-                           tint: onList == .interested ? Theme.accentText : Theme.text) {
+                           tint: onList == .interested ? Theme.accentText : Theme.text,
+                           isOn: onList == .interested) {
                     actions.toggle(place, in: .interested)
                 }
                 ActionTile(title: "Blacklist", systemImage: "nosign") { blacklist(place) }

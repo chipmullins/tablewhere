@@ -44,6 +44,7 @@ struct PlaceRow: View {
             Image(systemName: "chevron.right")
                 .font(Theme.body(14, .semibold))
                 .foregroundStyle(Theme.muted.opacity(0.6))
+                .accessibilityHidden(true)
         }
         .padding(12)
         .card()
@@ -62,7 +63,8 @@ struct Chip: View {
             Text(label)
                 .font(Theme.body(14, .semibold))
                 .padding(.horizontal, 16)
-                .frame(height: 40)
+                .padding(.vertical, 6)
+                .frame(minHeight: 40)
                 .foregroundStyle(isSelected ? Theme.night : Theme.text)
                 .background(isSelected ? Theme.text : Theme.surface, in: Capsule())
                 .overlay(Capsule().strokeBorder(isSelected ? .clear : Theme.hairline))
@@ -73,24 +75,44 @@ struct Chip: View {
 }
 
 /// Square icon + label button used for Call / Go / Save / Block.
+/// Pass `isOn` when the tile is a toggle (Favorite, Try) so VoiceOver reads
+/// its state; leave it nil for plain actions.
 struct ActionTile: View {
     let title: String
     let systemImage: String
     var tint: Color = Theme.text
     var background: Color = Theme.surfaceHigh
+    var isOn: Bool? = nil
     let action: () -> Void
 
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: systemImage).font(Theme.body(19, .semibold))
-                Text(title).font(Theme.body(12, .semibold))
+                Image(systemName: systemImage)
+                    .font(Theme.body(19, .semibold))
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(Theme.body(12, .semibold))
+                    .multilineTextAlignment(.center)
             }
             .foregroundStyle(tint)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, minHeight: 66)
             .background(background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.4)
         }
         .buttonStyle(.plain)
+
+        if let isOn {
+            button
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+                .accessibilityValue(isOn ? "On" : "Off")
+        } else {
+            button
+        }
     }
 }
 
@@ -103,6 +125,9 @@ struct SectionLabel: View {
             .font(Theme.body(12, .bold))
             .tracking(1)
             .foregroundStyle(color)
+            // VoiceOver can spell short all-caps words letter by letter.
+            .accessibilityLabel(text)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -144,6 +169,8 @@ struct StateCard: View {
             Text(title)
                 .font(Theme.display(19))
                 .foregroundStyle(Theme.text)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
             Text(message)
                 .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)

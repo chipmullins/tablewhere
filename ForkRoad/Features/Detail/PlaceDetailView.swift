@@ -75,7 +75,8 @@ struct PlaceDetailView: View {
                     ActionTile(title: "Favorite",
                                systemImage: onList == .favorites ? "heart.fill" : "heart",
                                tint: onList == .favorites ? Theme.onSaffron : Theme.text,
-                               background: onList == .favorites ? Theme.saffron : Theme.surface) {
+                               background: onList == .favorites ? Theme.saffron : Theme.surface,
+                               isOn: onList == .favorites) {
                         actions.toggle(place, in: .favorites)
                         refresh += 1
                     }
@@ -83,7 +84,8 @@ struct PlaceDetailView: View {
                     ActionTile(title: "Try",
                                systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
                                tint: onList == .interested ? Theme.onSaffron : Theme.text,
-                               background: onList == .interested ? Theme.saffron : Theme.surface) {
+                               background: onList == .interested ? Theme.saffron : Theme.surface,
+                               isOn: onList == .interested) {
                         actions.toggle(place, in: .interested)
                         refresh += 1
                     }

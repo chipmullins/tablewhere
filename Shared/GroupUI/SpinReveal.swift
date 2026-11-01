@@ -9,6 +9,7 @@ struct SpinReveal: View {
     var onDone: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverOn
     @State private var shown = ""
     @State private var landed = false
 
@@ -20,6 +21,7 @@ struct SpinReveal: View {
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(Theme.saffron)
                     .contentTransition(.symbolEffect(.replace))
+                    .accessibilityHidden(true)
                 Text(landed ? "THE WHEEL PICKED" : "SPINNING…")
                     .font(Theme.body(12, .heavy))
                     .tracking(1.4)
@@ -43,6 +45,8 @@ struct SpinReveal: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(landed ? "The wheel picked \(winner)" : "Spinning")
         .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Double-tap to close")
+        .accessibilityAction { onDone() }
         .task { await run() }
     }
 
@@ -62,7 +66,10 @@ struct SpinReveal: View {
             shown = winner
             landed = true
         }
-        try? await Task.sleep(for: .seconds(1.8))
+        let announcement: String = "The wheel picked \(winner)"
+        AccessibilityNotification.Announcement(announcement).post()
+        // Give VoiceOver time to finish the announcement before closing.
+        try? await Task.sleep(for: .seconds(voiceOverOn ? 3.5 : 1.8))
         onDone()
     }
 }
