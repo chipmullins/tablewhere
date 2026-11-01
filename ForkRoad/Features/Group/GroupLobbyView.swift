@@ -374,7 +374,7 @@ struct GroupLobbyView: View {
         meetTimeSection(session)
         if let meet = session.meetTime, meet.timeIntervalSinceNow > -15 * 60 {
             AddToCalendarButton(session: session, winner: winner, meetTime: meet)
-            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet) {
+            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet, title: session.title) {
                 // Get a fresh GPS fix if location is on (it's only used on this phone).
                 if model.location.authorization == .authorizedWhenInUse || model.location.authorization == .authorizedAlways {
                     model.location.start()

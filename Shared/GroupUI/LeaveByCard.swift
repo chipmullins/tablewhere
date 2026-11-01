@@ -8,6 +8,8 @@ struct LeaveByCard: View {
     let sessionID: String
     let winner: GroupOption
     let meetTime: Date
+    /// The group's name, for the Live Activity (nil shows "Group plan").
+    var title: String? = nil
     /// Where to measure from (the app: GPS or search area; iMessage: its
     /// own location or the app's last search area). Nil if there's nowhere.
     let origin: @MainActor () async -> LeaveBy.Origin?
@@ -67,7 +69,7 @@ struct LeaveByCard: View {
         .onChange(of: remind) {
             LeaveBy.remindersOn = remind
             Task {
-                if let plan { await LeaveBy.schedule(plan, sessionID: sessionID, winner: winner) }
+                if let plan { await LeaveBy.schedule(plan, sessionID: sessionID, winner: winner, title: title) }
             }
         }
     }
@@ -111,6 +113,6 @@ struct LeaveByCard: View {
             return
         }
         withAnimation(.snappy) { plan = next }
-        await LeaveBy.schedule(next, sessionID: sessionID, winner: winner)
+        await LeaveBy.schedule(next, sessionID: sessionID, winner: winner, title: title)
     }
 }
