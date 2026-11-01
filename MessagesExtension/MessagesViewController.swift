@@ -140,7 +140,10 @@ final class MessagesState {
     /// True when the group changed (decided in the app, new time…) since this
     /// phone last posted a bubble, so the creator should post the plan.
     static func bubbleIsOutdated(_ session: GroupSession) -> Bool {
-        SharedDefaults.store.string(forKey: "bubble.\(session.id)") != bubbleKey(session)
+        let posted = SharedDefaults.store.string(forKey: "bubble.\(session.id)")
+        // Keys saved by builds before the note was part of the bubble.
+        if session.trimmedNote == nil, let posted, posted + "|" == bubbleKey(session) { return false }
+        return posted != bubbleKey(session)
     }
 
     private func configure(_ message: MSMessage, session: GroupSession, tally: Tally, memberCount: Int = 0) {

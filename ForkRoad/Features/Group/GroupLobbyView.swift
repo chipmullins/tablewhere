@@ -19,6 +19,9 @@ struct GroupLobbyView: View {
     /// "I'll pick" plans: the creator moves it somewhere else.
     @State private var showChangePlace = false
     @State private var rsvpTaps = 0
+    /// This screen spun the wheel and holds the result until it lands
+    /// (a result held in iMessage waits for Send there instead).
+    @State private var heldByThisView = false
     /// An RSVP tapped before you'd set a name: sent once you have.
     @State private var pendingRSVP: (going: Bool, guests: Int)?
     @State private var browserURL: URL?
@@ -789,6 +792,7 @@ struct GroupLobbyView: View {
         Task {
             defer { isWorking = false }
             // A spin's result goes out when the wheel lands (see the reveal's end).
+            if session.mode == .spin { heldByThisView = true }
             do {
                 _ = try await GroupService.shared.decide(session: session, votes: live.votes,
                                                          ruledOut: live.ruledOutIDs, announce: session.mode != .spin)
@@ -800,8 +804,9 @@ struct GroupLobbyView: View {
     /// (or when they leave the screen, so it never stays unshared).
     private func announceIfHeld() {
         // Spins only: an iMessage result waits for Send in Messages.
-        guard live.isOwner, let session = live.session, session.mode == .spin,
+        guard heldByThisView, live.isOwner, let session = live.session, session.mode == .spin,
               session.status == .decided, session.announced == false else { return }
+        heldByThisView = false
         Task { try? await GroupService.shared.announce(sessionID: session.id) }
     }
 
@@ -839,7 +844,9 @@ struct GroupLobbyView: View {
         let wait = closesAt.timeIntervalSinceNow
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
         guard !Task.isCancelled, let current = live.session, current.status == .open else { return }
-        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs)
+        if current.mode == .spin { heldByThisView = true }
+        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs,
+                                                  announce: current.mode != .spin)
     }
 
     // MARK: Helpers

@@ -398,7 +398,8 @@ final class GroupService {
         try await sessionRef(session.id).updateData([
             "status": GroupStatus.open.rawValue,
             "winnerID": FieldValue.delete(),
-            "closesAt": FieldValue.delete()
+            "closesAt": FieldValue.delete(),
+            "announced": FieldValue.delete()
         ])
     }
 

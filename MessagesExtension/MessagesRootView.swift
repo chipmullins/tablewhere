@@ -398,7 +398,8 @@ struct MessageVoteView: View {
             let _ = postedTick
             // Time and note first, then one bubble with all of it.
             MessagePlanControls(session: session)
-            if MessagesState.bubbleIsOutdated(session) {
+            // Held results always offer Send (even if a matching bubble was posted before).
+            if MessagesState.bubbleIsOutdated(session) || session.announced == false {
                 if session.announced == false {
                     Text("Only you can see this so far. Add a time or note if you like, then send it.")
                         .font(Theme.body(13, .medium))
@@ -409,7 +410,10 @@ struct MessageVoteView: View {
                     state.sendUpdate(session, tally: live.tally, memberCount: live.members.count)
                     postedTick += 1
                     if session.announced == false {
-                        Task { try? await GroupService.shared.announce(sessionID: session.id) }
+                        Task {
+                            do { try await GroupService.shared.announce(sessionID: session.id) }
+                            catch { errorMessage = "Sent to the chat, but the app couldn’t tell everyone else. Tap Send again." }
+                        }
                     }
                 } label: {
                     Label(session.announced == false ? "Send to the group" : "Post the updated plan",
@@ -723,7 +727,10 @@ struct MessageVoteView: View {
         let wait = closesAt.timeIntervalSinceNow
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
         guard !Task.isCancelled, let current = live.session, current.status == .open else { return }
-        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs)
+        // Like Lock in: the creator is here, and sends it with the time and note.
+        _ = try? await GroupService.shared.decide(session: current, votes: live.votes, ruledOut: live.ruledOutIDs,
+                                                  announce: false)
+        state.expand()
     }
 
     private func removePlace() {
