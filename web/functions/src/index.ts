@@ -39,6 +39,13 @@ interface Recipient {
 interface SessionOption {
   id?: string;
   name?: string;
+  addedBy?: string;
+  addedByID?: string;
+}
+
+function optionsOf(session: DocumentData): SessionOption[] {
+  const options: unknown = session.options;
+  return Array.isArray(options) ? (options as SessionOption[]).filter((o) => o && typeof o.id === "string") : [];
 }
 
 function str(value: unknown): string | undefined {
@@ -210,6 +217,42 @@ export const onVoteUpdated = onDocumentUpdated(
   },
 );
 
+// MARK: - Places added → the session creator
+
+/**
+ * Someone added a place (a Group Spin pick, or a suggestion in a vote), or
+ * swapped theirs. Tells the creator, so they know when the wheel's ready.
+ * Places the creator added themselves are skipped.
+ */
+async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData, after: DocumentData): Promise<void> {
+  const creator = str(after.createdBy);
+  if (!creator) return;
+  const oldOptions = optionsOf(before);
+  const oldIDs = new Set(oldOptions.map((o) => o.id));
+  const added = optionsOf(after).filter((o) => !oldIDs.has(o.id) && o.addedByID !== creator);
+  if (added.length === 0) return;
+
+  const to = await recipients(sessionId, { only: [creator] });
+  if (to.length === 0) return;
+
+  const isSpin = after.mode === "spin";
+  const total = optionsOf(after).length;
+  const tally = isSpin ? `${total} on the wheel` : `${total} places in the vote`;
+  for (const option of added) {
+    const who = str(option.addedBy) ?? "Someone";
+    const place = str(option.name) ?? "a place";
+    // Their earlier place is gone: they changed their pick.
+    const swapped = !!option.addedByID && oldOptions.some((o) =>
+      o.addedByID === option.addedByID && !optionsOf(after).some((n) => n.id === o.id));
+    const body = swapped
+      ? `${who} changed their pick to ${place} · ${tally}`
+      : isSpin
+        ? `${who} added ${place} to the wheel · ${tally}`
+        : `${who} suggested ${place} · ${tally}`;
+    await send(sessionId, to, sessionTitle(after), body);
+  }
+}
+
 // MARK: - Session decided / meeting time → everyone but the creator
 
 export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async (event) => {
@@ -220,6 +263,12 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
     const sessionId = event.params.sessionId;
     const creator = str(after.createdBy);
     const except = creator ? [creator] : [];
+
+    // 0. A place was added while it's still open.
+    if (before.status === "open" && after.status === "open") {
+      await notifyCreatorOfNewPlaces(sessionId, before, after);
+      return;
+    }
 
     const winner = optionName(after, after.winnerID) ?? "the winning pick";
     const label = str(after.meetTimeLabel);
