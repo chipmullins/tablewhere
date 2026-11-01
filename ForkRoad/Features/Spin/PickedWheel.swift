@@ -187,6 +187,7 @@ struct WheelPickerSheet: View {
                 GroupPlacePicker(
                     query: query,
                     center: model.center,
+                    centerName: model.locationName,
                     favorites: savedPlaces(.favorites),
                     interested: savedPlaces(.interested),
                     startingFilters: PlacePickerFilters(model.searchArea),

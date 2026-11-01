@@ -82,6 +82,7 @@ struct CreateGroupView: View {
                 GroupPlacePicker(
                     query: query,
                     center: model.center,
+                    centerName: model.locationName,
                     favorites: savedPlaces(in: .favorites),
                     interested: savedPlaces(in: .interested),
                     startingFilters: PlacePickerFilters(model.searchArea),

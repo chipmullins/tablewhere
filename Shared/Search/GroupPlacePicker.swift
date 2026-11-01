@@ -49,8 +49,12 @@ struct PlacePickerFilters: Equatable {
 /// (new group, suggest a place) and the iMessage extension.
 struct GroupPlacePicker: View {
     let query: String
-    /// Where to search. Nil means no live search (only `startingNearby` is shown).
+    /// Where to search. Nil means no live search (only `startingNearby` is
+    /// shown) until you pick an area.
     let center: CLLocationCoordinate2D?
+    /// What `center` is called ("Near you", "Lexington, KY"), shown on the
+    /// "Searching near" row.
+    var centerName: String = "Your search area"
     let favorites: [Place]
     let interested: [Place]
     /// Filters to start with, and results that already match them (skips a search).
@@ -78,12 +82,25 @@ struct GroupPlacePicker: View {
     @State private var results: [Place] = []
     @State private var isSearching = false
     @State private var searchedQuery: String?
-    /// The filters `nearby` was loaded with (so clearing a search doesn't search again).
-    @State private var loadedFilters: PlacePickerFilters?
+    /// The filters and spot `nearby` was loaded with (so clearing a search doesn't search again).
+    @State private var loadedKey: NearbyKey?
+    /// A spot picked for this picker only (Discover and Spin keep theirs).
+    @State private var pickedArea: PickerArea?
+    @State private var showAreaSheet = false
+    @State private var showAreaMap = false
+
+    /// What a nearby search depends on.
+    private struct NearbyKey: Equatable {
+        var filters: PlacePickerFilters
+        var area: PickerArea?
+    }
+    private var nearbyKey: NearbyKey { NearbyKey(filters: current, area: pickedArea) }
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
     private var isTextSearch: Bool { trimmedQuery.count >= 2 }
     private var current: PlacePickerFilters { filters ?? startingFilters }
+    /// The picked spot, else the usual center.
+    private var searchCenter: CLLocationCoordinate2D? { pickedArea?.coordinate ?? center }
 
     private var filtersBinding: Binding<PlacePickerFilters> {
         Binding(get: { current }, set: { filters = $0 })
@@ -116,7 +133,7 @@ struct GroupPlacePicker: View {
                 Text("Results")
             }
             .listRowBackground(Theme.surface)
-            .task(id: trimmedQuery) { await runTextSearch() }
+            .task(id: TextSearchKey(query: trimmedQuery, area: pickedArea)) { await runTextSearch() }
         } else {
             // Pick where to look: nearby (with filters), or one of your lists.
             Section {
@@ -131,34 +148,7 @@ struct GroupPlacePicker: View {
 
             switch source {
             case .nearby:
-                Section {
-                    RadiusSlider(miles: filtersBinding.radiusMiles)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                        .listRowBackground(Color.clear)
-                    CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-                        .listRowBackground(Color.clear)
-                } header: {
-                    Text("Filters")
-                } footer: {
-                    if !groupBlockedHashes.isEmpty {
-                        Text("Places anyone in the group has blacklisted are hidden.")
-                    }
-                }
-                .task(id: current) { await loadNearby() }
-
-                let near = available(nearby)
-                section(nearbyTitle, near)
-                if isLoadingNearby && near.isEmpty {
-                    Section(nearbyTitle) { skeletonRows }
-                        .listRowBackground(Theme.surface)
-                } else if let nearbyError {
-                    statusRow(nearbyError)
-                } else if near.isEmpty {
-                    statusRow(center == nil
-                              ? "Open ForkRoad and look around nearby first, or search above."
-                              : "Nothing matches. Try a bigger radius, fewer filters, or search above.")
-                }
+                nearbySections
             case .favorites:
                 let favs = available(favorites)
                 section("Your favorites", favs)
@@ -179,9 +169,106 @@ struct GroupPlacePicker: View {
         }
     }
 
+    /// Nearby: where to look, the filters, then the results.
+    @ViewBuilder
+    private var nearbySections: some View {
+        Section {
+            areaRow
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowBackground(Color.clear)
+            RadiusSlider(miles: filtersBinding.radiusMiles)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowBackground(Color.clear)
+            CuisineChips(selection: filtersBinding.cuisines, diet: filtersBinding.diet)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+        } header: {
+            Text("Filters")
+        } footer: {
+            if !groupBlockedHashes.isEmpty {
+                Text("Places anyone in the group has blacklisted are hidden.")
+            }
+        }
+        .task(id: nearbyKey) { await loadNearby() }
+        .sheet(isPresented: $showAreaSheet) {
+            PickerAreaSheet(defaultCenter: center, defaultName: centerName,
+                            current: pickedArea) { pickedArea = $0 }
+        }
+        .fullScreenCover(isPresented: $showAreaMap) {
+            PickerMapView(start: searchCenter) { pickedArea = $0 }
+        }
+
+        let near = available(nearby)
+        section(nearbyTitle, near)
+        if isLoadingNearby && near.isEmpty {
+            Section(nearbyTitle) { skeletonRows }
+                .listRowBackground(Theme.surface)
+        } else if let nearbyError {
+            statusRow(nearbyError)
+        } else if near.isEmpty {
+            statusRow(searchCenter == nil
+                      ? "Choose where to look above, or search by name."
+                      : "Nothing matches. Try a bigger radius, fewer filters, or search above.")
+        }
+    }
+
     private var nearbyTitle: String {
+        let radius = RadiusSlider.label(current.radiusMiles)
+        if let pickedArea {
+            let what = current.cuisines.isEmpty ? "Places" : CuisineFilter.summary(of: current.cuisines)
+            return "\(what) within \(radius) of \(pickedArea.name)"
+        }
         let what = current.cuisines.isEmpty ? "Nearby" : CuisineFilter.summary(of: current.cuisines)
-        return "\(what) within \(RadiusSlider.label(current.radiusMiles))"
+        return "\(what) within \(radius)"
+    }
+
+    /// "Searching near …" (opens the area sheet), with quick chips for the
+    /// map and for going back to the usual area.
+    private var areaRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { showAreaSheet = true } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: pickedArea == nil ? "location.fill" : "mappin")
+                        .foregroundStyle(Theme.accentText)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Searching near").font(Theme.body(12)).foregroundStyle(Theme.muted)
+                        Text(pickedArea?.name ?? (searchCenter == nil ? "Choose a place" : centerName))
+                            .font(Theme.body(16, .semibold))
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(Theme.body(12, .bold)).foregroundStyle(Theme.muted)
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 56)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Search for a city, neighborhood, or address")
+
+            HStack(spacing: 8) {
+                if pickedArea != nil && center != nil {
+                    areaChip("Back to \(centerName)", icon: "arrow.uturn.backward") { pickedArea = nil }
+                }
+                areaChip("Choose on map", icon: "map.fill") { showAreaMap = true }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func areaChip(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.accentText)
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 40)
+                .background(Theme.accentSoft, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -252,16 +339,28 @@ struct GroupPlacePicker: View {
 
     // MARK: Searching
 
+    private struct TextSearchKey: Equatable {
+        var query: String
+        var area: PickerArea?
+    }
+
     private func loadNearby() async {
-        let wanted = current
-        if loadedFilters == wanted && !nearby.isEmpty { return }
-        // Discover already searched with these filters: reuse its results.
-        if wanted == startingFilters && !startingNearby.isEmpty {
+        let key = nearbyKey
+        let wanted = key.filters
+        if loadedKey == key && !nearby.isEmpty { return }
+        // Moved somewhere else: don't leave the old area's places up while searching.
+        if let loadedKey, loadedKey.area != key.area {
+            nearby = []
+            isLoadingNearby = true  // skeletons, not "Nothing matches", while it waits
+        }
+        // Discover already searched with these filters, in the same place: reuse its results.
+        if key.area == nil && wanted == startingFilters && !startingNearby.isEmpty {
             nearby = startingNearby
             nearbyError = nil
+            loadedKey = key
             return
         }
-        guard let center else {
+        guard let center = searchCenter else {
             nearby = startingNearby.filter {
                 CuisineFilter.matches(wanted.cuisines, name: $0.name, category: $0.category)
                     && $0.distanceMeters <= wanted.radiusMiles * Place.metersPerMile
@@ -281,7 +380,7 @@ struct GroupPlacePicker: View {
                                                 diet: wanted.diet)
             guard !Task.isCancelled else { return }
             nearby = found
-            loadedFilters = wanted
+            loadedKey = key
         } catch is CancellationError {
         } catch {
             guard !Task.isCancelled else { return }
@@ -291,7 +390,7 @@ struct GroupPlacePicker: View {
 
     private func runTextSearch() async {
         let text = trimmedQuery
-        guard text.count >= 2, let center else {
+        guard text.count >= 2, let center = searchCenter else {
             results = []
             searchedQuery = nil
             return

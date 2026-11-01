@@ -25,6 +25,8 @@ struct GroupLobbyView: View {
     /// Bumped when a vote's timer runs out, so the screen switches to "closed".
     @State private var timeUpTick = 0
     @State private var reveal: GroupOption?
+    /// The plan's status as of the last change seen (nil until it loads).
+    @State private var lastStatus: GroupStatus?
     @State private var confirmLockIn = false
     @State private var showNamePrompt = false
     @State private var pendingVote: GroupOption?
@@ -43,11 +45,24 @@ struct GroupLobbyView: View {
         withEffects(withDialogs(withChrome(content)))
     }
 
+    /// The plan as this screen shows it. While a Group Spin's reveal plays (and
+    /// in the moment before it starts), it still looks open, so the winner card
+    /// behind the wheel doesn't give the answer away.
+    private var shownSession: GroupSession? {
+        guard var session = live.session else { return nil }
+        let justDecided = lastStatus == .open || reveal != nil
+        if session.mode == .spin && session.status == .decided && justDecided {
+            session.status = .open
+            session.winnerID = nil
+        }
+        return session
+    }
+
     // Split up so the compiler can type-check it in reasonable time.
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                if let session = live.session {
+                if let session = shownSession {
                     header(session)
                     if session.status == .decided, let winner = session.winner {
                         decided(session, winner: winner)
@@ -77,7 +92,7 @@ struct GroupLobbyView: View {
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let session = live.session {
+            if let session = shownSession {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         if live.isOwner {
@@ -189,6 +204,7 @@ struct GroupLobbyView: View {
                let winner = session.winner {
                 reveal = winner
             }
+            lastStatus = new
         }
         .overlay {
             if let reveal, let session = live.session {
@@ -526,7 +542,7 @@ struct GroupLobbyView: View {
 
     @ViewBuilder
     private var bottomBar: some View {
-        if let session = live.session {
+        if let session = shownSession {
             Group {
                 if session.status == .decided, let winner = session.winner {
                     HStack(spacing: 10) {
@@ -736,6 +752,7 @@ private struct AddOptionView: View {
                 GroupPlacePicker(
                     query: query,
                     center: model.center,
+                    centerName: model.locationName,
                     favorites: savedPlaces(.favorites),
                     interested: savedPlaces(.interested),
                     startingFilters: PlacePickerFilters(model.searchArea),

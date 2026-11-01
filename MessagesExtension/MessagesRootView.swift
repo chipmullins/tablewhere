@@ -237,6 +237,8 @@ struct MessageVoteView: View {
     /// Bumped after posting a bubble, so "Post the plan" hides right away.
     @State private var postedTick = 0
     @State private var reveal: GroupOption?
+    /// The plan's status as of the last change seen (nil until it loads).
+    @State private var lastStatus: GroupStatus?
     @State private var lockInTaps = 0
     @State private var removeTaps = 0
 
@@ -250,11 +252,24 @@ struct MessageVoteView: View {
         withDialogs(withEffects(content))
     }
 
+    /// The plan as this view shows it. While a Group Spin's reveal plays (and
+    /// in the moment before it starts), it still looks open, so the winner
+    /// behind the wheel doesn't give the answer away.
+    private var shownSession: GroupSession? {
+        guard var session = live.session else { return nil }
+        let justDecided = lastStatus == .open || reveal != nil
+        if session.mode == .spin && session.status == .decided && justDecided {
+            session.status = .open
+            session.winnerID = nil
+        }
+        return session
+    }
+
     // Split up so the compiler can type-check it in reasonable time.
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if let session = live.session {
+                if let session = shownSession {
                     HStack(alignment: .firstTextBaseline) {
                         Text(session.title)
                             .font(Theme.display(20))
@@ -479,6 +494,7 @@ struct MessageVoteView: View {
             if !Task.isCancelled { timeUpTick += 1 }
         }
         .onChange(of: live.session?.status) { old, new in
+            defer { lastStatus = new }
             guard new == .decided else { return }
             state.expand()
             // Everyone watching a Group Spin sees the wheel land.
@@ -751,6 +767,7 @@ struct MessagePlacePicker: View {
         GroupPlacePicker(
             query: query,
             center: area?.center,
+            centerName: "Last search area",
             favorites: favorites,
             interested: interested,
             startingFilters: area.map { PlacePickerFilters($0) } ?? PlacePickerFilters(),
