@@ -354,12 +354,10 @@ struct GroupLobbyView: View {
                 if let url = PlaceLinks.phoneURL(winner.place) { openURL(url) }
             }
             .disabled(winner.phoneNumber == nil)
-            .opacity(winner.phoneNumber == nil ? 0.4 : 1)
             ActionTile(title: "Website", systemImage: "safari", tint: Theme.accentText, background: Theme.surface) {
                 browserURL = winner.place.websiteURL
             }
             .disabled(winner.websiteURL == nil)
-            .opacity(winner.websiteURL == nil ? 0.4 : 1)
         }
 
         meetTimeSection(session)

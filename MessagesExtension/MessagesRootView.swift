@@ -274,13 +274,11 @@ struct MessageVoteView: View {
                                 if let url = phoneURL(winner) { state.open(url: url) }
                             }
                             .disabled(phoneURL(winner) == nil)
-                            .opacity(phoneURL(winner) == nil ? 0.4 : 1)
                             ActionTile(title: "Website", systemImage: "safari",
                                        tint: Theme.accentText, background: Theme.surface) {
                                 if let url = winner.place.websiteURL { state.open(url: url) }
                             }
                             .disabled(winner.place.websiteURL == nil)
-                            .opacity(winner.place.websiteURL == nil ? 0.4 : 1)
                         }
                         if live.isOwner {
                             let _ = postedTick

@@ -63,14 +63,12 @@ struct PlaceDetailView: View {
                         if let url = PlaceLinks.phoneURL(place) { openURL(url) }
                     }
                     .disabled(place.phoneNumber == nil)
-                    .opacity(place.phoneNumber == nil ? 0.4 : 1)
 
                     ActionTile(title: "Go", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
                         PlaceLinks.openDirections(place)
                         VisitFollowUp.record(place, in: context)
                     }
                     .disabled(!hasDirections)
-                    .opacity(hasDirections ? 1 : 0.4)
 
                     ActionTile(title: "Favorite",
                                systemImage: onList == .favorites ? "heart.fill" : "heart",

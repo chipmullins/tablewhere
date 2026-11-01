@@ -70,6 +70,8 @@ struct SpinReveal: View {
         AccessibilityNotification.Announcement(announcement).post()
         // Give VoiceOver time to finish the announcement before closing.
         try? await Task.sleep(for: .seconds(voiceOverOn ? 3.5 : 1.8))
+        // Tapped to skip already (the view went away): don't finish twice.
+        guard !Task.isCancelled else { return }
         onDone()
     }
 }
