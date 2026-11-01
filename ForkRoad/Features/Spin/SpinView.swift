@@ -43,7 +43,9 @@ struct SpinView: View {
                 .filtered(by: model.listCity, near: model.center, areas: areas)
                 .map { $0.asPlace(from: model.center) }
         }
-        return Randomizer.eligible(source, rules: rules)
+        // "Not tonight" places sit out for a few hours.
+        let skipped = model.skippedForNowIDs
+        return Randomizer.eligible(source, rules: rules).filter { !skipped.contains($0.id) }
     }
 
     var body: some View {
@@ -312,7 +314,9 @@ private struct SpinStage: View {
             if idle {
                 IdleBar(width: 190)
             } else {
+                // Once it lands, only the pick shows (no neighbors that read like runners-up).
                 Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+                    .opacity(landed ? 0 : 1)
             }
             HStack(spacing: 12) {
                 if idle {
@@ -350,6 +354,7 @@ private struct SpinStage: View {
                 IdleBar(width: 150)
             } else {
                 Text(next).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
+                    .opacity(landed ? 0 : 1)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 250)
@@ -422,6 +427,28 @@ private struct SpinStage: View {
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .buttonStyle(.plain)
+            // Closed, too far, not in the mood: pass for tonight (not forever) and spin again.
+            Button { skipTonight(place) } label: {
+                Label("Not tonight · spin again", systemImage: "arrow.uturn.right")
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Leaves it out of spins for a few hours, then spins again")
+    }
+
+    private func skipTonight(_ place: Place) {
+        model.skipForNow(place)
+        let appModel: AppModel = model
+        UndoCenter.shared.show("Skipping \(place.name) tonight") { appModel.unskipForNow(place) }
+        let rest = pool.filter { $0.id != place.id }
+        winner = nil
+        guard !rest.isEmpty else {
+            message = "That was the last one. Try a bigger radius or another list."
+            return
+        }
+        spin(rest)
     }
 
     // MARK: Logic

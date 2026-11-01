@@ -340,8 +340,10 @@ struct GroupLobbyView: View {
     @ViewBuilder
     private func decided(_ session: GroupSession, winner: GroupOption) -> some View {
         let count = live.tally.count(for: winner.id)
+        // The meet day leads when there is one ("Meet tomorrow at 7:00 PM").
+        let how = session.mode == .vote ? "\(count) of \(live.tally.totalVotes) votes" : "Picked by the spin"
         WinnerCard(option: winner,
-                   detail: session.mode == .vote ? "\(count) of \(live.tally.totalVotes) votes · \(winner.category)" : "Picked by the spin · \(winner.category)")
+                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0)) · \(how)" } ?? "\(how) · \(winner.category)")
 
         HStack(spacing: 8) {
             ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {

@@ -52,6 +52,10 @@ struct DiscoverView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
+        // The widget's pick.
+        .navigationDestination(item: Binding(get: { model.pendingPlace }, set: { model.pendingPlace = $0 })) {
+            PlaceDetailView(place: $0)
+        }
         .refreshable { await model.refresh() }
         .onChange(of: model.places.first?.id) { shownCount = 40 }
         .scrollDismissesKeyboard(.immediately)
@@ -163,6 +167,15 @@ struct DiscoverView: View {
                      diet: Binding(get: { model.diet }, set: { model.diet = $0 }))
     }
 
+    /// "165 places · 2 mi · Mexican · No fast food": what the spin will use.
+    private var spinBannerDetail: String {
+        var parts = ["\(visiblePlaces.count) \(visiblePlaces.count == 1 ? "place" : "places")", model.radiusLabel]
+        if !model.cuisines.isEmpty { parts.append(model.cuisineSummary) }
+        if model.diet != .none { parts.append(model.diet.label) }
+        if model.excludeFastFood { parts.append("No fast food") }
+        return parts.joined(separator: " · ")
+    }
+
     private var spinBanner: some View {
         Button {
             model.spinSource = .nearby
@@ -177,9 +190,7 @@ struct DiscoverView: View {
                     .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Spin for it").font(Theme.display(19))
-                    Text(model.cuisines.isEmpty
-                         ? "Spin from \(visiblePlaces.count) places within \(model.radiusLabel)"
-                         : "Spin from \(visiblePlaces.count) \(model.cuisineSummary) places")
+                    Text(spinBannerDetail)
                         .font(Theme.body(13, .medium))
                 }
                 Spacer()

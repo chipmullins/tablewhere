@@ -18,6 +18,9 @@ struct TripDetailView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var pick: Place?
+    /// The same full-screen reveal as Spin, then the place's details.
+    @State private var reveal: SpinRevealRequest?
+    @State private var landed: Place?
 
     private let radiusMeters = 5 * Place.metersPerMile
     private let search: PlaceSearching = MapKitPlaceSearch()
@@ -59,7 +62,12 @@ struct TripDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
                 if !saved.isEmpty {
-                    Button { pick = Randomizer.pick(from: saved, rules: rules) } label: {
+                    Button {
+                        guard let choice = Randomizer.pick(from: saved, rules: rules) else { return }
+                        pick = choice
+                        reveal = SpinRevealRequest(names: Array(saved.shuffled().prefix(16)).map(\.name),
+                                                   winner: choice.name)
+                    } label: {
                         Label("Pick one of my saved spots", systemImage: "sparkles")
                             .font(Theme.display(16))
                             .foregroundStyle(Theme.onSaffron)
@@ -95,11 +103,17 @@ struct TripDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
         .task(id: "\(cuisines.map(\.rawValue).sorted())|\(diet.rawValue)") { await load() }
-        .alert("How about…", isPresented: Binding(get: { pick != nil }, set: { if !$0 { pick = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(pick.map { "\($0.name) · \($0.category)" } ?? "")
+        .overlay {
+            if let reveal {
+                SpinReveal(names: reveal.names, winner: reveal.winner) {
+                    self.reveal = nil
+                    landed = pick  // then open it, with Directions and Call
+                }
+                .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .navigationDestination(item: $landed) { PlaceDetailView(place: $0) }
     }
 
     private func tripRow(_ place: Place, isOnTrip: Bool) -> some View {

@@ -157,7 +157,11 @@ struct SettingsView: View {
             }
             .task { await refreshNotificationStatus() }
         }
-        .onDisappear { if replayWelcome { didOnboard = false } }
+        // Swiping the sheet away keeps a name you typed (not just Done).
+        .onDisappear {
+            saveName()
+            if replayWelcome { didOnboard = false }
+        }
         .presentationBackground(Theme.night)
     }
 

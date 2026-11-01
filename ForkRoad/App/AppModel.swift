@@ -47,6 +47,14 @@ final class AppModel {
     var spinSource: SpinSource = .nearby
     /// Set by "Spin for it" / "Spin my favorites": Spin starts as soon as it opens.
     var pendingSpin = false
+    /// Places you passed on with "Not tonight" (left out of spins for a few hours,
+    /// unlike Blacklist, which is forever).
+    private(set) var skippedForNow: [String: Date] = [:]
+    var skippedForNowIDs: Set<String> {
+        Set(skippedForNow.filter { -$0.value.timeIntervalSinceNow < 6 * 3600 }.keys)
+    }
+    func skipForNow(_ place: Place) { skippedForNow[place.id] = Date() }
+    func unskipForNow(_ place: Place) { skippedForNow[place.id] = nil }
 
     /// The hand-picked wheel (Spin → Pick). Saved on this device.
     var pickedWheel: [Place] = AppModel.savedWheel {
@@ -117,6 +125,8 @@ final class AppModel {
     private(set) var hasSearched = false
     /// A group to open (from a notification or link); GroupHomeView pushes it.
     var pendingGroupSessionID: String?
+    /// A place to open on Discover (from the widget).
+    var pendingPlace: Place?
 
     /// The city you're searching in ("Lexington, KY"), looked up from `center`.
     private(set) var currentCity: String?

@@ -46,6 +46,12 @@ struct RootTabView: View {
         // Keep the widget's, Siri's, and the iMessage app's copies of your lists current.
         .onChange(of: cacheKey, initial: true) { refreshSharedCaches() }
         .onOpenURL { url in
+            // forkroad://place?d=<base64url JSON>: the widget's pick, opened on Discover.
+            if url.host == "place", let place = Self.place(from: url) {
+                model.selectedTab = .discover
+                model.pendingPlace = place
+                return
+            }
             // forkroad://spin, forkroad://discover, forkroad://lists, forkroad://group/<id>
             let parts = [url.host ?? ""] + url.pathComponents.filter { $0 != "/" }
             handle(parts.first == "group" && parts.count > 1 ? "group:\(parts[1])" : (parts.first ?? ""))
@@ -71,6 +77,15 @@ struct RootTabView: View {
     }
 
     // MARK: Deep links
+
+    private static func place(from url: URL) -> Place? {
+        guard var text = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "d" })?.value else { return nil }
+        text = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while text.count % 4 != 0 { text += "=" }
+        guard let data = Data(base64Encoded: text) else { return nil }
+        return try? JSONDecoder().decode(Place.self, from: data)
+    }
 
     private func handle(_ link: String) {
         switch link {

@@ -320,6 +320,13 @@ struct MessageVoteView: View {
                                     do {
                                         try await GroupService.shared.reopen(session: session)
                                         LeaveBy.cancel(sessionID: session.id)
+                                        // Replace the "We're going to X" bubble, so the chat
+                                        // doesn't keep showing a plan that's open again.
+                                        var reopened = session
+                                        reopened.status = .open
+                                        reopened.winnerID = nil
+                                        reopened.closesAt = nil
+                                        state.sendUpdate(reopened, tally: live.tally, memberCount: live.members.count)
                                     }
                                     catch { errorMessage = GroupService.message(for: error) }
                                 }

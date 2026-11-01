@@ -53,11 +53,22 @@ struct TonightsPickWidget: Widget {
         StaticConfiguration(kind: kind, provider: TonightsPickProvider()) { entry in
             TonightsPickView(entry: entry)
                 .containerBackground(for: .widget) { Theme.night }
-                .widgetURL(URL(string: "forkroad://spin"))
+                .widgetURL(Self.url(for: entry))
         }
         .configurationDisplayName("Your Pick")
         .description("A random place from your Favorites, Want to try, or nearby list.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+    }
+
+    /// Tapping opens that place in ForkRoad (forkroad://place?d=…), or Spin if there's no pick.
+    static func url(for entry: PickEntry) -> URL? {
+        guard let place = entry.pick?.place,
+              let data = try? JSONEncoder().encode(place) else { return URL(string: "forkroad://spin") }
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return URL(string: "forkroad://place?d=\(encoded)") ?? URL(string: "forkroad://spin")
     }
 }
 
