@@ -29,6 +29,10 @@ struct GroupLobbyView: View {
     @State private var showNamePrompt = false
     @State private var pendingVote: GroupOption?
     @FocusState private var noteFocused: Bool
+    /// Bumped by taps that play a haptic but change nothing observable here.
+    @State private var commitTaps = 0
+    @State private var removeTaps = 0
+    @State private var timeTaps = 0
 
     init(sessionID: String) {
         self.sessionID = sessionID
@@ -55,7 +59,7 @@ struct GroupLobbyView: View {
                     StateCard(icon: "wifi.slash", title: "Can’t reach this group", message: message)
                         .padding(.top, 40)
                 } else {
-                    ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 80)
+                    GroupPlanSkeleton()
                 }
             }
             .padding(.horizontal, 16)
@@ -138,7 +142,10 @@ struct GroupLobbyView: View {
             if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
         }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
-        .sensoryFeedback(.success, trigger: live.session?.winnerID)
+        .sensoryFeedback(Haptic.decided, trigger: live.session?.winnerID)
+        .sensoryFeedback(Haptic.commit, trigger: commitTaps)
+        .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
+        .sensoryFeedback(Haptic.tick, trigger: timeTaps)
         // Everyone watching a Group Spin sees the wheel land.
         .onChange(of: live.session?.status) { old, new in
             if old == .open, new == .decided, let session = live.session, session.mode == .spin,
@@ -492,12 +499,25 @@ struct GroupLobbyView: View {
         if let session = live.session {
             Group {
                 if session.status == .decided, let winner = session.winner {
-                    ShareLink(item: Self.planText(session, winner: winner, note: live.isOwner ? noteDraft : nil)) {
-                        Label("Send everyone the plan", systemImage: "paperplane.fill")
-                            .font(Theme.display(17))
-                            .foregroundStyle(Theme.onSaffron)
-                            .frame(maxWidth: .infinity, minHeight: 56)
-                            .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    HStack(spacing: 10) {
+                        ShareLink(item: Self.planText(session, winner: winner, note: live.isOwner ? noteDraft : nil)) {
+                            Label("Send everyone the plan", systemImage: "paperplane.fill")
+                                .font(Theme.display(17))
+                                .foregroundStyle(Theme.onSaffron)
+                                .frame(maxWidth: .infinity, minHeight: 56)
+                                .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                        .simultaneousGesture(TapGesture().onEnded { commitTaps += 1 })
+                        // The same news as a picture, for group chats and stories.
+                        SharePickButton(place: winner.place,
+                                        context: .group(meetTime: session.meetTime)) {
+                            Image(systemName: "photo")
+                                .font(Theme.body(19, .semibold))
+                                .foregroundStyle(Theme.text)
+                                .frame(width: 56, height: 56)
+                                .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                        .accessibilityLabel("Share as image")
                     }
                 } else if live.isOwner {
                     Button {
@@ -584,6 +604,7 @@ struct GroupLobbyView: View {
     }
 
     private func lockIn(_ session: GroupSession) {
+        commitTaps += 1
         isWorking = true
         Task {
             defer { isWorking = false }
@@ -593,6 +614,7 @@ struct GroupLobbyView: View {
     }
 
     private func setMeetTime(_ date: Date) {
+        timeTaps += 1
         Task {
             do { try await GroupService.shared.setMeetTime(sessionID: sessionID, date: date) }
             catch { errorMessage = GroupService.message(for: error) }
@@ -602,6 +624,7 @@ struct GroupLobbyView: View {
     private func removePlace() {
         guard let option = removing, let session = live.session else { return }
         removing = nil
+        removeTaps += 1
         Task {
             do { try await GroupService.shared.removeOption(option.id, from: session) }
             catch { errorMessage = GroupService.message(for: error) }

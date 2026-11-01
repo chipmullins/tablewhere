@@ -37,6 +37,8 @@ struct RestaurantSearchField: View {
 /// Search results that replace the rest of Discover while you're searching.
 struct RestaurantSearchResults: View {
     let query: String
+    /// Discover's namespace, so a result zooms into its details (iOS 18+).
+    var zoom: Namespace.ID? = nil
 
     @Environment(AppModel.self) private var model
     @Query private var blockedPlaces: [BlockedPlace]
@@ -81,6 +83,7 @@ struct RestaurantSearchResults: View {
                                         .padding(10)
                                 }
                             }
+                            .zoomSource(id: place.id, ns: zoom)
                     }
                     .buttonStyle(.plain)
                 }

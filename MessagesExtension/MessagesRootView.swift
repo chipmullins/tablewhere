@@ -64,6 +64,7 @@ struct NewVoteView: View {
     @State private var mode: GroupMode = .vote
     @State private var title = ""
     @State private var closesIn: Int? = nil
+    @State private var sendTaps = 0
 
     /// A vote starts with 2–8 of your places; a spin starts with your one pick.
     private var maxOptions: Int { mode == .spin ? 1 : GroupMode.maxStartingVoteOptions }
@@ -100,6 +101,7 @@ struct NewVoteView: View {
                             Text("Spin").tag(GroupMode.spin)
                         }
                         .pickerStyle(.segmented)
+                        .sensoryFeedback(Haptic.tick, trigger: mode)
                         .onChange(of: mode) {
                             if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
                         }
@@ -168,6 +170,7 @@ struct NewVoteView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
+                .sensoryFeedback(Haptic.commit, trigger: sendTaps)
                 .padding(16)
             }
         }
@@ -195,6 +198,7 @@ struct NewVoteView: View {
 
     private func send() {
         guard let name = Identity.displayName else { return }
+        sendTaps += 1
         isSending = true
         errorMessage = nil
         Task {
@@ -233,6 +237,8 @@ struct MessageVoteView: View {
     /// Bumped after posting a bubble, so "Post the plan" hides right away.
     @State private var postedTick = 0
     @State private var reveal: GroupOption?
+    @State private var lockInTaps = 0
+    @State private var removeTaps = 0
 
     init(sessionID: String, state: MessagesState) {
         self.sessionID = sessionID
@@ -431,11 +437,15 @@ struct MessageVoteView: View {
                         .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.muted)
                 } else {
-                    ProgressView().tint(Theme.muted).frame(maxWidth: .infinity).padding(.top, 30)
+                    GroupPlanSkeleton(compact: true)
                 }
             }
             .padding(16)
         }
+        .sensoryFeedback(Haptic.decided, trigger: live.session?.winnerID)
+        .sensoryFeedback(Haptic.commit, trigger: lockInTaps)
+        .sensoryFeedback(Haptic.commit, trigger: postedTick)
+        .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
         // Watch only; you join when you vote or add a place.
         .task { await live.start() }
         // A timed vote locks itself in when time's up, if the creator has it open.
@@ -586,6 +596,7 @@ struct MessageVoteView: View {
     private func removePlace() {
         guard let option = removing, let session = live.session else { return }
         removing = nil
+        removeTaps += 1
         Task {
             do { try await GroupService.shared.removeOption(option.id, from: session) }
             catch { errorMessage = GroupService.message(for: error) }
@@ -593,6 +604,7 @@ struct MessageVoteView: View {
     }
 
     private func lockIn(_ session: GroupSession) {
+        lockInTaps += 1
         isWorking = true
         Task {
             defer { isWorking = false }
@@ -768,6 +780,7 @@ struct MessagePlanControls: View {
     @State private var savingNote = false
     @State private var errorMessage: String?
     @FocusState private var noteFocused: Bool
+    @State private var timeTaps = 0
 
     var body: some View {
         let slots = MeetTimes.slots(count: 6)
@@ -820,6 +833,7 @@ struct MessagePlanControls: View {
         .sheet(isPresented: $showPicker) {
             MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
         }
+        .sensoryFeedback(Haptic.tick, trigger: timeTaps)
     }
 
     private var noteChanged: Bool {
@@ -841,6 +855,7 @@ struct MessagePlanControls: View {
     }
 
     private func setTime(_ date: Date) {
+        timeTaps += 1
         errorMessage = nil
         Task {
             do { try await GroupService.shared.setMeetTime(sessionID: session.id, date: date) }

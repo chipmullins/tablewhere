@@ -19,6 +19,7 @@ struct CreateGroupView: View {
     @State private var isCreating = false
     @State private var errorMessage: String?
     @State private var query = ""
+    @State private var startTaps = 0
 
     static let maxVoteOptions = GroupMode.maxStartingVoteOptions
     /// In a spin everyone adds one place, starting with you.
@@ -41,6 +42,7 @@ struct CreateGroupView: View {
                         Text("Spin").tag(GroupMode.spin)
                     }
                     .pickerStyle(.segmented)
+                    .sensoryFeedback(Haptic.tick, trigger: mode)
                     .onChange(of: mode) {
                         if mode == .spin && selected.count > 1 { selected = Array(selected.prefix(1)) }
                     }
@@ -100,6 +102,7 @@ struct CreateGroupView: View {
             .background(Theme.night)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search restaurants or cravings")
+            .sensoryFeedback(Haptic.commit, trigger: startTaps)
             .navigationTitle("New group plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -150,6 +153,7 @@ struct CreateGroupView: View {
 
     private func create() {
         guard let name = Identity.displayName else { return }
+        startTaps += 1
         isCreating = true
         errorMessage = nil
         Task {

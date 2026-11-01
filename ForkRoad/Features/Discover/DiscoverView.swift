@@ -15,6 +15,7 @@ struct DiscoverView: View {
     /// How many of the nearby places the list shows (Show more adds 40).
     @State private var shownCount = 40
     @FocusState private var searchFocused: Bool
+    @Namespace private var zoom
 
     private var isSearching: Bool { searchText.trimmingCharacters(in: .whitespaces).count >= 2 }
 
@@ -34,7 +35,7 @@ struct DiscoverView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 RestaurantSearchField(text: $searchText, isFocused: $searchFocused)
                 if isSearching {
-                    RestaurantSearchResults(query: searchText)
+                    RestaurantSearchResults(query: searchText, zoom: zoom)
                 } else if !model.hasLocation {
                     whereToLook
                 } else {
@@ -51,7 +52,9 @@ struct DiscoverView: View {
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
+        .navigationDestination(for: Place.self) { place in
+            PlaceDetailView(place: place).zoomDestination(id: place.id, ns: zoom)
+        }
         // The widget's pick.
         .navigationDestination(item: Binding(get: { model.pendingPlace }, set: { model.pendingPlace = $0 })) {
             PlaceDetailView(place: $0)
@@ -223,7 +226,10 @@ struct DiscoverView: View {
                       message: "Check your connection and try again.",
                       action: ("Try again", { Task { await model.refresh() } }))
         } else if !model.hasSearched || (model.isLoading && visiblePlaces.isEmpty) {
-            ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
+            VStack(spacing: 10) {
+                ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
+            }
+            .loadingSkeleton()
         } else if visiblePlaces.isEmpty {
             emptyResults
         }
@@ -232,8 +238,10 @@ struct DiscoverView: View {
         let shown = visiblePlaces.prefix(shownCount)
         LazyVStack(spacing: 10) {
             ForEach(shown) { place in
-                NavigationLink(value: place) { PlaceRow(place: place) }
-                    .buttonStyle(.plain)
+                NavigationLink(value: place) {
+                    PlaceRow(place: place).zoomSource(id: place.id, ns: zoom)
+                }
+                .buttonStyle(.plain)
             }
         }
         if visiblePlaces.count > shown.count {

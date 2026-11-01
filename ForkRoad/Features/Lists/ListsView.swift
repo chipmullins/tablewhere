@@ -29,6 +29,10 @@ struct ListsView: View {
 
     @State private var tab: Tab = .favorites
     @State private var showAddPlace = false
+    /// Bumped by swipe actions, for their haptics.
+    @State private var tickTaps = 0
+    @State private var removeTaps = 0
+    @Namespace private var zoom
 
     private var actions: ListActions { ListActions(context: context) }
 
@@ -43,6 +47,7 @@ struct ListsView: View {
                     ForEach(Tab.allCases) { Text(label(for: $0)).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .sensoryFeedback(Haptic.tick, trigger: tab)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
@@ -78,7 +83,11 @@ struct ListsView: View {
         .sheet(isPresented: $showAddPlace) {
             AddToListSheet(startingList: tab == .favorites ? .favorites : .interested)
         }
-        .navigationDestination(for: Place.self) { PlaceDetailView(place: $0) }
+        .navigationDestination(for: Place.self) { place in
+            PlaceDetailView(place: place).zoomDestination(id: place.id, ns: zoom)
+        }
+        .sensoryFeedback(Haptic.tick, trigger: tickTaps)
+        .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
         .animation(.snappy, value: saved.map(\.listRaw))
         // Fill in cities for places saved before cities existed (one at a time).
         .task {
@@ -206,7 +215,8 @@ struct ListsView: View {
     @ViewBuilder
     private func savedRows(_ rows: [SavedPlace], list: SavedList) -> some View {
         ForEach(rows) { item in
-            NavigationLink(value: item.asPlace(from: model.center)) {
+            let place = item.asPlace(from: model.center)
+            NavigationLink(value: place) {
                 HStack(spacing: 12) {
                     MonogramTile(name: item.name, category: item.category, size: 44)
                         .opacity(item.skipInSpins ? 0.45 : 1)
@@ -229,11 +239,16 @@ struct ListsView: View {
                             .accessibilityLabel("Left out of spins")
                     }
                 }
+                .zoomSource(id: place.id, ns: zoom)
             }
             .swipeActions(edge: .trailing) {
-                Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) { actions.remove(item) }
+                Button(item.isCustom ? "Delete" : "Remove", systemImage: "trash", role: .destructive) {
+                    removeTaps += 1
+                    actions.remove(item)
+                }
                 Button(item.skipInSpins ? "Spin it" : "Skip",
                        systemImage: item.skipInSpins ? "sparkles" : "pause.circle") {
+                    tickTaps += 1
                     item.skipInSpins.toggle()
                 }
                 .tint(Theme.trackFill)
@@ -241,16 +256,23 @@ struct ListsView: View {
             .contextMenu {
                 Button(item.skipInSpins ? "Include in spins" : "Leave out of spins",
                        systemImage: item.skipInSpins ? "sparkles" : "pause.circle") {
+                    tickTaps += 1
                     item.skipInSpins.toggle()
                 }
             }
             .swipeActions(edge: .leading) {
                 if list == .interested {
-                    Button("Loved it", systemImage: "heart.fill") { actions.move(item, to: .favorites) }
-                        .tint(Theme.saffron)
+                    Button("Loved it", systemImage: "heart.fill") {
+                        tickTaps += 1
+                        actions.move(item, to: .favorites)
+                    }
+                    .tint(Theme.saffron)
                 } else {
-                    Button("Try later", systemImage: "bookmark.fill") { actions.move(item, to: .interested) }
-                        .tint(Theme.trackFill)
+                    Button("Try later", systemImage: "bookmark.fill") {
+                        tickTaps += 1
+                        actions.move(item, to: .interested)
+                    }
+                    .tint(Theme.trackFill)
                 }
             }
         }
@@ -277,14 +299,20 @@ struct ListsView: View {
         if !blockedCategories.isEmpty {
             Section("Categories") {
                 ForEach(blockedCategories) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedCategories[$0] }.forEach { actions.unblock($0) } }
+                    .onDelete { offsets in
+                        removeTaps += 1
+                        offsets.map { blockedCategories[$0] }.forEach { actions.unblock($0) }
+                    }
                     .listRowBackground(Theme.surface)
             }
         }
         if !blockedPlaces.isEmpty {
             Section("Places") {
                 ForEach(blockedPlaces) { Text($0.name) }
-                    .onDelete { offsets in offsets.map { blockedPlaces[$0] }.forEach { actions.unblock($0) } }
+                    .onDelete { offsets in
+                        removeTaps += 1
+                        offsets.map { blockedPlaces[$0] }.forEach { actions.unblock($0) }
+                    }
                     .listRowBackground(Theme.surface)
             }
         }

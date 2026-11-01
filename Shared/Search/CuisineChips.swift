@@ -18,9 +18,11 @@ struct CuisineChips: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if showsFastFoodToggle { NoFastFoodChip() }
-                    Chip(label: "All", isSelected: selection.isEmpty) { selection = [] }
+                    // Cuisine chips tick when the selection changes (below), not per tap,
+                    // so a tap past the limit plays only the warning.
+                    Chip(label: "All", isSelected: selection.isEmpty, haptic: nil) { selection = [] }
                     ForEach(CuisineFilter.specific) { cuisine in
-                        Chip(label: cuisine.label, isSelected: selection.contains(cuisine)) {
+                        Chip(label: cuisine.label, isSelected: selection.contains(cuisine), haptic: nil) {
                             toggle(cuisine)
                         }
                     }
@@ -50,7 +52,7 @@ struct CuisineChips: View {
                     .foregroundStyle(Theme.muted)
             }
         }
-        .sensoryFeedback(.selection, trigger: selection)
+        .sensoryFeedback(Haptic.tick, trigger: selection)
         .sensoryFeedback(.warning, trigger: bumpedLimit)
     }
 

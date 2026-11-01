@@ -32,6 +32,7 @@ struct TripDetailView: View {
     private var visibleResults: [Place] { Randomizer.eligible(results, rules: rules) }
 
     var body: some View {
+        let browse = visibleResults.filter { !trip.contains($0) }
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -87,12 +88,20 @@ struct TripDetailView: View {
                 HStack {
                     Text("Worth the trip").font(Theme.display(22)).foregroundStyle(Theme.text)
                     Spacer()
-                    if isLoading { ProgressView().tint(Theme.muted) }
+                    // Refreshing results already on screen: a small spinner.
+                    if isLoading && !browse.isEmpty { ProgressView().tint(Theme.muted) }
                 }
                 if let errorMessage {
                     Text(errorMessage).font(Theme.body(14)).foregroundStyle(Theme.danger)
                 }
-                ForEach(visibleResults.filter { !trip.contains($0) }) { place in
+                if isLoading && browse.isEmpty {
+                    // Same spacing as the result rows below.
+                    VStack(spacing: 18) {
+                        ForEach(0..<3, id: \.self) { _ in PlaceRowPlaceholder(tileSize: 50) }
+                    }
+                    .loadingSkeleton()
+                }
+                ForEach(browse) { place in
                     tripRow(place, isOnTrip: false)
                 }
             }

@@ -52,14 +52,21 @@ struct PlaceRow: View {
     }
 }
 
-/// A pill-shaped selectable chip.
+/// A pill-shaped selectable chip. Ticks on tap; pass `haptic: nil` when the
+/// owner plays its own feedback (CuisineChips does, so it can warn at the limit).
 struct Chip: View {
     let label: String
     let isSelected: Bool
+    var haptic: SensoryFeedback? = Haptic.tick
     let action: () -> Void
 
+    @State private var taps = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            taps += 1
+            action()
+        } label: {
             Text(label)
                 .font(Theme.body(14, .semibold))
                 .padding(.horizontal, 16)
@@ -71,24 +78,31 @@ struct Chip: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .sensoryFeedback(trigger: taps) { _, _ in haptic }
     }
 }
 
 /// Square icon + label button used for Call / Go / Save / Block.
 /// Pass `isOn` when the tile is a toggle (Favorite, Try) so VoiceOver reads
-/// its state; leave it nil for plain actions.
+/// its state; leave it nil for plain actions. Pass a `haptic` from `Haptic`
+/// (`.tick` for toggles, `.destructive` for Blacklist) to play it on tap.
 struct ActionTile: View {
     let title: String
     let systemImage: String
     var tint: Color = Theme.text
     var background: Color = Theme.surfaceHigh
     var isOn: Bool? = nil
+    var haptic: SensoryFeedback? = nil
     let action: () -> Void
 
     @Environment(\.isEnabled) private var isEnabled
+    @State private var taps = 0
 
     var body: some View {
-        let button = Button(action: action) {
+        let button = Button {
+            taps += 1
+            action()
+        } label: {
             VStack(spacing: 6) {
                 Image(systemName: systemImage)
                     .font(Theme.body(19, .semibold))
@@ -105,6 +119,7 @@ struct ActionTile: View {
             .opacity(isEnabled ? 1 : 0.4)
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(trigger: taps) { _, _ in haptic }
 
         if let isOn {
             button
@@ -131,23 +146,56 @@ struct SectionLabel: View {
     }
 }
 
-/// A shimmering stand-in for a restaurant row while results load.
+/// A shimmering stand-in for a restaurant row (a `PlaceRow` card) while results load.
+/// Wrap a group of them in `.loadingSkeleton()` so VoiceOver hears one "Loading".
 struct PlaceRowPlaceholder: View {
+    var tileSize: CGFloat = 60
+
     var body: some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: tileSize * 0.27, style: .continuous)
                 .fill(Theme.surfaceHigh)
-                .frame(width: 60, height: 60)
+                .frame(width: tileSize, height: tileSize)
             VStack(alignment: .leading, spacing: 8) {
-                Capsule().fill(Theme.surfaceHigh).frame(width: 160, height: 12)
-                Capsule().fill(Theme.surfaceHigh).frame(width: 100, height: 10)
+                SkeletonBar(width: 160, height: 12)
+                SkeletonBar(width: 100, height: 10)
             }
             Spacer(minLength: 0)
         }
         .padding(12)
         .card()
         .shimmering()
-        .accessibilityHidden(true)
+    }
+}
+
+/// A stand-in for a plain list row (small tile, name, detail), for pickers in a `List`.
+struct ListRowPlaceholder: View {
+    var tileSize: CGFloat = 36
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: tileSize * 0.27, style: .continuous)
+                .fill(Theme.surfaceHigh)
+                .frame(width: tileSize, height: tileSize)
+            VStack(alignment: .leading, spacing: 7) {
+                SkeletonBar(width: 150, height: 11)
+                SkeletonBar(width: 90, height: 9)
+            }
+            Spacer(minLength: 0)
+        }
+        .shimmering()
+    }
+}
+
+/// One gray line of a skeleton.
+struct SkeletonBar: View {
+    let width: CGFloat
+    var height: CGFloat = 12
+
+    var body: some View {
+        Capsule()
+            .fill(Theme.surfaceHigh)
+            .frame(width: width, height: height)
     }
 }
 
@@ -195,9 +243,11 @@ struct StateCard: View {
     }
 }
 
-/// A soft light sweep across a placeholder. Still when Reduce Motion is on.
+/// A soft light sweep across a placeholder, clipped to its shapes. Still when
+/// Reduce Motion is on.
 struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var phase: CGFloat = -1
 
     func body(content: Content) -> some View {
@@ -205,13 +255,14 @@ struct Shimmer: ViewModifier {
             .overlay {
                 if !reduceMotion {
                     GeometryReader { geo in
-                        LinearGradient(colors: [.clear, Color.white.opacity(0.10), .clear],
+                        LinearGradient(colors: [.clear, highlight, .clear],
                                        startPoint: .leading, endPoint: .trailing)
                             .frame(width: geo.size.width * 0.6)
                             .offset(x: phase * geo.size.width * 1.4)
                     }
                     .allowsHitTesting(false)
-                    .clipped()
+                    // Only over the placeholder's own shapes (rounded corners included).
+                    .mask { content }
                 }
             }
             .onAppear {
@@ -219,8 +270,25 @@ struct Shimmer: ViewModifier {
                 withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) { phase = 1 }
             }
     }
+
+    private var highlight: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.55)
+    }
 }
 
 extension View {
     func shimmering() -> some View { modifier(Shimmer()) }
+
+    /// A loading skeleton, read by VoiceOver as one "Loading" element. Pass
+    /// `announces: false` for the rest of a skeleton split across list rows,
+    /// so only the first row speaks.
+    @ViewBuilder
+    func loadingSkeleton(announces: Bool = true) -> some View {
+        if announces {
+            accessibilityElement(children: .ignore)
+                .accessibilityLabel("Loading")
+        } else {
+            accessibilityHidden(true)
+        }
+    }
 }

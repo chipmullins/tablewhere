@@ -104,7 +104,7 @@ struct GroupPlacePicker: View {
             // search, so they step aside until the search is cleared).
             Section {
                 if isSearching && results.isEmpty {
-                    statusRow("Searching…", showsSpinner: true)
+                    skeletonRows
                 } else if !isSearching && searchedQuery == trimmedQuery && available(results).isEmpty {
                     statusRow("No restaurants found for “\(trimmedQuery)”. Try a broader word like “pizza.”")
                 }
@@ -124,6 +124,7 @@ struct GroupPlacePicker: View {
                     ForEach(PickerSource.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .sensoryFeedback(Haptic.tick, trigger: source)
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -149,7 +150,8 @@ struct GroupPlacePicker: View {
                 let near = available(nearby)
                 section(nearbyTitle, near)
                 if isLoadingNearby && near.isEmpty {
-                    statusRow("Looking nearby…", showsSpinner: true)
+                    Section(nearbyTitle) { skeletonRows }
+                        .listRowBackground(Theme.surface)
                 } else if let nearbyError {
                     statusRow(nearbyError)
                 } else if near.isEmpty {
@@ -196,7 +198,8 @@ struct GroupPlacePicker: View {
     }
 
     private func row(_ place: Place) -> some View {
-        HStack(spacing: 12) {
+        let kind = accessory(place)
+        return HStack(spacing: 12) {
             MonogramTile(name: place.name, category: place.category, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.name).foregroundStyle(Theme.text)
@@ -205,7 +208,7 @@ struct GroupPlacePicker: View {
                     .foregroundStyle(Theme.muted)
             }
             Spacer()
-            switch accessory(place) {
+            switch kind {
             case .check(let isOn):
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                     .font(Theme.body(22))
@@ -218,6 +221,15 @@ struct GroupPlacePicker: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected(place) ? .isSelected : [])
+        // Per row, from its own state, so only the tapped row plays: a tick
+        // when it's checked or unchecked, a commit when it starts being added.
+        .sensoryFeedback(Haptic.tick, trigger: isSelected(place))
+        .sensoryFeedback(trigger: isAdding(kind)) { old, new in !old && new ? Haptic.commit : nil }
+    }
+
+    private func isAdding(_ accessory: PlacePickerAccessory) -> Bool {
+        if case .add(isBusy: true) = accessory { return true }
+        return false
     }
 
     private func isSelected(_ place: Place) -> Bool {
@@ -225,12 +237,17 @@ struct GroupPlacePicker: View {
         return false
     }
 
-    private func statusRow(_ text: String, showsSpinner: Bool = false) -> some View {
-        HStack(spacing: 10) {
-            if showsSpinner { ProgressView().tint(Theme.muted) }
-            Text(text).font(Theme.body(14)).foregroundStyle(Theme.muted)
+    private func statusRow(_ text: String) -> some View {
+        Text(text).font(Theme.body(14)).foregroundStyle(Theme.muted)
+            .listRowBackground(Color.clear)
+    }
+
+    /// Three placeholder rows while results load (VoiceOver hears one "Loading").
+    private var skeletonRows: some View {
+        ForEach(0..<3, id: \.self) { index in
+            ListRowPlaceholder()
+                .loadingSkeleton(announces: index == 0)
         }
-        .listRowBackground(Color.clear)
     }
 
     // MARK: Searching

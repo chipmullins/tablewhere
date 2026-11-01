@@ -63,8 +63,13 @@ struct VoteOptionRow: View {
     var isRuledOut: Bool = false
     let action: () -> Void
 
+    @State private var taps = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            taps += 1
+            action()
+        } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     MonogramTile(name: option.name, category: option.category, size: 44)
@@ -137,6 +142,7 @@ struct VoteOptionRow: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityText)
+        .sensoryFeedback(Haptic.tick, trigger: taps)
     }
 
     /// Vote: "Tacos, 2 votes, leading, your vote, voted by Amy, Ben".
@@ -161,6 +167,70 @@ struct VoteOptionRow: View {
     private var fraction: CGFloat {
         guard totalSlots > 0 else { return 0 }
         return min(1, CGFloat(votes) / CGFloat(totalSlots))
+    }
+}
+
+/// Stand-in for a group plan while it first loads: the header (or, `compact`
+/// for iMessage, a title line), then three option rows. One "Loading" for VoiceOver.
+struct GroupPlanSkeleton: View {
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 12 : 18) {
+            if compact {
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonBar(width: 170, height: 18)
+                    SkeletonBar(width: 230, height: 10)
+                }
+                .shimmering()
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SkeletonBar(width: 70, height: 10)
+                        SkeletonBar(width: 210, height: 28)
+                    }
+                    .shimmering()
+                    HStack(spacing: 12) {
+                        Circle().fill(Theme.surfaceHigh).frame(width: 38, height: 38)
+                        VStack(alignment: .leading, spacing: 7) {
+                            SkeletonBar(width: 110, height: 12)
+                            SkeletonBar(width: 170, height: 10)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                    .card()
+                    .shimmering()
+                }
+                .padding(.top, 8)
+            }
+            VStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in optionRow }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .loadingSkeleton()
+    }
+
+    /// Shaped like `VoteOptionRow`: tile, name and detail, and the vote bar.
+    private var optionRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.surfaceHigh)
+                    .frame(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 7) {
+                    SkeletonBar(width: 150, height: 12)
+                    SkeletonBar(width: 100, height: 9)
+                }
+                Spacer(minLength: 0)
+            }
+            Capsule().fill(Theme.track).frame(height: 8)
+        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline))
+        .shimmering()
     }
 }
 
