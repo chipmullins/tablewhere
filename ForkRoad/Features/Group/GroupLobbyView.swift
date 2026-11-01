@@ -712,8 +712,14 @@ struct GroupLobbyView: View {
         if let note = (note ?? session.note)?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             text += ".\nNote: \(note)"
         }
-        let name = winner.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        text += ".\nDirections: https://maps.apple.com/?daddr=\(winner.latitude),\(winner.longitude)&q=\(name)"
+        // One link to the plan page: Apple and Google Maps, the website, and
+        // it stays current if the time changes. Apple Maps if there's no page.
+        if let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
+            text += ".\nDetails & directions: \(url.absoluteString)"
+        } else {
+            let name = winner.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            text += ".\nDirections: https://maps.apple.com/?daddr=\(winner.latitude),\(winner.longitude)&q=\(name)"
+        }
         return text
     }
 }
