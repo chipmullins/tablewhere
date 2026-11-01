@@ -247,6 +247,11 @@ struct MessageVoteView: View {
     }
 
     var body: some View {
+        withDialogs(withEffects(content))
+    }
+
+    // Split up so the compiler can type-check it in reasonable time.
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if let session = live.session {
@@ -268,151 +273,9 @@ struct MessageVoteView: View {
                         .foregroundStyle(Theme.muted)
 
                     if let winner = session.winner {
-                        WinnerCard(option: winner,
-                                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category)
-                        HStack(spacing: 8) {
-                            ActionTile(title: "Directions", systemImage: "location.north.line",
-                                       tint: Theme.accentText, background: Theme.surface) {
-                                if let url = directionsURL(winner) { state.open(url: url) }
-                            }
-                            ActionTile(title: "Call", systemImage: "phone",
-                                       tint: Theme.accentText, background: Theme.surface) {
-                                if let url = phoneURL(winner) { state.open(url: url) }
-                            }
-                            .disabled(phoneURL(winner) == nil)
-                            ActionTile(title: "Website", systemImage: "safari",
-                                       tint: Theme.accentText, background: Theme.surface) {
-                                if let url = winner.place.websiteURL { state.open(url: url) }
-                            }
-                            .disabled(winner.place.websiteURL == nil)
-                        }
-                        if live.isOwner {
-                            let _ = postedTick
-                            if MessagesState.bubbleIsOutdated(session) {
-                                // One bubble when you're ready, not one per tap.
-                                Button {
-                                    state.sendUpdate(session, tally: live.tally, memberCount: live.members.count)
-                                    postedTick += 1
-                                } label: {
-                                    Label("Post the plan to the chat", systemImage: "paperplane.fill")
-                                        .font(Theme.display(16))
-                                        .foregroundStyle(Theme.onSaffron)
-                                        .frame(maxWidth: .infinity, minHeight: 50)
-                                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            MessagePlanControls(session: session)
-                        } else if let note = session.trimmedNote {
-                            PlanNoteCard(note: note, author: session.createdByName)
-                        }
-                        if let meet = session.meetTime, meet.timeIntervalSinceNow > -15 * 60 {
-                            AddToCalendarButton(session: session, winner: winner, meetTime: meet)
-                            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet,
-                                        origin: { await MessageLeaveOrigin.current() },
-                                        askForLocation: { await OneShotLocation.shared.requestPermission() })
-                        }
-                        if session.mode == .vote {
-                            VoteBreakdown(options: session.options,
-                                          tally: live.tally,
-                                          winnerID: session.winnerID,
-                                          nonVoters: live.nonVoterNames)
-                        }
-                        if live.isOwner {
-                            Button {
-                                Task {
-                                    do {
-                                        try await GroupService.shared.reopen(session: session)
-                                        LeaveBy.cancel(sessionID: session.id)
-                                        // Replace the "We're going to X" bubble, so the chat
-                                        // doesn't keep showing a plan that's open again.
-                                        var reopened = session
-                                        reopened.status = .open
-                                        reopened.winnerID = nil
-                                        reopened.closesAt = nil
-                                        state.sendUpdate(reopened, tally: live.tally, memberCount: live.members.count)
-                                    }
-                                    catch { errorMessage = GroupService.message(for: error) }
-                                }
-                            } label: {
-                                Label(session.mode == .vote ? "Reopen voting" : "Reopen picks", systemImage: "arrow.uturn.backward")
-                                    .font(Theme.body(14, .semibold))
-                                    .foregroundStyle(Theme.accentText)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        decidedSection(session, winner: winner)
                     } else {
-                        let tally = live.tally
-                        let slots = max(live.members.count, tally.totalVotes, 1)
-                        let ruledOut = live.ruledOutIDs
-                        let _ = timeUpTick
-                        let open = session.acceptsChanges
-                        let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
-                        if let closesAt = session.closesAt, session.mode == .vote {
-                            VoteCountdown(closesAt: closesAt)
-                        }
-                        if live.isOwner && live.members.count <= 1 {
-                            inviteCard(session)
-                        }
-                        if session.mode == .spin {
-                            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
-                        }
-                        VoteNotices(session: session, isOwner: live.isOwner,
-                                    everythingRuledOut: live.everythingRuledOut,
-                                    myVoteIsRuledOut: live.myVote.map { ruledOut.contains($0) } ?? false)
-                        ForEach(session.options) { option in
-                            VoteOptionRow(option: option,
-                                          votes: tally.count(for: option.id),
-                                          totalSlots: slots,
-                                          voters: tally.votersByOption[option.id] ?? [],
-                                          isMine: live.myVote == option.id,
-                                          isLeading: leader == option.id,
-                                          isEnabled: !isWorking && session.mode == .vote && open
-                                              && (!ruledOut.contains(option.id) || live.myVote == option.id),
-                                          showsVotes: session.mode == .vote,
-                                          isRuledOut: ruledOut.contains(option.id)) {
-                                vote(option, session: session)
-                            }
-                        }
-                        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
-                            state.expand()
-                            Task {
-                                // Adding a place is taking part: join first.
-                                do { try await GroupService.shared.joinIfNeeded(sessionID: session.id) }
-                                catch { errorMessage = GroupService.message(for: error); return }
-                                showAdd = true
-                            }
-                        }
-                        if live.isOwner {
-                            OwnerGroupTools(session: session,
-                                            nudge: Nudge.text(session: session, members: live.members, votes: live.votes),
-                                            sendNudge: { state.insertText($0) },
-                                            onRemove: { removing = $0 })
-                        }
-                        if live.isOwner {
-                            Button {
-                                if GroupWording.lockInWarning(session, totalVotes: tally.totalVotes) != nil {
-                                    confirmLockIn = true
-                                } else {
-                                    lockIn(session)
-                                }
-                            } label: {
-                                Text(session.mode == .spin ? "Spin it" : "Lock it in")
-                                    .font(Theme.display(17))
-                                    .foregroundStyle(Theme.onSaffron)
-                                    .frame(maxWidth: .infinity, minHeight: 52)
-                                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(isWorking || session.options.isEmpty)
-                        } else {
-                            Text(GroupWording.whoDecides(session))
-                                .font(Theme.body(14, .semibold))
-                                .foregroundStyle(Theme.muted)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
+                        openSection(session)
                     }
                     // Only people who've joined (voted or added) have anything to leave.
                     if live.isOwner || live.members.contains(where: { $0.id == GroupService.shared.currentUserID }) {
@@ -442,6 +305,162 @@ struct MessageVoteView: View {
             }
             .padding(16)
         }
+    }
+
+    @ViewBuilder
+    private func decidedSection(_ session: GroupSession, winner: GroupOption) -> some View {
+        WinnerCard(option: winner,
+                   detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category)
+        HStack(spacing: 8) {
+            ActionTile(title: "Directions", systemImage: "location.north.line",
+                       tint: Theme.accentText, background: Theme.surface) {
+                if let url = directionsURL(winner) { state.open(url: url) }
+            }
+            ActionTile(title: "Call", systemImage: "phone",
+                       tint: Theme.accentText, background: Theme.surface) {
+                if let url = phoneURL(winner) { state.open(url: url) }
+            }
+            .disabled(phoneURL(winner) == nil)
+            ActionTile(title: "Website", systemImage: "safari",
+                       tint: Theme.accentText, background: Theme.surface) {
+                if let url = winner.place.websiteURL { state.open(url: url) }
+            }
+            .disabled(winner.place.websiteURL == nil)
+        }
+        if live.isOwner {
+            let _ = postedTick
+            if MessagesState.bubbleIsOutdated(session) {
+                // One bubble when you're ready, not one per tap.
+                Button {
+                    state.sendUpdate(session, tally: live.tally, memberCount: live.members.count)
+                    postedTick += 1
+                } label: {
+                    Label("Post the plan to the chat", systemImage: "paperplane.fill")
+                        .font(Theme.display(16))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            MessagePlanControls(session: session)
+        } else if let note = session.trimmedNote {
+            PlanNoteCard(note: note, author: session.createdByName)
+        }
+        if let meet = session.meetTime, meet.timeIntervalSinceNow > -15 * 60 {
+            AddToCalendarButton(session: session, winner: winner, meetTime: meet)
+            LeaveByCard(sessionID: session.id, winner: winner, meetTime: meet,
+                        origin: { await MessageLeaveOrigin.current() },
+                        askForLocation: { await OneShotLocation.shared.requestPermission() })
+        }
+        if session.mode == .vote {
+            VoteBreakdown(options: session.options,
+                          tally: live.tally,
+                          winnerID: session.winnerID,
+                          nonVoters: live.nonVoterNames)
+        }
+        if live.isOwner {
+            Button {
+                Task {
+                    do {
+                        try await GroupService.shared.reopen(session: session)
+                        LeaveBy.cancel(sessionID: session.id)
+                        // Replace the "We're going to X" bubble, so the chat
+                        // doesn't keep showing a plan that's open again.
+                        var reopened = session
+                        reopened.status = .open
+                        reopened.winnerID = nil
+                        reopened.closesAt = nil
+                        state.sendUpdate(reopened, tally: live.tally, memberCount: live.members.count)
+                    }
+                    catch { errorMessage = GroupService.message(for: error) }
+                }
+            } label: {
+                Label(session.mode == .vote ? "Reopen voting" : "Reopen picks", systemImage: "arrow.uturn.backward")
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func openSection(_ session: GroupSession) -> some View {
+        let tally = live.tally
+        let slots = max(live.members.count, tally.totalVotes, 1)
+        let ruledOut = live.ruledOutIDs
+        let _ = timeUpTick
+        let open = session.acceptsChanges
+        let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
+        if let closesAt = session.closesAt, session.mode == .vote {
+            VoteCountdown(closesAt: closesAt)
+        }
+        if live.isOwner && live.members.count <= 1 {
+            inviteCard(session)
+        }
+        if session.mode == .spin {
+            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
+        }
+        VoteNotices(session: session, isOwner: live.isOwner,
+                    everythingRuledOut: live.everythingRuledOut,
+                    myVoteIsRuledOut: live.myVote.map { ruledOut.contains($0) } ?? false)
+        ForEach(session.options) { option in
+            VoteOptionRow(option: option,
+                          votes: tally.count(for: option.id),
+                          totalSlots: slots,
+                          voters: tally.votersByOption[option.id] ?? [],
+                          isMine: live.myVote == option.id,
+                          isLeading: leader == option.id,
+                          isEnabled: !isWorking && session.mode == .vote && open
+                              && (!ruledOut.contains(option.id) || live.myVote == option.id),
+                          showsVotes: session.mode == .vote,
+                          isRuledOut: ruledOut.contains(option.id)) {
+                vote(option, session: session)
+            }
+        }
+        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
+            state.expand()
+            Task {
+                // Adding a place is taking part: join first.
+                do { try await GroupService.shared.joinIfNeeded(sessionID: session.id) }
+                catch { errorMessage = GroupService.message(for: error); return }
+                showAdd = true
+            }
+        }
+        if live.isOwner {
+            OwnerGroupTools(session: session,
+                            nudge: Nudge.text(session: session, members: live.members, votes: live.votes),
+                            sendNudge: { state.insertText($0) },
+                            onRemove: { removing = $0 })
+        }
+        if live.isOwner {
+            Button {
+                if GroupWording.lockInWarning(session, totalVotes: tally.totalVotes) != nil {
+                    confirmLockIn = true
+                } else {
+                    lockIn(session)
+                }
+            } label: {
+                Text(session.mode == .spin ? "Spin it" : "Lock it in")
+                    .font(Theme.display(17))
+                    .foregroundStyle(Theme.onSaffron)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isWorking || session.options.isEmpty)
+        } else {
+            Text(GroupWording.whoDecides(session))
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private func withEffects<V: View>(_ view: V) -> some View {
+        view
         // When it's decided while you watch (not on opening a decided plan, or on
         // reopening). A Group Spin's reveal plays its own when the wheel lands.
         .sensoryFeedback(Haptic.decided, trigger: live.session?.status) { old, new in
@@ -474,8 +493,16 @@ struct MessageVoteView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+    }
+
+    private var removingBinding: Binding<Bool> {
+        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
+    }
+
+    private func withDialogs<V: View>(_ view: V) -> some View {
+        view
         .confirmationDialog("Remove \(removing?.name ?? "this place")?",
-                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            isPresented: removingBinding,
                             titleVisibility: .visible) {
             Button("Remove", role: .destructive) { removePlace() }
         } message: {
