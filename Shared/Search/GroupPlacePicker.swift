@@ -176,6 +176,15 @@ struct GroupPlacePicker: View {
             areaRow
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 .listRowBackground(Color.clear)
+                // On one row, not the Section (a List can repeat Section modifiers per row).
+                .task(id: nearbyKey) { await loadNearby() }
+                .sheet(isPresented: $showAreaSheet) {
+                    PickerAreaSheet(defaultCenter: center, defaultName: centerName,
+                                    current: pickedArea) { pickedArea = $0 }
+                }
+                .fullScreenCover(isPresented: $showAreaMap) {
+                    PickerMapView(start: searchCenter) { pickedArea = $0 }
+                }
             RadiusSlider(miles: filtersBinding.radiusMiles)
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 .listRowBackground(Color.clear)
@@ -188,14 +197,6 @@ struct GroupPlacePicker: View {
             if !groupBlockedHashes.isEmpty {
                 Text("Places anyone in the group has blacklisted are hidden.")
             }
-        }
-        .task(id: nearbyKey) { await loadNearby() }
-        .sheet(isPresented: $showAreaSheet) {
-            PickerAreaSheet(defaultCenter: center, defaultName: centerName,
-                            current: pickedArea) { pickedArea = $0 }
-        }
-        .fullScreenCover(isPresented: $showAreaMap) {
-            PickerMapView(start: searchCenter) { pickedArea = $0 }
         }
 
         let near = available(nearby)
@@ -250,7 +251,7 @@ struct GroupPlacePicker: View {
 
             HStack(spacing: 8) {
                 if pickedArea != nil && center != nil {
-                    areaChip("Back to \(centerName)", icon: "arrow.uturn.backward") { pickedArea = nil }
+                    areaChip("Reset area", icon: "arrow.uturn.backward") { pickedArea = nil }
                 }
                 areaChip("Choose on map", icon: "map.fill") { showAreaMap = true }
                 Spacer(minLength: 0)
@@ -349,7 +350,7 @@ struct GroupPlacePicker: View {
         let wanted = key.filters
         if loadedKey == key && !nearby.isEmpty { return }
         // Moved somewhere else: don't leave the old area's places up while searching.
-        if let loadedKey, loadedKey.area != key.area {
+        if loadedKey?.area != key.area {
             nearby = []
             isLoadingNearby = true  // skeletons, not "Nothing matches", while it waits
         }
@@ -358,6 +359,7 @@ struct GroupPlacePicker: View {
             nearby = startingNearby
             nearbyError = nil
             loadedKey = key
+            isLoadingNearby = false
             return
         }
         guard let center = searchCenter else {
@@ -365,6 +367,8 @@ struct GroupPlacePicker: View {
                 CuisineFilter.matches(wanted.cuisines, name: $0.name, category: $0.category)
                     && $0.distanceMeters <= wanted.radiusMiles * Place.metersPerMile
             }
+            loadedKey = key
+            isLoadingNearby = false
             return
         }
         // Wait until the slider or chips settle (MapKit limits searches per minute).
