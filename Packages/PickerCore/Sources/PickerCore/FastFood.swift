@@ -22,6 +22,8 @@ public enum FastFood {
         "hot n now", "jollibee", "biscuitville",
         // Gas-station / convenience-store counters.
         "hunt brothers pizza", "hunt brothers",
+        // Dairy Queen's other names ("DQ Grill & Chill").
+        "dq grill and chill", "dq",
         // Fast casual: order at the counter, food in minutes.
         "fazolis", "chipotle", "moes southwest grill", "qdoba", "five guys", "shake shack",
         "smashburger", "freddys", "panera bread", "noodles and company", "cicis", "sbarro",
@@ -30,12 +32,18 @@ public enum FastFood {
 
     private static let normalizedChains: [String] = chains.map(normalize)
 
+    /// Phrases in a name that mean fast food, wherever they appear.
+    static let selfDescribed = ["fast food", "hot dog stand", "hotdog stand", "drive thru", "drive through"]
+
     /// True when the name starts with a known chain name ("McDonald's #4021"
     /// and "Taco Bell Cantina" both match), or the place calls itself fast
     /// food ("Grimes's Fast Food Restaurant", a local spot no list would know).
     public static func isFastFood(_ name: String) -> Bool {
         let n = normalize(name)
-        if (" " + n + " ").contains(" fast food ") { return true }
+        // Places that describe themselves as fast: "Fast Food", a hot dog
+        // stand, a drive-thru.
+        let padded = " " + n + " "
+        if selfDescribed.contains(where: { padded.contains(" \($0) ") }) { return true }
         return normalizedChains.contains { chain in
             n == chain || n.hasPrefix(chain + " ")
         }

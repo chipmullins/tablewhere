@@ -332,7 +332,10 @@ struct MapKitPlaceSearch: PlaceSearching {
         case .brewery?: return "Brewery"
         case .winery?: return "Winery"
         case .foodMarket?: return "Market"
-        default: return job.label ?? "Restaurant"
+        default:
+            if let label = job.label { return label }
+            // Apple only says "Restaurant": let the name tell us more.
+            return CuisineLabel.guess(name: item.name ?? "") ?? "Restaurant"
         }
     }
 }

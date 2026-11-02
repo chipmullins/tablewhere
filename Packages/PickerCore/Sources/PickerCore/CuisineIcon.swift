@@ -81,12 +81,12 @@ public enum CuisineIcon: String, CaseIterable, Sendable {
         (.pizza, ["pizza", "pizzas", "pizzeria", "italian", "italia", "italiano", "trattoria", "ristorante",
                   "osteria", "pasta", "napoli", "roma", "sicilian", "calzone", "fazolis", "dominos", "papa",
                   "marcos", "caesars", "sbarro"]),
-        (.burger, ["burger", "burgers", "hamburger", "hamburgers", "mcdonalds", "wendys", "culvers",
+        (.burger, ["burger", "burgers", "hamburger", "hamburgers", "mcdonalds", "wendys", "culvers", "dq", "hotdog",
                    "whataburger", "sonic", "checkers", "rallys", "hardees", "arbys", "shack", "drivein"]),
         (.curry, ["curry", "masala", "tandoor", "tandoori", "india", "indian", "nepal", "nepali",
                   "himalayan", "bombay", "mumbai", "delhi", "punjab", "punjabi", "taj", "biryani", "naan"]),
         (.bbq, ["bbq", "barbecue", "smokehouse", "smoke", "smokin", "smoked", "brisket", "ribs", "rib",
-                "pit", "korean", "kbbq", "kalbi"]),
+                "pit", "korean", "kbbq", "kalbi", "kangnam", "gangnam", "seoul", "bulgogi"]),
         (.steak, ["steak", "steaks", "steakhouse", "chophouse", "prime", "longhorn", "outback", "texas"]),
         (.seafood, ["fish", "oyster", "oysters", "crab", "seafood", "lobster", "shrimp", "crawfish",
                     "catfish", "cajun", "boil", "clam", "clams", "poke", "captain"]),
@@ -115,7 +115,8 @@ public enum CuisineIcon: String, CaseIterable, Sendable {
         (("cracker", "barrel"), .breakfast), (("first", "watch"), .breakfast), (("five", "guys"), .burger),
         (("burger", "king"), .burger), (("taco", "bell"), .taco), (("dairy", "queen"), .dessert),
         (("pizza", "hut"), .pizza), (("hot", "pot"), .noodles), (("red", "lobster"), .seafood),
-        (("long", "john"), .seafood), (("jack", "box"), .burger), (("steak", "n"), .burger)
+        (("long", "john"), .seafood), (("jack", "box"), .burger), (("steak", "n"), .burger),
+        (("hot", "dog"), .burger), (("hot", "dogs"), .burger)
     ]
 
     /// Words that are too generic to decide on their own; only used when
