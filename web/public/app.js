@@ -698,7 +698,8 @@ function downloadCalendar() {
 // After the vote closes: every place, who voted for it, and who didn't vote.
 function renderBreakdown(winnerId) {
   const wrap = $("breakdown-wrap");
-  if (session.mode === "spin") { wrap.hidden = true; return; }
+  // Nobody votes in a spin or an "I'll pick" plan.
+  if (session.mode === "spin" || session.mode === "plan") { wrap.hidden = true; return; }
   const t = tally();
   const options = (session.options || []).map((o, i) => ({ o, i, n: t.counts[o.id] || 0 }));
   options.sort((a, b) =>
