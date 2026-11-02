@@ -121,6 +121,10 @@ final class AppModel {
     var excludeFastFood: Bool = Preferences.excludeFastFood {
         didSet { Preferences.excludeFastFood = excludeFastFood }
     }
+    /// "No coffee & sweets" (on by default). Shared with the iMessage extension.
+    var excludeCoffeeAndSweets: Bool = Preferences.excludeCoffeeAndSweets {
+        didSet { Preferences.excludeCoffeeAndSweets = excludeCoffeeAndSweets }
+    }
 
     private(set) var places: [Place] = []
     private(set) var isLoading = false
@@ -223,7 +227,8 @@ final class AppModel {
             blockedCategories: Set(blockedCategories.map(\.name)),
             recentPlaceIDs: recent,
             maxDistanceMeters: maxDistance,
-            excludeFastFood: excludeFastFood
+            excludeFastFood: excludeFastFood,
+            excludeCoffeeAndSweets: excludeCoffeeAndSweets
         )
     }
     var radiusMeters: Double { radiusMiles * Place.metersPerMile }

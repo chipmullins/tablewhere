@@ -71,12 +71,15 @@ enum SharedCache {
         SharedDefaults.store.stringArray(forKey: blockedKey) ?? []
     }
 
-    /// The widget/Siri rules: blacklist plus the "No fast food" setting.
-    static func pickRules() -> Randomizer.Rules {
+    /// The widget/Siri rules: blacklist plus the "No fast food" and "No coffee
+    /// & sweets" settings. Pass `savedList: true` for your own lists, which
+    /// keep the coffee shops you saved on purpose.
+    static func pickRules(savedList: Bool = false) -> Randomizer.Rules {
         Randomizer.Rules(
             blockedPlaceIDs: Set(SharedDefaults.store.stringArray(forKey: blockedKey) ?? []),
             blockedCategories: Set(SharedDefaults.store.stringArray(forKey: blockedCategoriesKey) ?? []),
-            excludeFastFood: Preferences.excludeFastFood
+            excludeFastFood: Preferences.excludeFastFood,
+            excludeCoffeeAndSweets: !savedList && Preferences.excludeCoffeeAndSweets
         )
     }
 

@@ -272,6 +272,7 @@ extension DiscoverView {
         let blacklistRules: Randomizer.Rules = {
             var rules = model.rules(blockedPlaces: blockedPlaces, blockedCategories: blockedCategories)
             rules.excludeFastFood = false
+            rules.excludeCoffeeAndSweets = false
             return rules
         }()
         let hiddenByBlacklist = model.places.count - Randomizer.eligible(model.places, rules: blacklistRules).count
@@ -316,5 +317,16 @@ struct NoFastFoodChip: View {
     var body: some View {
         @Bindable var model = model
         FastFoodChip(isOn: $model.excludeFastFood)
+    }
+}
+
+/// Toggle that hides coffee shops and sweets from nearby places and spins
+/// (on by default; your saved lists keep theirs).
+struct NoCoffeeSweetsChip: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        FastFoodChip(isOn: $model.excludeCoffeeAndSweets, title: "No coffee & sweets", icon: "cup.and.saucer")
     }
 }

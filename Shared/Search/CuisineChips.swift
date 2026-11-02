@@ -4,8 +4,8 @@ import PickerCore
 /// Multi-select cuisine chips. "All" clears the selection; tapping a cuisine
 /// toggles it. Used on Discover, Spin, group picks, and in iMessage.
 ///
-/// `NoFastFoodChip` is supplied by each target: the app's reads AppModel,
-/// the iMessage extension's reads the shared preference.
+/// `NoFastFoodChip` and `NoCoffeeSweetsChip` are supplied by each target:
+/// the app's read AppModel, the iMessage extension's read the shared preference.
 struct CuisineChips: View {
     @Binding var selection: Set<CuisineFilter>
     /// Optional dietary row (vegetarian / vegan / gluten-free), shown under the cuisines.
@@ -17,7 +17,10 @@ struct CuisineChips: View {
         VStack(alignment: .leading, spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    if showsFastFoodToggle { NoFastFoodChip() }
+                    if showsFastFoodToggle {
+                        NoFastFoodChip()
+                        NoCoffeeSweetsChip()
+                    }
                     // Cuisine chips tick when the selection changes (below), not per tap,
                     // so a tap past the limit plays only the warning.
                     Chip(label: "All", isSelected: selection.isEmpty, haptic: nil) { selection = [] }

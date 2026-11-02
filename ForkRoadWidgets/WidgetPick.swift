@@ -46,13 +46,13 @@ enum WidgetPick {
 
     /// Favorites first; if none pass the rules, To try; then the closest nearby places.
     static func pool() -> (places: [Place], source: Source)? {
-        let rules = SharedCache.pickRules()
         let lists: [(Source, () -> [Place])] = [
             (.favorites, SharedCache.loadFavorites),
             (.interested, SharedCache.loadInterested),
             (.nearby, SharedCache.loadClosestNearby)
         ]
         for (source, load) in lists {
+            let rules = SharedCache.pickRules(savedList: source != .nearby)
             let eligible = Randomizer.eligible(load(), rules: rules)
             if !eligible.isEmpty { return (eligible, source) }
         }

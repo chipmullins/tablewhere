@@ -108,8 +108,12 @@ struct GroupPlacePicker: View {
         Binding(get: { current }, set: { filters = $0 })
     }
 
-    private func available(_ places: [Place]) -> [Place] {
-        Randomizer.eligible(places, rules: rules).filter { place in
+    /// `chosen`: your saved lists or a name search, where a coffee shop is
+    /// there on purpose (No coffee & sweets only trims nearby results).
+    private func available(_ places: [Place], chosen: Bool = false) -> [Place] {
+        var rules = self.rules
+        if chosen { rules.excludeCoffeeAndSweets = false }
+        return Randomizer.eligible(places, rules: rules).filter { place in
             if excludedIDs.contains(place.id) { return false }
             if let sessionID, !groupBlockedHashes.isEmpty,
                groupBlockedHashes.contains(GroupBlacklist.hash(placeID: place.id, sessionID: sessionID)) { return false }
@@ -124,10 +128,10 @@ struct GroupPlacePicker: View {
             Section {
                 if isSearching && results.isEmpty {
                     skeletonRows
-                } else if !isSearching && searchedQuery == trimmedQuery && available(results).isEmpty {
+                } else if !isSearching && searchedQuery == trimmedQuery && available(results, chosen: true).isEmpty {
                     statusRow("No restaurants found for “\(trimmedQuery)”. Try a broader word like “pizza.”")
                 }
-                ForEach(available(results)) { place in
+                ForEach(available(results, chosen: true)) { place in
                     Button { onTap(place) } label: { row(place) }
                         .disabled(isDisabled(place))
                 }
@@ -152,7 +156,7 @@ struct GroupPlacePicker: View {
             case .nearby:
                 nearbySections
             case .favorites:
-                let favs = available(favorites)
+                let favs = available(favorites, chosen: true)
                 section("Your favorites", favs)
                 if favs.isEmpty {
                     statusRow(favorites.isEmpty
@@ -160,7 +164,7 @@ struct GroupPlacePicker: View {
                               : "None of your favorites can be added here.")
                 }
             case .interested:
-                let wants = available(interested)
+                let wants = available(interested, chosen: true)
                 section("To try", wants)
                 if wants.isEmpty {
                     statusRow(interested.isEmpty

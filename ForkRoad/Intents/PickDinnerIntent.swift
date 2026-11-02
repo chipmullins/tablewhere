@@ -43,11 +43,10 @@ struct PickDinnerIntent: AppIntent {
     init() {}
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let rules = SharedCache.pickRules()
         let order: [DinnerSource] = source.map { [$0] } ?? [.favorites, .wantToTry, .nearby]
 
         for list in order {
-            if let place = Randomizer.pick(from: list.load(), rules: rules) {
+            if let place = Randomizer.pick(from: list.load(), rules: SharedCache.pickRules(savedList: list != .nearby)) {
                 return .result(dialog: "How about \(place.name)? It's \(place.category), \(place.distanceLabel) away.")
             }
         }
@@ -56,7 +55,7 @@ struct PickDinnerIntent: AppIntent {
         if let source {
             switch source {
             case .favorites: message = "You don't have any Favorites to pick from yet. Open ForkRoad and save a few first."
-            case .wantToTry: message = "Your Want to Try list is empty. Open ForkRoad and add a few places first."
+            case .wantToTry: message = "Your To try list is empty. Open ForkRoad and add a few places first."
             case .nearby: message = "I don't have any nearby places yet. Open ForkRoad first so it can find restaurants near you."
             }
         } else {

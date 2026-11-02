@@ -54,12 +54,14 @@ struct RadiusSlider: View {
 /// The "No fast food" chip's look, bound to any Bool.
 struct FastFoodChip: View {
     @Binding var isOn: Bool
+    var title = "No fast food"
+    var icon = "takeoutbag.and.cup.and.straw"
 
     var body: some View {
         Button {
             isOn.toggle()
         } label: {
-            Label("No fast food", systemImage: isOn ? "checkmark" : "takeoutbag.and.cup.and.straw")
+            Label(title, systemImage: isOn ? "checkmark" : icon)
                 .font(Theme.body(14, .semibold))
                 .padding(.horizontal, 14)
                 .frame(height: 40)

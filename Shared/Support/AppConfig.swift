@@ -36,4 +36,12 @@ enum Preferences {
         get { SharedDefaults.store.bool(forKey: noFastFoodKey) }
         set { SharedDefaults.store.set(newValue, forKey: noFastFoodKey) }
     }
+
+    static let noCoffeeSweetsKey = "excludeCoffeeAndSweets"
+
+    /// "No coffee & sweets": on until you turn it off.
+    static var excludeCoffeeAndSweets: Bool {
+        get { SharedDefaults.store.object(forKey: noCoffeeSweetsKey) as? Bool ?? true }
+        set { SharedDefaults.store.set(newValue, forKey: noCoffeeSweetsKey) }
+    }
 }

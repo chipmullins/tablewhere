@@ -49,6 +49,7 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("No fast food", isOn: $model.excludeFastFood)
+                    Toggle("No coffee & sweets", isOn: $model.excludeCoffeeAndSweets)
                     Picker("Diet", selection: $model.diet) {
                         ForEach(DietFilter.allCases) { Text($0.label).tag($0) }
                     }

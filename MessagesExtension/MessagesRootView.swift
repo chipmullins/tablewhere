@@ -835,6 +835,8 @@ struct MessageAddPlaceView: View {
 struct MessagePlacePicker: View {
     let query: String
     let excludeFastFood: Bool
+    /// Read live, so flipping the chip in the picker updates the list.
+    @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var excludeCoffeeAndSweets = true
     var excludedIDs: Set<String> = []
     var groupBlockedHashes: Set<String> = []
     var sessionID: String?
@@ -855,6 +857,7 @@ struct MessagePlacePicker: View {
     private var rules: Randomizer.Rules {
         var rules = SharedCache.pickRules()
         rules.excludeFastFood = excludeFastFood
+        rules.excludeCoffeeAndSweets = excludeCoffeeAndSweets
         return rules
     }
 
@@ -909,6 +912,15 @@ struct NoFastFoodChip: View {
 
     var body: some View {
         FastFoodChip(isOn: $excludeFastFood)
+    }
+}
+
+/// The iMessage extension's "No coffee & sweets" chip (same saved setting as the app).
+struct NoCoffeeSweetsChip: View {
+    @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var exclude = true
+
+    var body: some View {
+        FastFoodChip(isOn: $exclude, title: "No coffee & sweets", icon: "cup.and.saucer")
     }
 }
 

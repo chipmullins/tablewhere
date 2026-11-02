@@ -23,13 +23,16 @@ struct SpinView: View {
     private var actions: ListActions { ListActions(context: context) }
 
     private var rules: Randomizer.Rules {
-        model.rules(
+        var rules = model.rules(
             blockedPlaces: blockedPlaces,
             blockedCategories: blockedCategories,
             recent: actions.recentPlaceIDs(),
             // Saved places are the user's own picks, so the radius doesn't apply to them.
             maxDistance: model.spinSource == .nearby ? model.radiusMeters : nil
         )
+        // A coffee shop you saved yourself still spins.
+        if model.spinSource != .nearby { rules.excludeCoffeeAndSweets = false }
+        return rules
     }
 
     /// Everything that could come up on the reel.
