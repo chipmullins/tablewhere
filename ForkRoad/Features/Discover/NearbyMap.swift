@@ -81,7 +81,8 @@ struct NearbyMap: View {
         }
         .frame(height: isExpanded ? nil : 170)
         .clipShape(RoundedRectangle(cornerRadius: isExpanded ? 0 : 22, style: .continuous))
-        .overlay(alignment: .bottomLeading) { if selected == nil { countBadge } }
+        // Bottom right: Apple's "Maps · Legal" mark sits bottom left and must stay visible.
+        .overlay(alignment: .bottomTrailing) { if selected == nil { countBadge } }
         .overlay(alignment: .bottom) {
             if isExpanded, let selected {
                 MapPlaceCard(place: selected) { self.selected = nil }
