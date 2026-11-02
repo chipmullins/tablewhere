@@ -172,6 +172,7 @@ struct SpinView: View {
                 }
                 .buttonStyle(.plain)
                 Button("Edit") {
+                    model.showHomeList = true
                     model.selectedTab = .lists
                 }
                 .font(Theme.body(14, .bold))
@@ -608,7 +609,8 @@ private struct SpinStage: View {
             }
         }
         .offset(x: dragX)
-        .gesture(
+        // Simultaneous, so a drag that starts on the card still scrolls the page.
+        .simultaneousGesture(
             DragGesture(minimumDistance: 24)
                 .onChanged { value in
                     // Left only, and mostly sideways (so scrolling still works).
@@ -616,7 +618,7 @@ private struct SpinStage: View {
                     dragX = min(0, value.translation.width)
                 }
                 .onEnded { value in
-                    let skip = value.translation.width < -100
+                    let skip = dragX < -100  // only sideways drags moved it
                     withAnimation(.snappy) { dragX = 0 }
                     if skip { skipTonight(meal) }
                 }

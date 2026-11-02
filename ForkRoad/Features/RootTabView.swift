@@ -102,6 +102,7 @@ struct RootTabView: View {
         case "spin": model.selectedTab = .spin
         case SpinLink.autoSpin:
             model.selectedTab = .spin
+            model.eatIn = false  // the widget, Control Center, and Siri spin restaurants
             model.pendingSpin = true
         case "discover": model.selectedTab = .discover
         case "lists": model.selectedTab = .lists

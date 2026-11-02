@@ -12,6 +12,7 @@ struct RecipeForm: View {
     @State private var note = ""
     @State private var link = ""
     @State private var saveTaps = 0
+    @State private var confirmDelete = false
     @FocusState private var nameFocused: Bool
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -47,10 +48,14 @@ struct RecipeForm: View {
 
                 if let recipe {
                     Section {
-                        Button("Delete recipe", role: .destructive) {
-                            context.delete(recipe)
-                            dismiss()
-                        }
+                        Button("Delete meal", role: .destructive) { confirmDelete = true }
+                            .confirmationDialog("Delete \(recipe.name)?", isPresented: $confirmDelete,
+                                                titleVisibility: .visible) {
+                                Button("Delete", role: .destructive) {
+                                    context.delete(recipe)
+                                    dismiss()
+                                }
+                            }
                     }
                     .listRowBackground(Theme.surface)
                 }

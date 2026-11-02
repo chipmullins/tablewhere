@@ -182,6 +182,7 @@ struct DiscoverView: View {
     private var spinBanner: some View {
         Button {
             model.spinSource = .nearby
+            model.eatIn = false
             model.pendingSpin = true
             model.selectedTab = .spin
         } label: {

@@ -92,6 +92,9 @@ struct ListsView: View {
             AddToListSheet(startingList: tab == .favorites ? .favorites : .interested)
         }
         .sheet(isPresented: $showAddRecipe) { RecipeForm() }
+        // Spin → Eat in → Edit lands here, on Home.
+        .onAppear { openHomeIfAsked() }
+        .onChange(of: model.showHomeList) { openHomeIfAsked() }
         .sheet(item: $editingRecipe) { RecipeForm(recipe: $0) }
         .navigationDestination(for: Place.self) { place in
             PlaceDetailView(place: place).zoomDestination(id: place.id, ns: zoom)
@@ -163,6 +166,7 @@ struct ListsView: View {
             Section {
                 Button {
                     model.spinSource = SpinSource(list)
+                    model.eatIn = false
                     model.pendingSpin = true
                     model.selectedTab = .spin
                 } label: {
@@ -301,6 +305,12 @@ struct ListsView: View {
     }
 
     // MARK: Home
+
+    private func openHomeIfAsked() {
+        guard model.showHomeList else { return }
+        model.showHomeList = false
+        tab = .home
+    }
 
     @ViewBuilder
     private var homeSections: some View {

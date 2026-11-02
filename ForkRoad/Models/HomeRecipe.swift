@@ -40,7 +40,12 @@ final class HomeRecipe {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let withScheme = trimmed.contains("://") ? trimmed : "https://" + trimmed
-        guard let url = URL(string: withScheme), let host = url.host, host.contains(".") else { return nil }
+        guard let url = URL(string: withScheme),
+              let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host else { return nil }
+        // "allrecipes.com", not "hello" or "hello."
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2, !parts.contains(where: \.isEmpty) else { return nil }
         return url
     }
 }

@@ -47,6 +47,8 @@ final class AppModel {
     var spinSource: SpinSource = .nearby
     /// Spin → Eat in: spin your home meals instead of restaurants.
     var eatIn = false
+    /// Set to open Lists on the Home list (Spin → Eat in → Edit).
+    var showHomeList = false
     /// Set by "Spin for it" / "Spin my favorites": Spin starts as soon as it opens.
     var pendingSpin = false
     /// Places you passed on with "Not tonight" (left out of spins for a few hours,
