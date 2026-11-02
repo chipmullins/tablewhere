@@ -28,10 +28,12 @@ public enum FastFood {
 
     private static let normalizedChains: [String] = chains.map(normalize)
 
-    /// True when the name starts with a known chain name
-    /// ("McDonald's #4021" and "Taco Bell Cantina" both match).
+    /// True when the name starts with a known chain name ("McDonald's #4021"
+    /// and "Taco Bell Cantina" both match), or the place calls itself fast
+    /// food ("Grimes's Fast Food Restaurant", a local spot no list would know).
     public static func isFastFood(_ name: String) -> Bool {
         let n = normalize(name)
+        if (" " + n + " ").contains(" fast food ") { return true }
         return normalizedChains.contains { chain in
             n == chain || n.hasPrefix(chain + " ")
         }
