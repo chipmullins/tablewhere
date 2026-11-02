@@ -44,6 +44,7 @@ struct DiscoverView: View {
                     RadiusControl()
                     cuisineChips
                     spinBanner
+                    LateNightNote()
                     results
                 }
             }
@@ -320,13 +321,13 @@ struct NoFastFoodChip: View {
     }
 }
 
-/// Toggle that hides coffee shops and sweets from nearby places and spins
-/// (on by default; your saved lists keep theirs).
-struct NoCoffeeSweetsChip: View {
+/// The "Filters" chip: No fast food and No coffee & sweets (the latter on by
+/// default; your saved lists keep their coffee shops).
+struct PlaceFiltersChip: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        FastFoodChip(isOn: $model.excludeCoffeeAndSweets, title: "No coffee & sweets", icon: "cup.and.saucer")
+        FoodFiltersChip(noFastFood: $model.excludeFastFood, noCoffeeSweets: $model.excludeCoffeeAndSweets)
     }
 }

@@ -51,6 +51,53 @@ struct RadiusSlider: View {
     }
 }
 
+/// One "Filters" chip for the place-type filters (No fast food, No coffee &
+/// sweets), so the chip row starts with the cuisines. Lit, with a count,
+/// when any are on.
+struct FoodFiltersChip: View {
+    @Binding var noFastFood: Bool
+    @Binding var noCoffeeSweets: Bool
+
+    private var count: Int { (noFastFood ? 1 : 0) + (noCoffeeSweets ? 1 : 0) }
+
+    var body: some View {
+        Menu {
+            Toggle(isOn: $noFastFood) {
+                Label("No fast food", systemImage: "takeoutbag.and.cup.and.straw")
+            }
+            Toggle(isOn: $noCoffeeSweets) {
+                Label("No coffee & sweets", systemImage: "cup.and.saucer")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease")
+                Text("Filters")
+                if count > 0 {
+                    Text("\(count)")
+                        .font(Theme.body(12, .bold))
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Theme.onSaffron.opacity(0.15), in: Circle())
+                }
+            }
+            .font(Theme.body(14, .semibold))
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .foregroundStyle(count > 0 ? Theme.onSaffron : Theme.text)
+            .background(count > 0 ? Theme.saffron : Theme.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(count > 0 ? .clear : Theme.hairline))
+        }
+        .accessibilityLabel(accessibilityText)
+        .sensoryFeedback(.selection, trigger: count)
+    }
+
+    private var accessibilityText: String {
+        var on: [String] = []
+        if noFastFood { on.append("no fast food") }
+        if noCoffeeSweets { on.append("no coffee and sweets") }
+        return on.isEmpty ? "Filters, none on" : "Filters: " + on.joined(separator: ", ")
+    }
+}
+
 /// The "No fast food" chip's look, bound to any Bool.
 struct FastFoodChip: View {
     @Binding var isOn: Bool

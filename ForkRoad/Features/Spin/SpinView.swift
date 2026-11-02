@@ -80,6 +80,7 @@ struct SpinView: View {
                     eatInHeader
                 } else {
                     eatOutControls
+                    LateNightNote()
                 }
 
                 // The reel, Spin button, and result live in their own view, so

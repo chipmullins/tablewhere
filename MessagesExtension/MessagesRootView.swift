@@ -915,12 +915,13 @@ struct NoFastFoodChip: View {
     }
 }
 
-/// The iMessage extension's "No coffee & sweets" chip (same saved setting as the app).
-struct NoCoffeeSweetsChip: View {
-    @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var exclude = true
+/// The iMessage extension's "Filters" chip (same saved settings as the app).
+struct PlaceFiltersChip: View {
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var noFastFood = false
+    @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var noCoffee = true
 
     var body: some View {
-        FastFoodChip(isOn: $exclude, title: "No coffee & sweets", icon: "cup.and.saucer")
+        FoodFiltersChip(noFastFood: $noFastFood, noCoffeeSweets: $noCoffee)
     }
 }
 
