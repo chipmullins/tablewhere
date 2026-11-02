@@ -5,6 +5,7 @@ final class FastCasualTests: XCTestCase {
     func testPlacesThatCallThemselvesFastFoodCount() {
         XCTAssertTrue(FastFood.isFastFood("Grimes's Fast Food Restaurant"))
         XCTAssertTrue(FastFood.isFastFood("Fast-Food Express"))
+        XCTAssertTrue(FastFood.isFastFood("Hunt Brothers Pizza"))
         XCTAssertFalse(FastFood.isFastFood("Steakfast Foodhall"))
     }
 

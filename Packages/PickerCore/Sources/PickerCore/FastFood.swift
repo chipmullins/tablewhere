@@ -20,6 +20,8 @@ public enum FastFood {
         "firehouse subs", "potbelly", "quiznos", "blimpie", "dunkin", "tim hortons",
         "krispy kreme", "cook out", "culvers", "freddys frozen custard", "portillos",
         "hot n now", "jollibee", "biscuitville",
+        // Gas-station / convenience-store counters.
+        "hunt brothers pizza", "hunt brothers",
         // Fast casual: order at the counter, food in minutes.
         "fazolis", "chipotle", "moes southwest grill", "qdoba", "five guys", "shake shack",
         "smashburger", "freddys", "panera bread", "noodles and company", "cicis", "sbarro",

@@ -299,6 +299,8 @@ private struct SpinStage: View {
     @AppStorage("spinReveal") private var useReveal = true
     /// The pick waiting for the reveal to finish.
     @State private var pending: (place: Place, index: Int)?
+    /// How many were on the wheel for the last spin ("Picked from 21 places").
+    @State private var spunFrom = 0
     /// The home result card, while it's being swiped away.
     @State private var dragX: CGFloat = 0
     /// The result card zooms into the details (iOS 18+).
@@ -350,6 +352,11 @@ private struct SpinStage: View {
             }
 
             if let winner, !isSpinning {
+                // How big the wheel was, in place of the line under the button.
+                Text(spunFromText)
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
                 Group {
                     if isHome { homeResultCard(winner) } else { resultCard(winner) }
                 }
@@ -551,6 +558,11 @@ private struct SpinStage: View {
             .accessibilityHint("Leaves it out of spins for a few hours, then spins again")
     }
 
+    private var spunFromText: String {
+        let noun = isHome ? (spunFrom == 1 ? "meal" : "meals") : (spunFrom == 1 ? "place" : "places")
+        return "Picked from \(spunFrom) \(noun)"
+    }
+
     private func skipTonight(_ place: Place) {
         model.skipForNow(place)
         let appModel: AppModel = model
@@ -657,6 +669,7 @@ private struct SpinStage: View {
         }
         message = nil
         reelPool = pool
+        spunFrom = pool.count
         isSpinning = true
         winner = nil
 
