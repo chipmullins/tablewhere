@@ -12,8 +12,10 @@ struct SpinView: View {
     @Query private var blockedCategories: [BlockedCategory]
     @Query(sort: \SavedPlace.savedAt, order: .reverse) private var saved: [SavedPlace]
     @Query private var areas: [SavedArea]
+    @Query(sort: \HomeRecipe.name) private var recipes: [HomeRecipe]
 
     @State private var showFilters = false
+    @State private var showAddRecipe = false
     @State private var showWheelPicker = false
     /// The full-screen reveal (same as Group Spin) while it plays.
     @State private var reveal: SpinRevealRequest?
@@ -32,6 +34,11 @@ struct SpinView: View {
 
     /// Everything that could come up on the reel.
     private var pool: [Place] {
+        // Eat in: your home meals (minus tonight's "Not tonight"s).
+        if model.eatIn {
+            let skipped = model.skippedForNowIDs
+            return recipes.map(\.asSpinItem).filter { !skipped.contains($0.id) }
+        }
         let source: [Place]
         switch model.spinSource {
         case .nearby: source = model.places
@@ -59,13 +66,65 @@ struct SpinView: View {
                     .foregroundStyle(Theme.text)
                     .padding(.top, 8)
 
-                Picker("Pick from", selection: $model.spinSource) {
-                    ForEach(SpinSource.allCases) { Text($0.label).tag($0) }
+                Picker("Eat out or in", selection: $model.eatIn.animation(.snappy)) {
+                    Text("Eat out").tag(false)
+                    Text("Eat in").tag(true)
                 }
                 .pickerStyle(.segmented)
+                .sensoryFeedback(Haptic.tick, trigger: model.eatIn)
 
-                // One row instead of a block of chips: the Spin button stays on screen.
-                switch model.spinSource {
+                if model.eatIn {
+                    eatInHeader
+                } else {
+                    eatOutControls
+                }
+
+                // The reel, Spin button, and result live in their own view, so
+                // each reel tick redraws only them (not the lists and filters above).
+                SpinStage(pool: pool,
+                          resetKey: resetKey,
+                          emptyText: emptyReelText,
+                          footnote: footnote(count: pool.count),
+                          isPickedWheel: !model.eatIn && model.spinSource == .picked,
+                          isHome: model.eatIn,
+                          notes: recipeNotes,
+                          rulesAtSpin: { rules },
+                          reveal: $reveal)
+
+                if !model.eatIn {
+                    HintCard(.spinFirst)
+                    HintCard(.myWheel)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+        .background(Theme.night)
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay {
+            if let reveal {
+                SpinReveal(names: reveal.names, winner: reveal.winner) { self.reveal = nil }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .onChange(of: model.spinSource) {
+            if model.spinSource == .picked { Hint.myWheel.dismiss() }
+        }
+        .sheet(isPresented: $showAddRecipe) { RecipeForm() }
+    }
+
+    /// Eat out: where to pick from, and that source's filters.
+    @ViewBuilder
+    private var eatOutControls: some View {
+        @Bindable var model = model
+        Picker("Pick from", selection: $model.spinSource) {
+            ForEach(SpinSource.allCases) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented)
+
+        // One row instead of a block of chips: the Spin button stays on screen.
+        switch model.spinSource {
                 case .nearby:
                     Button { showFilters = true } label: {
                         FilterRow(icon: model.isUsingCurrentLocation ? "location.fill" : "mappin",
@@ -85,40 +144,55 @@ struct SpinView: View {
                         NoFastFoodChip()
                     }
                 }
+    }
 
-                // The reel, Spin button, and result live in their own view, so
-                // each reel tick redraws only them (not the lists and filters above).
-                SpinStage(pool: pool,
-                          resetKey: resetKey,
-                          emptyText: emptyReelText,
-                          footnote: footnote(count: pool.count),
-                          isPickedWheel: model.spinSource == .picked,
-                          rulesAtSpin: { rules },
-                          reveal: $reveal)
+    /// Eat in: how many meals, and a quick way to add one.
+    @ViewBuilder
+    private var eatInHeader: some View {
+        if recipes.isEmpty {
+            EmptyState(
+                art: .plate,
+                title: "What do you make at home?",
+                message: "Add a few go-to meals, like tacos or spaghetti. Then spin to pick tonight’s.",
+                primary: ("Add a meal", { showAddRecipe = true })
+            )
+            .padding(.vertical, 8)
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "frying.pan")
+                    .foregroundStyle(Theme.accentText)
+                Text("\(recipes.count) home meal\(recipes.count == 1 ? "" : "s")")
+                    .font(Theme.body(15, .semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Button { showAddRecipe = true } label: {
+                    Label("Add", systemImage: "plus")
+                        .font(Theme.body(14, .bold))
+                        .foregroundStyle(Theme.accentText)
+                }
+                .buttonStyle(.plain)
+                Button("Edit") {
+                    model.selectedTab = .lists
+                }
+                .font(Theme.body(14, .bold))
+                .foregroundStyle(Theme.accentText)
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens your Home list in Lists")
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 52)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
 
-                HintCard(.spinFirst)
-                HintCard(.myWheel)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
-        }
-        .background(Theme.night)
-        .toolbar(.hidden, for: .navigationBar)
-        .overlay {
-            if let reveal {
-                SpinReveal(names: reveal.names, winner: reveal.winner) { self.reveal = nil }
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: reveal?.id)
-        .onChange(of: model.spinSource) {
-            if model.spinSource == .picked { Hint.myWheel.dismiss() }
-        }
+    /// Recipe notes by reel ID, for the result card.
+    private var recipeNotes: [String: String] {
+        Dictionary(recipes.map { ($0.asSpinItem.id, $0.note) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// When any of these change, the reel starts over.
     private var resetKey: String {
-        [model.spinSource.rawValue, "\(model.listCity)", "\(model.center.latitude),\(model.center.longitude)",
+        [model.eatIn ? "in" : "out", model.spinSource.rawValue, "\(model.listCity)", "\(model.center.latitude),\(model.center.longitude)",
          "\(model.radiusMiles)", model.pickedWheel.map(\.id).joined(separator: ",")].joined(separator: "|")
     }
 
@@ -135,6 +209,11 @@ struct SpinView: View {
 
     /// One quiet line under the Spin button.
     private func footnote(count: Int) -> String {
+        if model.eatIn {
+            let skipped = recipes.count - count
+            return skipped > 0 ? "\(count) meal\(count == 1 ? "" : "s") · \(skipped) not tonight"
+                               : "\(count) meal\(count == 1 ? "" : "s")"
+        }
         if model.spinSource == .picked { return count < 2 ? "Add at least 2 to spin" : "\(count) on your wheel" }
         var parts = ["\(count) \(count == 1 ? "place" : "places")"]
         if model.spinSource != .nearby { parts.append(areaChip) }
@@ -163,6 +242,7 @@ struct SpinView: View {
     }
 
     private var emptyReelText: String {
+        if model.eatIn { return recipes.isEmpty ? "Add a few meals first" : "Nothing left for tonight" }
         switch model.spinSource {
         case .nearby: return model.hasLocation ? "No places in range" : "Pick a location above"
         case .picked: return "Add a few places to your wheel"
@@ -191,6 +271,10 @@ private struct SpinStage: View {
     let footnote: String
     /// Your own wheel spins exactly what you chose (no rules at spin time).
     let isPickedWheel: Bool
+    /// Eat in: the reel holds home meals (see HomeRecipe.asSpinItem).
+    var isHome = false
+    /// Home meals' notes, by reel ID.
+    var notes: [String: String] = [:]
     /// The rules for picking, worked out once when you tap Spin.
     let rulesAtSpin: () -> Randomizer.Rules
 
@@ -214,6 +298,8 @@ private struct SpinStage: View {
     @AppStorage("spinReveal") private var useReveal = true
     /// The pick waiting for the reveal to finish.
     @State private var pending: (place: Place, index: Int)?
+    /// The home result card, while it's being swiped away.
+    @State private var dragX: CGFloat = 0
     /// The result card zooms into the details (iOS 18+).
     @Namespace private var zoom
 
@@ -263,7 +349,9 @@ private struct SpinStage: View {
             }
 
             if let winner, !isSpinning {
-                resultCard(winner)
+                Group {
+                    if isHome { homeResultCard(winner) } else { resultCard(winner) }
+                }
                     .transition(reduceMotion ? .opacity : .asymmetric(
                         insertion: .modifier(active: FlipIn(angle: -70, opacity: 0),
                                              identity: FlipIn(angle: 0, opacity: 1)),
@@ -469,10 +557,71 @@ private struct SpinStage: View {
         let rest = pool.filter { $0.id != place.id }
         winner = nil
         guard !rest.isEmpty else {
-            message = "That was the last one. Try a bigger radius or another list."
+            message = isHome ? "That was the last one. Maybe it’s a takeout night: switch to Eat out."
+                             : "That was the last one. Try a bigger radius or another list."
             return
         }
         spin(rest)
+    }
+
+    /// Eat in: the meal, its note, the recipe link, and Not tonight (button or
+    /// swipe left, for when you're missing an ingredient).
+    private func homeResultCard(_ meal: Place) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel(text: "Tonight you’re making", color: Theme.accentText)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(meal.name).font(Theme.display(24)).foregroundStyle(Theme.text)
+                if let note = notes[meal.id], !note.isEmpty {
+                    Text(note).font(Theme.body(14)).foregroundStyle(Theme.muted)
+                }
+            }
+            if let url = meal.websiteURL {
+                Button { openURL(url) } label: {
+                    Label("Open the recipe", systemImage: "book")
+                        .font(Theme.body(15, .bold))
+                        .foregroundStyle(Theme.night)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            Button { skipTonight(meal) } label: {
+                Label("Missing something? Not tonight · spin again", systemImage: "arrow.uturn.right")
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Leaves it out for tonight, then spins again")
+        }
+        .padding(18)
+        .card(radius: 24)
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+        .overlay(alignment: .trailing) {
+            // What a swipe will do, showing as you drag.
+            if dragX < -24 {
+                Label("Not tonight", systemImage: "arrow.uturn.right")
+                    .font(Theme.body(13, .bold))
+                    .foregroundStyle(Theme.accentText)
+                    .padding(.trailing, 16)
+                    .opacity(min(1, Double(-dragX - 24) / 60))
+            }
+        }
+        .offset(x: dragX)
+        .gesture(
+            DragGesture(minimumDistance: 24)
+                .onChanged { value in
+                    // Left only, and mostly sideways (so scrolling still works).
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    dragX = min(0, value.translation.width)
+                }
+                .onEnded { value in
+                    let skip = value.translation.width < -100
+                    withAnimation(.snappy) { dragX = 0 }
+                    if skip { skipTonight(meal) }
+                }
+        )
+        .accessibilityAction(named: "Not tonight") { skipTonight(meal) }
     }
 
     // MARK: Logic
@@ -499,7 +648,7 @@ private struct SpinStage: View {
         Hint.spinFirst.dismiss()
         // Your own wheel spins exactly what you chose. Everything else still
         // prefers places you haven't had lately (the pool is already filtered).
-        let choice = isPickedWheel ? pool.randomElement() : Randomizer.pick(from: pool, rules: rulesAtSpin())
+        let choice = (isPickedWheel || isHome) ? pool.randomElement() : Randomizer.pick(from: pool, rules: rulesAtSpin())
         guard let pick = choice, let target = pool.firstIndex(of: pick) else {
             message = "Nothing to spin. Try a bigger radius or fewer filters."
             return
@@ -543,7 +692,8 @@ private struct SpinStage: View {
         winner = pick
         landCount += 1
         isSpinning = false
-        if !pick.id.hasPrefix("typed|") { actions.recordSpin(pick) }
+        // Things you typed onto your wheel and home meals aren't restaurants.
+        if !pick.id.hasPrefix("typed|") && !HomeRecipe.isRecipe(pick) { actions.recordSpin(pick) }
         UsageStats.record(.spins)
         AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
     }

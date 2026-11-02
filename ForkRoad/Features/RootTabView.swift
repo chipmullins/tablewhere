@@ -33,9 +33,6 @@ struct RootTabView: View {
                 .tabItem { Label("Group", systemImage: "person.2") }
                 .tag(AppTab.group)
 
-            NavigationStack { TripsView() }
-                .tabItem { Label("Trips", systemImage: "globe.americas") }
-                .tag(AppTab.trips)
         }
         .toolbarBackground(Theme.night, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)

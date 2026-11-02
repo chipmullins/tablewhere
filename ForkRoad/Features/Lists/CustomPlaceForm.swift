@@ -116,7 +116,7 @@ struct CustomPlaceForm: View {
 
                 Section {
                     Picker("List", selection: $list) {
-                        Text("Want to try").tag(SavedList.interested)
+                        Text("To try").tag(SavedList.interested)
                         Text("Favorites").tag(SavedList.favorites)
                     }
                     .pickerStyle(.segmented)

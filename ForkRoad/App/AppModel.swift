@@ -3,7 +3,7 @@ import CoreLocation
 import PickerCore
 
 enum AppTab: Hashable {
-    case discover, spin, lists, group, trips
+    case discover, spin, lists, group
 }
 
 enum SpinSource: String, CaseIterable, Identifiable {
@@ -20,7 +20,7 @@ enum SpinSource: String, CaseIterable, Identifiable {
         case .nearby: return "Nearby"
         case .picked: return "Custom"
         case .favorites: return "Favorites"
-        case .interested: return "Want to try"
+        case .interested: return "To try"
         }
     }
 
@@ -45,6 +45,8 @@ enum SpinSource: String, CaseIterable, Identifiable {
 final class AppModel {
     var selectedTab: AppTab = .discover
     var spinSource: SpinSource = .nearby
+    /// Spin → Eat in: spin your home meals instead of restaurants.
+    var eatIn = false
     /// Set by "Spin for it" / "Spin my favorites": Spin starts as soon as it opens.
     var pendingSpin = false
     /// Places you passed on with "Not tonight" (left out of spins for a few hours,

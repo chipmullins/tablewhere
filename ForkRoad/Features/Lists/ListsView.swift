@@ -2,11 +2,13 @@ import SwiftUI
 import SwiftData
 import PickerCore
 
-/// Favorites (places you love), Want to try, and Blacklisted.
+/// Favorites (places you love), To try, Home (meals you make, for Spin →
+/// Eat in), and Blacklisted.
 struct ListsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case favorites = "Favorites"
         case interested = "Interested"
+        case home = "Home"
         case blocked = "Blacklisted"
         var id: Self { self }
 
@@ -14,7 +16,7 @@ struct ListsView: View {
             switch self {
             case .favorites: return .favorites
             case .interested: return .interested
-            case .blocked: return nil
+            case .home, .blocked: return nil
             }
         }
     }
@@ -26,8 +28,11 @@ struct ListsView: View {
     @Query(sort: \BlockedPlace.blockedAt, order: .reverse) private var blockedPlaces: [BlockedPlace]
     @Query(sort: \BlockedCategory.blockedAt, order: .reverse) private var blockedCategories: [BlockedCategory]
     @Query private var areas: [SavedArea]
+    @Query(sort: \HomeRecipe.name) private var recipes: [HomeRecipe]
 
     @State private var tab: Tab = .favorites
+    @State private var showAddRecipe = false
+    @State private var editingRecipe: HomeRecipe?
     @State private var showAddPlace = false
     /// Bumped by swipe actions, for their haptics.
     @State private var tickTaps = 0
@@ -62,6 +67,8 @@ struct ListsView: View {
 
             if let list = tab.savedList {
                 savedSections(list)
+            } else if tab == .home {
+                homeSections
             } else {
                 blockedSections
             }
@@ -73,16 +80,19 @@ struct ListsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Hint.listsAdd.dismiss()
-                    showAddPlace = true
+                    if tab == .home { showAddRecipe = true } else { showAddPlace = true }
                 } label: {
-                    Label("Add a place", systemImage: "plus")
+                    Label(tab == .home ? "Add a meal" : "Add a place", systemImage: "plus")
                 }
-                .accessibilityHint("Search for a restaurant, or add one yourself")
+                .accessibilityHint(tab == .home ? "Add something you make at home"
+                                                : "Search for a restaurant, or add one yourself")
             }
         }
         .sheet(isPresented: $showAddPlace) {
             AddToListSheet(startingList: tab == .favorites ? .favorites : .interested)
         }
+        .sheet(isPresented: $showAddRecipe) { RecipeForm() }
+        .sheet(item: $editingRecipe) { RecipeForm(recipe: $0) }
         .navigationDestination(for: Place.self) { place in
             PlaceDetailView(place: place).zoomDestination(id: place.id, ns: zoom)
         }
@@ -100,8 +110,9 @@ struct ListsView: View {
     private func label(for tab: Tab) -> String {
         switch tab {
         case .favorites: return "Favorites \(items(in: .favorites).filtered(by: model.listCity, near: model.center, areas: areas).count)"
-        case .interested: return "Want to try \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
-        case .blocked: return "Blacklisted \(blockedPlaces.count + blockedCategories.count)"
+        case .interested: return "To try \(items(in: .interested).filtered(by: model.listCity, near: model.center, areas: areas).count)"
+        case .home: return "Home \(recipes.count)"
+        case .blocked: return "Blacklist \(blockedPlaces.count + blockedCategories.count)"
         }
     }
 
@@ -127,7 +138,7 @@ struct ListsView: View {
                 title: list == .favorites ? "Your plate’s empty" : "Nothing on deck yet",
                 message: list == .favorites
                     ? "Tap the heart on a place you love and it lands here. Then spin just your favorites when you can’t decide."
-                    : "Tap the bookmark on a place you want to try and it lands here. Then spin something new.",
+                    : "Curious about a place? Eager to finally try it? Tap the bookmark and it lands here. Then spin something new.",
                 primary: ("Find places nearby", { model.selectedTab = .discover }),
                 secondary: ("Or add one that’s not on the map", { showAddPlace = true })
             )
@@ -183,7 +194,7 @@ struct ListsView: View {
             Section {} footer: {
                 Text(list == .interested
                      ? "Tried one and loved it? Swipe right to move it to Favorites. Swipe left to skip a place in spins or remove it. Missing a place? Tap + to add it."
-                     : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it to Want to try.")
+                     : "Swipe left to skip a favorite in spins (it stays on your list) or remove it. Swipe right to move it to To try.")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
             }
@@ -271,7 +282,7 @@ struct ListsView: View {
                     }
                     .tint(Theme.saffron)
                 } else {
-                    Button("Try later", systemImage: "bookmark.fill") {
+                    Button("To try", systemImage: "bookmark.fill") {
                         tickTaps += 1
                         actions.move(item, to: .interested)
                     }
@@ -287,6 +298,75 @@ struct ListsView: View {
         if item.isCustom { parts.append(item.hasExactLocation ? "added by you" : "added by you · no address") }
         if item.skipInSpins { parts.append("left out of spins") }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: Home
+
+    @ViewBuilder
+    private var homeSections: some View {
+        if recipes.isEmpty {
+            EmptyState(
+                art: .plate,
+                title: "Cooking tonight?",
+                message: "Add the meals you make at home. Then switch Spin to Eat in and let the wheel pick dinner.",
+                primary: ("Add a meal", { showAddRecipe = true })
+            )
+            .padding(.vertical, 24)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        } else {
+            Section {
+                Button {
+                    model.eatIn = true
+                    model.pendingSpin = true
+                    model.selectedTab = .spin
+                } label: {
+                    Label("Spin what to make", systemImage: "sparkles")
+                        .font(Theme.display(17))
+                        .foregroundStyle(Theme.onSaffron)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .listRowBackground(Theme.saffron)
+            }
+            Section {
+                ForEach(recipes) { recipe in
+                    Button { editingRecipe = recipe } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "frying.pan")
+                                .font(Theme.body(18, .semibold))
+                                .foregroundStyle(Theme.accentText)
+                                .frame(width: 44, height: 44)
+                                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(recipe.name).font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
+                                if !recipe.note.isEmpty {
+                                    Text(recipe.note).font(Theme.body(13)).foregroundStyle(Theme.muted).lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            if recipe.link != nil {
+                                Image(systemName: "link")
+                                    .foregroundStyle(Theme.muted)
+                                    .accessibilityLabel("Has a recipe link")
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            removeTaps += 1
+                            context.delete(recipe)
+                        }
+                    }
+                }
+            }
+            .listRowBackground(Theme.surface)
+            Section {} footer: {
+                Text("Tap a meal to edit it. Swipe left to delete.")
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
+            }
+        }
     }
 
     // MARK: Blacklisted

@@ -3,7 +3,7 @@ import MapKit
 import Observation
 
 /// Place autocomplete backed by MKLocalSearchCompleter.
-/// `citiesOnly` (trips) drops street addresses; otherwise addresses,
+/// `citiesOnly` drops street addresses; otherwise addresses,
 /// neighborhoods, and landmarks are all allowed (changing your location).
 @MainActor
 @Observable

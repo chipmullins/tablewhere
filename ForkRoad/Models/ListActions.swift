@@ -84,7 +84,7 @@ struct ListActions {
         guard !isBlocked(place) else { return }
         let blocked = BlockedPlace(place: place)
         context.insert(blocked)
-        // A blacklisted place shouldn't stay on Favorites or Want to try.
+        // A blacklisted place shouldn't stay on Favorites or To try.
         var snapshot: SavedSnapshot?
         if let saved = savedRecord(for: place.id) {
             snapshot = SavedSnapshot(saved)

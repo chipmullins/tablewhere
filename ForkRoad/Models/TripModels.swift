@@ -5,6 +5,10 @@ import PickerCore
 
 /// A trip to another city, with the restaurants saved for it.
 /// Relationships are optional and every property has a default, as CloudKit requires.
+///
+/// NO LONGER USED (Trips was removed in build 26; Lists' city filter covers
+/// it). Kept in the schema because synced CloudKit models can only change
+/// additively: removing it could break sync for anyone who had trips.
 @Model
 final class Trip {
     var name: String = ""

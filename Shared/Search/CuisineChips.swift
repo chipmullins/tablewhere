@@ -2,7 +2,7 @@ import SwiftUI
 import PickerCore
 
 /// Multi-select cuisine chips. "All" clears the selection; tapping a cuisine
-/// toggles it. Used on Discover, Spin, trips, group picks, and in iMessage.
+/// toggles it. Used on Discover, Spin, group picks, and in iMessage.
 ///
 /// `NoFastFoodChip` is supplied by each target: the app's reads AppModel,
 /// the iMessage extension's reads the shared preference.

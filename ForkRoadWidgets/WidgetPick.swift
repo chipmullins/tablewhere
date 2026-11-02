@@ -44,7 +44,7 @@ enum WidgetPick {
         Date(timeIntervalSince1970: Double(slot(for: date) + 1) * slotLength)
     }
 
-    /// Favorites first; if none pass the rules, Want to try; then the closest nearby places.
+    /// Favorites first; if none pass the rules, To try; then the closest nearby places.
     static func pool() -> (places: [Place], source: Source)? {
         let rules = SharedCache.pickRules()
         let lists: [(Source, () -> [Place])] = [

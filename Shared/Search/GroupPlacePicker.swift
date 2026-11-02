@@ -18,7 +18,7 @@ enum PickerSource: String, CaseIterable, Identifiable {
         switch self {
         case .nearby: return "Nearby"
         case .favorites: return "Favorites"
-        case .interested: return "Want to try"
+        case .interested: return "To try"
         }
     }
 }
@@ -76,7 +76,7 @@ struct GroupPlacePicker: View {
     let onTap: (Place) -> Void
 
     @State private var filters: PlacePickerFilters?
-    /// Nearby, Favorites, or Want to try. Remembered between pickers.
+    /// Nearby, Favorites, or To try. Remembered between pickers.
     @AppStorage("placePickerSource") private var source: PickerSource = .nearby
     @State private var nearby: [Place] = []
     @State private var isLoadingNearby = false
@@ -161,10 +161,10 @@ struct GroupPlacePicker: View {
                 }
             case .interested:
                 let wants = available(interested)
-                section("Want to try", wants)
+                section("To try", wants)
                 if wants.isEmpty {
                     statusRow(interested.isEmpty
-                              ? "Tap the bookmark on a restaurant you want to try to see it here."
+                              ? "Curious about a place? Bookmark it and it shows up here."
                               : "None of your places to try can be added here.")
                 }
             }
