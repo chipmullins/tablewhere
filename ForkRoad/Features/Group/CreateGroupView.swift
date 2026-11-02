@@ -32,6 +32,11 @@ struct CreateGroupView: View {
     @State private var asksRSVP = false
     @State private var hasReplyBy = false
     @State private var replyBy = PlanSetupRows.defaultReplyBy(for: PlanSetupRows.defaultMeetTime())
+    /// An "I'll pick" plan that was just made: the share sheet opens with it
+    /// (the button said "Send the plan"), then you land on the plan.
+    @State private var createdPlan: GroupSession?
+    /// The same plan, kept until the share sheet has closed.
+    @State private var sessionBeingShared: GroupSession?
 
     static let maxVoteOptions = GroupMode.maxStartingVoteOptions
     /// In a spin everyone adds one place, starting with you; a plan has one.
@@ -117,6 +122,11 @@ struct CreateGroupView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
+            .sheet(item: $createdPlan, onDismiss: finishPlan) { plan in
+                ActivityView(items: [planMessage(plan)])
+                    .presentationDetents([.medium, .large])
+                    .ignoresSafeArea()
+            }
         }
         .presentationBackground(Theme.night)
     }
@@ -233,6 +243,20 @@ struct CreateGroupView: View {
         }
     }
 
+    /// What goes to the group chat: the plan, the time, the note, and the link.
+    private func planMessage(_ plan: GroupSession) -> String {
+        guard let winner = plan.winner else { return plan.title }
+        return GroupLobbyView.planText(plan, winner: winner, note: plan.note)
+    }
+
+    /// The share sheet closed (sent or not): on to the plan, where "Send
+    /// everyone the plan" is still there if they backed out.
+    private func finishPlan() {
+        guard let session = sessionBeingShared else { return }
+        sessionBeingShared = nil
+        onCreated(session)
+    }
+
     /// Where everyone else's picker starts: the area you picked here, else
     /// where you're searching. ("Near you" would mean them, so it gets a real name.)
     private func groupArea(creatorName: String) -> GroupArea? {
@@ -264,7 +288,13 @@ struct CreateGroupView: View {
                     asksRSVP: mode == .plan && asksRSVP,
                     rsvpBy: mode == .plan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil
                 )
-                onCreated(session)
+                if session.mode == .plan {
+                    // Share first; onCreated runs when the sheet closes.
+                    sessionBeingShared = session
+                    createdPlan = session
+                } else {
+                    onCreated(session)
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
