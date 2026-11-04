@@ -62,6 +62,13 @@ final class LiveSession {
         RSVPCount(rsvps, creatorID: session?.createdBy, creatorName: session?.createdByName)
     }
 
+    /// People in the group (not the creator) who haven't answered the RSVP.
+    var noRSVPYet: [String] {
+        guard let session, session.hasRSVP else { return [] }
+        let answered = Set(rsvps.map(\.userID))
+        return members.filter { !session.isOwned(by: $0.id) && !answered.contains($0.id) }.map(\.name)
+    }
+
     var myRSVP: GroupRSVP? {
         guard let uid = GroupService.shared.currentUserID else { return nil }
         return rsvps.first { $0.userID == uid }

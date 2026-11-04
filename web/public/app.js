@@ -208,8 +208,10 @@ function start() {
     const name = $("name-input").value.trim().slice(0, 30);
     if (!name) return;
     store.set(NAME_KEY, name);
-    joinedOnce = true;
-    await join(name);
+    // You join the group when you vote, add a pick, or RSVP (just looking
+    // doesn't put you on the "waiting on" list). A rename updates it now.
+    if (members.some((m) => m.id === uid)) await join(name);
+    else store.remove(sessionNameKey());
     render();
   });
 
@@ -218,7 +220,6 @@ function start() {
     store.remove(NAME_KEY);
     store.remove(sessionNameKey());
     $("name-input").value = "";
-    joinedOnce = false;
     render();
     $("name-input").focus();
   });
@@ -236,6 +237,13 @@ function uniqueName(name) {
   return name;
 }
 
+/** Join the group the first time you do something (vote, add a pick, RSVP). */
+async function ensureJoined() {
+  if (members.some((m) => m.id === uid)) return;
+  const name = myName();
+  if (name) await join(name);
+}
+
 async function join(name) {
   const unique = uniqueName(name);
   store.set(sessionNameKey(), unique);
@@ -250,9 +258,25 @@ function myName() {
   return store.get(sessionNameKey()) || store.get(NAME_KEY);
 }
 
-let joinedOnce = false;
+// A live update rebuilds the place buttons. While a finger is on one, wait,
+// so a tap in a busy group doesn't land on a button that just got replaced.
+let pressing = false;
+let renderWaiting = false;
+document.addEventListener("pointerdown", (e) => {
+  if (e.target.closest && e.target.closest("#options")) pressing = true;
+}, true);
+const endPress = () => {
+  if (!pressing) return;
+  pressing = false;
+  // After the click has fired on the button that was pressed.
+  if (renderWaiting) setTimeout(() => { renderWaiting = false; render(); }, 0);
+};
+document.addEventListener("pointerup", endPress, true);
+document.addEventListener("pointercancel", endPress, true);
+
 function render() {
   if (!session) return;
+  if (pressing) { renderWaiting = true; return; }
   $("code").textContent = formatCode(session.joinCode);
   $("footer").hidden = false;
 
@@ -285,11 +309,6 @@ function render() {
     show("name-step");
     return;
   }
-  // Wait for the members list, so a returning "Sam" still becomes "Sam 2".
-  if (!joinedOnce && membersLoaded && !members.some((m) => m.id === uid)) {
-    joinedOnce = true;
-    join(name).catch(() => {});
-  }
 
   renderVote();
   if (held) {
@@ -319,9 +338,11 @@ function statusText() {
   if (isSpin()) {
     const n = (session.options || []).length;
     const picks = session.picksBy || {};
-    const waiting = members.filter((m) => !picks[m.id] && !(session.options || []).some((o) => o.addedByID === m.id));
+    // A full wheel can't take more picks, so nobody is waited on.
+    const waiting = n >= MAX_OPTIONS ? []
+      : members.filter((m) => !picks[m.id] && !(session.options || []).some((o) => o.addedByID === m.id));
     const names = waiting.map((m) => m.name);
-    const tail = !waiting.length ? "everyone’s pick is in"
+    const tail = n >= MAX_OPTIONS ? "the wheel is full" : !waiting.length ? "everyone’s pick is in"
       : `waiting on picks from ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`;
     return `${n} place${n === 1 ? "" : "s"} in the wheel · ${tail}`;
   }
@@ -491,6 +512,7 @@ async function vote(optionId, currentVote) {
     if (currentVote === optionId) {
       await deleteDoc(ref);
     } else {
+      await ensureJoined();
       await setDoc(ref, { voterID: uid, voterName: myName(), optionID: optionId, votedAt: serverTimestamp() });
       bumpStat("webVotes");
     }
@@ -517,6 +539,12 @@ function renderDecided() {
   const q = encodeURIComponent(winner.name);
   $("apple-maps").href = `https://maps.apple.com/?daddr=${winner.latitude},${winner.longitude}&q=${q}`;
   $("google-maps").href = `https://www.google.com/maps/dir/?api=1&destination=${winner.latitude},${winner.longitude}`;
+  if (!isApple) {
+    // Google Maps is the main button on Android.
+    $("google-maps").className = "btn light";
+    $("apple-maps").className = "btn ghost";
+    $("google-maps").after($("apple-maps"));
+  }
   const site = $("website");
   if (winner.websiteURL && /^https?:\/\//i.test(winner.websiteURL)) {
     site.href = winner.websiteURL;
@@ -664,6 +692,10 @@ function icsText(text) {
   return String(text).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
 }
 
+// Android and other non-Apple devices: Google Maps first, and Google
+// Calendar instead of an .ics file (which often won't open there).
+const isApple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+
 function downloadCalendar() {
   const winner = (session.options || []).find((o) => o.id === session.winnerID);
   const start = toDate(session.meetTime);
@@ -671,6 +703,17 @@ function downloadCalendar() {
   const end = new Date(start.getTime() + 90 * 60 * 1000);
   const note = typeof session.note === "string" && session.note.trim()
     ? `Note from ${session.createdByName || "the organizer"}: ${session.note.trim()}\n` : "";
+  if (!isApple) {
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: `${winner.name} · ${session.title || "Dinner"}`,
+      dates: `${icsDate(start)}/${icsDate(end)}`,
+      details: `${note}Details: ${location.href}`,
+      location: winner.address || winner.name,
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params}`, "_blank", "noopener");
+    return;
+  }
   const lines = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ForkRoad//Plan//EN", "BEGIN:VEVENT",
     `UID:${sessionId}@forkroad`,
@@ -1035,6 +1078,7 @@ async function addOption(option) {
   setStatus(myPick() ? `Swapping your pick for ${option.name}…` : `Adding ${option.name}…`);
   [...$("suggest-results").children].forEach((b) => { b.disabled = true; });
   try {
+    await ensureJoined();
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(sessionRef);
       if (!snap.exists()) throw new Error("ended");

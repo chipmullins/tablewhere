@@ -436,7 +436,7 @@ struct MessageVoteView: View {
         }
         if session.hasRSVP {
             RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,
-                      isOwner: live.isOwner, isWorking: isWorking) { going, guests in
+                      isOwner: live.isOwner, isWorking: isWorking, noReply: live.noRSVPYet) { going, guests in
                 answer(going: going, guests: guests, session: session)
             }
         }
@@ -821,10 +821,8 @@ struct MessageAddPlaceView: View {
                     sessionID: session.id,
                     option: GroupOption(place: place, addedBy: Identity.displayName ?? "Someone"))
                 dismiss()
-            } catch let error as GroupError {
-                errorMessage = GroupService.message(for: error)
             } catch {
-                errorMessage = "Couldn’t add it. Voting may have closed, or the list is full."
+                errorMessage = GroupService.message(for: error)
             }
         }
     }

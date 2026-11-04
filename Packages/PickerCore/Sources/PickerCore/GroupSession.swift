@@ -259,9 +259,10 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
 
     // MARK: Spin progress
 
-    /// In a spin, the members who haven't added their pick yet.
+    /// In a spin, the members who haven't added their pick yet. Once the
+    /// wheel is full nobody else can add one, so nobody is waited on.
     public func waitingOnPicks(members: [GroupMember]) -> [GroupMember] {
-        guard mode == .spin else { return [] }
+        guard mode == .spin, options.count < GroupSession.maxOptions else { return [] }
         return members.filter { pick(of: $0.id) == nil }
     }
 }

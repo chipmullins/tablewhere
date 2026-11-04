@@ -24,6 +24,8 @@ const db = getFirestore();
 
 /** FCM accepts at most 500 tokens per multicast. */
 const MULTICAST_LIMIT = 500;
+/** Most places a group can hold (GroupSession.maxOptions in the app). */
+const MAX_OPTIONS = 12;
 
 /** Error codes meaning the token will never work again. */
 const DEAD_TOKEN_CODES = new Set([
@@ -95,13 +97,27 @@ async function recipients(
 
 // MARK: - Sending
 
+interface SendOptions {
+  /** Same key = the new push replaces the last one (apns-collapse-id). */
+  collapse?: string;
+  /** No sound or screen wake (iOS passive interruption level). */
+  quiet?: boolean;
+}
+
 async function send(
   sessionId: string,
   to: Recipient[],
   title: string,
   body: string,
+  opts: SendOptions = {},
 ): Promise<void> {
   if (to.length === 0) return;
+  // Running updates (picks added, RSVPs) replace the previous one on the
+  // lock screen instead of piling up, and arrive quietly (no sound or screen
+  // wake). Milestones ("Everyone's in", "It's decided!") stay normal.
+  const aps: Record<string, unknown> = { "thread-id": `session-${sessionId}` };
+  if (opts.quiet) aps["interruption-level"] = "passive";
+  else aps.sound = "default";
   for (let i = 0; i < to.length; i += MULTICAST_LIMIT) {
     const chunk = to.slice(i, i + MULTICAST_LIMIT);
     const message: MulticastMessage = {
@@ -109,7 +125,8 @@ async function send(
       notification: { title, body },
       data: { sessionId },
       apns: {
-        payload: { aps: { sound: "default", "thread-id": `session-${sessionId}` } },
+        ...(opts.collapse ? { headers: { "apns-collapse-id": `${opts.collapse}-${sessionId}`.slice(0, 64) } } : {}),
+        payload: { aps },
       },
     };
     try {
@@ -170,6 +187,8 @@ async function everyoneIsIn(sessionId: string, session: DocumentData): Promise<{
   if (members.length === 0) return { ready: false, others: 0 };
   let done: Set<string>;
   if (session.mode === "spin") {
+    // A full wheel (12 places) can't take more picks: nobody is left to wait on.
+    if (optionsOf(session).length >= MAX_OPTIONS) return { ready: true, others: members.length };
     const picks = session.picksBy && typeof session.picksBy === "object" ? Object.keys(session.picksBy) : [];
     done = new Set([...picks, ...optionsOf(session).map((o) => o.addedByID ?? "")]);
   } else {
@@ -276,7 +295,8 @@ async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData,
       : isSpin
         ? `${who} added ${place} to the wheel · ${tally}`
         : `${who} suggested ${place} · ${tally}`;
-    await send(sessionId, to, title, body);
+    const milestone = title === "Everyone's in";
+    await send(sessionId, to, title, body, { collapse: "places", quiet: !milestone });
   }
 }
 
@@ -463,7 +483,7 @@ export const onRSVPWritten = onDocumentWritten(
       const guests = typeof after.guests === "number" && after.guests > 0 ? ` (+${after.guests})` : "";
       const what = after.going === true ? `${who}'s in${guests}` : `${who} can't make it`;
       const count = headcountText(await headcount(sessionId, creator));
-      await send(sessionId, to, sessionTitle(session), `${what} · ${count}`);
+      await send(sessionId, to, sessionTitle(session), `${what} · ${count}`, { collapse: "rsvp", quiet: true });
     } catch (err) {
       logger.error("onRSVPWritten failed", { params: event.params, err });
     }

@@ -39,7 +39,8 @@ struct NamePromptView: View {
         .onAppear { focused = true }
     }
 
-    private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
+    /// 30 characters at most, same as the web page.
+    private var trimmed: String { String(name.trimmingCharacters(in: .whitespaces).prefix(30)) }
 
     private func save() {
         guard !trimmed.isEmpty else { return }
@@ -107,7 +108,7 @@ struct VoteOptionRow: View {
                             }
                         }
                         Text(isRuledOut ? "Someone in the group blacklisted it, so it can’t win"
-                             : voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : voters.joined(separator: ", "))
+                             : voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : shortVoterList(voters))
                             .font(Theme.body(12))
                             .foregroundStyle(Theme.muted)
                             .lineLimit(1)
@@ -482,4 +483,10 @@ struct VoteNotices: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
+}
+
+/// "Sam, Alex, Jo + 8" so a big group's voters fit on one line.
+func shortVoterList(_ names: [String], showing limit: Int = 3) -> String {
+    guard names.count > limit + 1 else { return names.joined(separator: ", ") }
+    return names.prefix(limit).joined(separator: ", ") + " + \(names.count - limit)"
 }

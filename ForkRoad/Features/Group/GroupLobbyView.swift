@@ -499,7 +499,7 @@ struct GroupLobbyView: View {
         }
         if session.hasRSVP {
             RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,
-                      isOwner: live.isOwner, isWorking: isWorking) { going, guests in
+                      isOwner: live.isOwner, isWorking: isWorking, noReply: live.noRSVPYet) { going, guests in
                 answer(going: going, guests: guests, in: session)
             }
         }
@@ -950,10 +950,9 @@ private struct AddOptionView: View {
             do {
                 try await GroupService.shared.addOption(sessionID: session.id, option: GroupOption(place: place, addedBy: name))
                 dismiss()
-            } catch let error as GroupError {
-                errorMessage = GroupService.message(for: error)
             } catch {
-                errorMessage = "Couldn’t add it. Voting may have closed, or the wheel is full (12 places)."
+                // Offline, closed, full, or ended: say which.
+                errorMessage = GroupService.message(for: error)
             }
         }
     }

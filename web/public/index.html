@@ -27,9 +27,10 @@
     .option:disabled { cursor: default; }
     .row { display: flex; align-items: center; gap: 12px; }
     .tile { width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center; font: 800 20px Outfit, sans-serif; }
-    .name { font-weight: 600; font-size: 16px; }
+    .name { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+    .row > div { min-width: 0; }
     .linkish { background: none; border: 0; padding: 4px 0; color: var(--saffron); font: inherit; font-weight: 600; cursor: pointer; }
-    .sub { font-size: 12px; color: var(--muted); }
+    .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
     .count { margin-left: auto; font: 800 22px Outfit, sans-serif; }
     .bar { height: 8px; border-radius: 4px; background: #23232E; overflow: hidden; }
     .bar > span { display: block; height: 100%; border-radius: 4px; background: #5C5A66; transition: width .4s ease; }

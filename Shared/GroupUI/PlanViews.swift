@@ -13,6 +13,8 @@ struct RSVPPanel: View {
     let mine: GroupRSVP?
     let isOwner: Bool
     let isWorking: Bool
+    /// In the group but haven't answered (shown to the creator only).
+    var noReply: [String] = []
     /// Going, guests.
     var onAnswer: (Bool, Int) -> Void
 
@@ -40,6 +42,9 @@ struct RSVPPanel: View {
             }
             if !count.notGoing.isEmpty {
                 names("Can’t make it", count.notGoing.map(\.name))
+            }
+            if isOwner && !noReply.isEmpty {
+                names("No reply yet", noReply)
             }
         }
         .padding(16)
