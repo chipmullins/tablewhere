@@ -101,6 +101,9 @@ struct PlaceDetailView: View {
                 .padding(.horizontal, 16)
                 .sensoryFeedback(Haptic.tick, trigger: refresh)
 
+                MakeItThePlanButton(place: place, background: Theme.surface)
+                    .padding(.horizontal, 16)
+
                 if let onList {
                     Toggle(isOn: Binding(
                         get: { actions.isSkippedInSpins(place) },
@@ -259,5 +262,44 @@ private struct NoteField: View {
         guard let item = matches.first else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if item.note != trimmed { item.note = trimmed }
+    }
+}
+
+/// "Make it the plan": opens Group → I'll pick with this place filled in, so
+/// you just set the time and send it. Shown on place details and the Spin result.
+struct MakeItThePlanButton: View {
+    let place: Place
+    var background: Color = Theme.surfaceHigh
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.modelContext) private var context
+    @State private var taps = 0
+
+    /// Real places only: not home meals, things typed onto the wheel, or your
+    /// own places without an address (friends couldn't get directions).
+    static func canPlan(_ place: Place, saved: SavedPlace?) -> Bool {
+        FirebaseSetup.isConfigured
+            && !place.id.hasPrefix("typed|")
+            && !HomeRecipe.isRecipe(place)
+            && (saved?.isShareable ?? true)
+    }
+
+    var body: some View {
+        if Self.canPlan(place, saved: ListActions(context: context).saved(place)) {
+            Button {
+                taps += 1
+                model.pendingPlanPlace = place
+                model.selectedTab = .group
+            } label: {
+                Label("Make it the plan", systemImage: "person.2.fill")
+                    .font(Theme.body(15, .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .sensoryFeedback(Haptic.commit, trigger: taps)
+            .accessibilityHint("Starts a group plan at \(place.name). You pick the time and send it.")
+        }
     }
 }

@@ -135,6 +135,8 @@ final class AppModel {
     var pendingGroupSessionID: String?
     /// A place to open on Discover (from the widget).
     var pendingPlace: Place?
+    /// "Make it the plan": GroupHomeView opens I'll pick with this place.
+    var pendingPlanPlace: Place?
 
     /// The city you're searching in ("Lexington, KY"), looked up from `center`.
     private(set) var currentCity: String?

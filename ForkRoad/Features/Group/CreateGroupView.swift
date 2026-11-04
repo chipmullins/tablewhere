@@ -5,6 +5,8 @@ import PickerCore
 /// Sheet for starting a group plan: name it, choose vote, spin, or "I'll
 /// pick" (you already know where: set the time and send it), pick places.
 struct CreateGroupView: View {
+    /// "Make it the plan" from a place: start on I'll pick with it filled in.
+    var startingPlace: Place? = nil
     var onCreated: (GroupSession) -> Void
 
     @Environment(AppModel.self) private var model
@@ -122,6 +124,11 @@ struct CreateGroupView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
+            .onAppear {
+                guard let startingPlace, selected.isEmpty else { return }
+                mode = .plan
+                selected = [startingPlace]
+            }
             .sheet(item: $createdPlan, onDismiss: finishPlan) { plan in
                 ActivityView(items: [planMessage(plan)])
                     .presentationDetents([.medium, .large])
