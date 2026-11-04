@@ -499,7 +499,7 @@ struct MessageVoteView: View {
                           totalSlots: slots,
                           voters: tally.votersByOption[option.id] ?? [],
                           isMine: live.myVote == option.id,
-                          isLeading: leader == option.id,
+                          isLeading: session.mode == .vote && leader == option.id,
                           isEnabled: !isWorking && session.mode == .vote && open
                               && (!ruledOut.contains(option.id) || live.myVote == option.id),
                           showsVotes: session.mode == .vote,

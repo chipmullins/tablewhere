@@ -416,7 +416,11 @@ private struct SpinStage: View {
         let next = count > 1 ? pool[(reelIndex + 1) % count].name : " "
         let landed = winner != nil && !isSpinning
         // Before a spin: no names yet, so it never looks like it already picked.
-        let idle = !isSpinning && winner == nil && count > 0
+        let ready = !isSpinning && winner == nil && count > 0
+        // The full-screen reveal is playing over the reel (it shows through the
+        // backdrop): no names here either until it lands.
+        let revealing = isSpinning && pending != nil
+        let idle = ready || revealing
 
         return VStack(spacing: 14) {
             if idle {
@@ -434,7 +438,7 @@ private struct SpinStage: View {
                         .frame(width: 40, height: 40)
                         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-                    Text("Ready to spin")
+                    Text(revealing ? "Spinning…" : "Ready to spin")
                         .font(Theme.display(24))
                         .foregroundStyle(Theme.muted)
                 } else if let current {
@@ -468,7 +472,7 @@ private struct SpinStage: View {
         .frame(maxWidth: .infinity, minHeight: 250)
         .card(radius: 28)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(idle ? "Ready to spin, \(count) places" : (current.map { "Reel showing \($0.name)" } ?? "Reel is empty"))
+        .accessibilityLabel(revealing ? "Spinning" : ready ? "Ready to spin, \(count) places" :(current.map { "Reel showing \($0.name)" } ?? "Reel is empty"))
     }
 
     private func spinButton(_ pool: [Place]) -> some View {
