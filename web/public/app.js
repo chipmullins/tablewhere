@@ -259,20 +259,25 @@ function myName() {
 }
 
 // MARK: Spin reveal
-// Someone watching an open spin sees the wheel land, like in the app. Anyone
-// opening the link after it's decided just sees the result.
+// Someone watching an open spin sees the wheel land, like in the app. Someone
+// opening the link afterward gets a quick version, once per device (reopening
+// the link later goes straight to the result).
 let sawUndecided = false;   // this page has shown the plan before it was decided
 let revealedFor = null;     // the winner we already played (or skipped) the reveal for
 let revealing = false;
 
+function revealKey() { return `forkroad.revealed.${sessionId}.${session.winnerID}`; }
+
 function shouldReveal() {
-  return isSpin() && sawUndecided && !revealing && revealedFor !== session.winnerID
-    && (session.options || []).length > 1;
+  if (!isSpin() || revealing || revealedFor === session.winnerID || (session.options || []).length < 2) return false;
+  return sawUndecided || !store.get(revealKey());
 }
 
-function playReveal() {
+/** `quick`: opened after the spin, so a short version (about 2.5 seconds). */
+function playReveal(quick = false) {
   revealing = true;
   const winnerId = session.winnerID;
+  store.set(revealKey(), "1");
   const winner = (session.options || []).find((o) => o.id === winnerId);
   const pool = (session.options || []).filter((o) => !ruledOut.has(o.id)).map((o) => o.name);
   const names = pool.length > 1 ? pool : (session.options || []).map((o) => o.name);
@@ -314,21 +319,24 @@ function playReveal() {
     overlay.setAttribute("aria-label", `The wheel picked ${winner ? winner.name : "a place"}`);
     showName(winner ? winner.name : "");
     if (navigator.vibrate) navigator.vibrate(30);
-    setTimeout(finish, 2000);
+    setTimeout(finish, quick ? 1400 : 2000);
   };
 
   if (reduce || names.length < 2) { land(); return; }
-  // Same pacing as the app: 20 steps, starting fast and easing out.
+  // Live: the app's pacing, 20 steps easing out (about 8 seconds).
+  // Quick: 8 faster steps (about 1 second), then the landing.
+  const steps = quick ? 8 : 20;
+  const growth = quick ? 1.25 : 1.17;
   let index = Math.floor(Math.random() * names.length);
-  let delay = 60;
+  let delay = quick ? 50 : 60;
   let step = 0;
   const tick = () => {
     if (finished) return;
-    if (step++ >= 20) { land(); return; }
+    if (step++ >= steps) { land(); return; }
     index = (index + 1) % names.length;
     showName(names[index], delay);
     setTimeout(tick, delay);
-    delay *= 1.17;
+    delay *= growth;
   };
   tick();
 }
@@ -362,7 +370,7 @@ function render() {
   // Anyone opening the link after the group decided sees the result right away.
   if (session.status === "decided" && session.winnerID && !held) {
     // Watching when the spin landed: play the wheel first (the places stay behind it).
-    if (shouldReveal()) { playReveal(); return; }
+    if (shouldReveal()) { playReveal(!sawUndecided); return; }
     if (revealing) return;
     // Tapped I'm in / Can't make it without a name yet: ask for it first.
     if (pendingRSVP && !myName()) {
