@@ -306,7 +306,8 @@ function render() {
   if (!name) {
     $("name-title").textContent = session.title || "Help pick where to eat";
     // What happens next, so a first-timer knows why they're typing a name.
-    const next = isSpin() ? "Add your pick to the wheel, and the winner shows up right here."
+    const next = isSurprise() ? "The wheel picks from places nearby, and the winner shows up right here."
+      : isSpin() ? "Add your pick to the wheel, and the winner shows up right here."
       : "Vote for a place, and the winner shows up right here.";
     $("name-sub").textContent = `${session.createdByName || "A friend"} wants help deciding where to eat. ${next}`;
     show("name-step");
@@ -335,9 +336,15 @@ function tally() {
 }
 
 function isSpin() { return session.mode === "spin"; }
+// "Surprise us": a spin whose wheel is places nearby; nobody adds a pick.
+function isSurprise() { return isSpin() && session.surprise === true; }
 function isPlan() { return session.mode === "plan"; }
 
 function statusText() {
+  if (isSurprise()) {
+    const n = (session.options || []).length;
+    return `${n} places nearby on the wheel · ${session.createdByName || "the organizer"} spins when everyone’s here`;
+  }
   if (isSpin()) {
     const n = (session.options || []).length;
     const picks = session.picksBy || {};
@@ -452,7 +459,9 @@ function renderSpin() {
   const creator = session.createdByName || "Whoever started it";
   const options = session.options || [];
   const havePick = !!myPick();
-  $("vote-help").textContent = havePick
+  $("vote-help").textContent = isSurprise()
+    ? `${creator} let the wheel fill itself with places nearby. When they spin, it picks one at random and the result shows up right here.`
+    : havePick
     ? `You’re in the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
     : mapkitToken
       ? `Add your pick to the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
@@ -467,8 +476,8 @@ function renderSpin() {
     list.append(empty);
   }
   for (const option of options) {
-    const mine = option.addedByID ? option.addedByID === uid
-      : (option.addedBy || "").trim().toLowerCase() === me;
+    const mine = !isSurprise() && (option.addedByID ? option.addedByID === uid
+      : (option.addedBy || "").trim().toLowerCase() === me);
     const card = document.createElement("div");
     card.className = "option static" + (mine ? " mine-pick" : "");
     card.setAttribute("role", "listitem");
@@ -495,7 +504,7 @@ function renderSpin() {
     const sub = document.createElement("div");
     sub.className = "sub";
     sub.textContent = out ? `Added by ${option.addedBy} · someone in the group blacklisted it, so the spin skips it`
-      : `${option.category} · added by ${option.addedBy}`;
+      : isSurprise() ? option.category : `${option.category} · added by ${option.addedBy}`;
     text.append(nameEl, sub);
     row.append(tile, text);
     card.append(row);
@@ -583,6 +592,7 @@ function renderDecided() {
   $("winner-label").textContent = isPlan() ? "THE PLAN" : "THE GROUP PICKED";
   const time = formatTime(session.meetTime);
   const how = isPlan() ? `Picked by ${session.createdByName || "the organizer"} · ${winner.category}`
+    : isSurprise() ? `Picked by the spin · ${winner.category}`
     : isSpin() ? `Picked by the spin · ${winner.addedBy ? winner.addedBy + "’s pick" : winner.category}` : winner.category;
   $("winner-detail").textContent = time ? `Meet ${time} · ${how}` : how;
 
@@ -865,7 +875,7 @@ function updateSuggest() {
   const open = acceptsChanges();
   const full = (session.options || []).length >= MAX_OPTIONS;
   const mine = myPick();
-  $("suggest").hidden = !mapkitToken || !open;
+  $("suggest").hidden = !mapkitToken || !open || isSurprise();
   const button = $("suggest-open");
   button.style.width = "100%";
   if (mine) {

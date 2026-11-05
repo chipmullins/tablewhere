@@ -388,7 +388,10 @@ struct AddPlaceButton: View {
     let action: () -> Void
 
     var body: some View {
-        if let userID, let mine = session.pick(of: userID), !(session.mode == .vote && session.isOwned(by: userID)) {
+        if session.isSurprise {
+            // The wheel is places nearby; nobody adds one.
+            EmptyView()
+        } else if let userID, let mine = session.pick(of: userID), !(session.mode == .vote && session.isOwned(by: userID)) {
             HStack(spacing: 10) {
                 Label("Your pick: \(mine.name)", systemImage: "checkmark.circle.fill")
                     .font(Theme.body(14, .semibold))

@@ -487,7 +487,7 @@ struct MessageVoteView: View {
         if live.isOwner && live.members.count <= 1 {
             inviteCard(session)
         }
-        if session.mode == .spin {
+        if session.mode == .spin && !session.isSurprise {
             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
         }
         VoteNotices(session: session, isOwner: live.isOwner,

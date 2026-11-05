@@ -337,7 +337,7 @@ struct GroupLobbyView: View {
         let _ = timeUpTick
         let open = session.acceptsChanges
         let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
-        if session.mode == .spin {
+        if session.mode == .spin && !session.isSurprise {
             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
         }
         VoteNotices(session: session, isOwner: live.isOwner,

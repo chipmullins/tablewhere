@@ -54,7 +54,9 @@ private struct VoteBubbleCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
             } else if session.mode == .spin {
-                Text("Everyone adds one place, then \(session.createdByName) spins.")
+                Text(session.isSurprise
+                     ? "\(session.options.count) places nearby. \(session.createdByName) spins."
+                     : "Everyone adds one place, then \(session.createdByName) spins.")
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Theme.text)
                 ForEach(session.options.prefix(4)) { option in

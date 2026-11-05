@@ -161,7 +161,7 @@ final class MessagesState {
         } else {
             layout.caption = session.title
             if session.mode == .spin {
-                layout.subcaption = "Tap to add your pick to the wheel"
+                layout.subcaption = session.isSurprise ? "Tap to see the wheel" : "Tap to add your pick to the wheel"
                 message.summaryText = "Spin: \(session.title)"
             } else {
                 let votes = tally.totalVotes
