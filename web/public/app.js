@@ -258,6 +258,81 @@ function myName() {
   return store.get(sessionNameKey()) || store.get(NAME_KEY);
 }
 
+// MARK: Spin reveal
+// Someone watching an open spin sees the wheel land, like in the app. Anyone
+// opening the link after it's decided just sees the result.
+let sawUndecided = false;   // this page has shown the plan before it was decided
+let revealedFor = null;     // the winner we already played (or skipped) the reveal for
+let revealing = false;
+
+function shouldReveal() {
+  return isSpin() && sawUndecided && !revealing && revealedFor !== session.winnerID
+    && (session.options || []).length > 1;
+}
+
+function playReveal() {
+  revealing = true;
+  const winnerId = session.winnerID;
+  const winner = (session.options || []).find((o) => o.id === winnerId);
+  const pool = (session.options || []).filter((o) => !ruledOut.has(o.id)).map((o) => o.name);
+  const names = pool.length > 1 ? pool : (session.options || []).map((o) => o.name);
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const overlay = document.createElement("div");
+  overlay.className = "reveal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-live", "assertive");
+  overlay.setAttribute("aria-label", "Spinning");
+  overlay.innerHTML = `<div><div class="icon" aria-hidden="true">✨</div><div class="label">SPINNING…</div>`
+    + `<div class="name"></div><div class="skip">Tap to skip</div></div>`;
+  document.body.append(overlay);
+  const nameBox = overlay.querySelector(".name");
+  const showName = (text, ms) => {
+    const span = document.createElement("span");
+    span.textContent = text;
+    // Slides in about as fast as the wheel is turning (like the app).
+    if (ms) span.style.animationDuration = `${Math.min(220, Math.round(ms * 0.7))}ms`;
+    nameBox.replaceChildren(span);
+  };
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    overlay.remove();
+    revealing = false;
+    revealedFor = winnerId;
+    render();
+  };
+  overlay.addEventListener("click", finish);
+
+  const land = () => {
+    if (finished) return;
+    overlay.classList.add("landed");
+    overlay.querySelector(".icon").textContent = "🎉";
+    overlay.querySelector(".label").textContent = "THE WHEEL PICKED";
+    overlay.setAttribute("aria-label", `The wheel picked ${winner ? winner.name : "a place"}`);
+    showName(winner ? winner.name : "");
+    if (navigator.vibrate) navigator.vibrate(30);
+    setTimeout(finish, 2000);
+  };
+
+  if (reduce || names.length < 2) { land(); return; }
+  // Same pacing as the app: 20 steps, starting fast and easing out.
+  let index = Math.floor(Math.random() * names.length);
+  let delay = 60;
+  let step = 0;
+  const tick = () => {
+    if (finished) return;
+    if (step++ >= 20) { land(); return; }
+    index = (index + 1) % names.length;
+    showName(names[index], delay);
+    setTimeout(tick, delay);
+    delay *= 1.17;
+  };
+  tick();
+}
+
 // A live update rebuilds the place buttons. While a finger is on one, wait,
 // so a tap in a busy group doesn't land on a button that just got replaced.
 let pressing = false;
@@ -286,6 +361,9 @@ function render() {
 
   // Anyone opening the link after the group decided sees the result right away.
   if (session.status === "decided" && session.winnerID && !held) {
+    // Watching when the spin landed: play the wheel first (the places stay behind it).
+    if (shouldReveal()) { playReveal(); return; }
+    if (revealing) return;
     // Tapped I'm in / Can't make it without a name yet: ask for it first.
     if (pendingRSVP && !myName()) {
       $("name-title").textContent = session.title || "The plan";
@@ -302,6 +380,7 @@ function render() {
     return;
   }
 
+  sawUndecided = true;
   const name = myName();
   if (!name) {
     $("name-title").textContent = session.title || "Help pick where to eat";

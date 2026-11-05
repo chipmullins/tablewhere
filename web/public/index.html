@@ -49,6 +49,20 @@
     .meet-line { margin: 2px 0 6px; font-weight: 700; color: var(--saffron); }
     .app-pitch { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface); font-size: 14px; }
     .app-pitch b { display: block; margin-bottom: 2px; }
+    /* The spin reveal (same as the app's): names cycle and slow, then land. */
+    .reveal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; text-align: center;
+      padding: 24px; background: rgba(11, 11, 15, .94); cursor: pointer; animation: rv-fade .2s ease-out; }
+    .reveal .icon { font-size: 40px; line-height: 1; }
+    .reveal .label { margin: 14px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--saffron); }
+    .reveal .name { min-height: 2.3em; display: grid; place-items: center; overflow: hidden; }
+    .reveal .name span { display: block; max-width: 92vw; font: 800 30px/1.1 Outfit, sans-serif; color: var(--muted);
+      overflow-wrap: anywhere; animation: rv-in .16s ease-out; }
+    .reveal.landed .name span { font-size: 38px; color: var(--text); animation: rv-land .55s cubic-bezier(.3, 1.6, .5, 1); }
+    .reveal .skip { margin-top: 26px; font-size: 12px; color: var(--muted); }
+    @keyframes rv-fade { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes rv-in { from { transform: translateY(55%); opacity: .55 } to { transform: none; opacity: 1 } }
+    @keyframes rv-land { from { transform: scale(.75); opacity: .3 } to { transform: none; opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .reveal, .reveal .name span { animation: none !important; } }
     .winner-map { height: 170px; border-radius: 22px; overflow: hidden; margin-top: 12px; background: #1F1F29; cursor: pointer; }
     .btn { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; border: 0; font: 700 15px 'DM Sans', sans-serif; text-decoration: none; cursor: pointer; }
     .btn.primary { background: var(--saffron); color: var(--on-saffron); }
