@@ -98,6 +98,7 @@ struct SpinView: View {
                 if !model.eatIn {
                     HintCard(.spinFirst)
                     HintCard(.myWheel)
+                    HintCard(.eatIn)
                 }
             }
             .padding(.horizontal, 16)
@@ -115,6 +116,7 @@ struct SpinView: View {
         .onChange(of: model.spinSource) {
             if model.spinSource == .picked { Hint.myWheel.dismiss() }
         }
+        .onChange(of: model.eatIn) { if model.eatIn { Hint.eatIn.dismiss() } }
         .sheet(isPresented: $showAddRecipe) { RecipeForm() }
     }
 

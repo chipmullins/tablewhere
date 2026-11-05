@@ -305,7 +305,10 @@ function render() {
   const name = myName();
   if (!name) {
     $("name-title").textContent = session.title || "Help pick where to eat";
-    $("name-sub").textContent = `${session.createdByName || "A friend"} wants help deciding where to eat.`;
+    // What happens next, so a first-timer knows why they're typing a name.
+    const next = isSpin() ? "Add your pick to the wheel, and the winner shows up right here."
+      : "Vote for a place, and the winner shows up right here.";
+    $("name-sub").textContent = `${session.createdByName || "A friend"} wants help deciding where to eat. ${next}`;
     show("name-step");
     return;
   }
@@ -382,7 +385,7 @@ function renderVote() {
   if (isTimeUp()) notes.push(`Time’s up! ${session.createdByName || "The organizer"} will lock it in.`);
   if (everythingRuledOut) notes.push("Someone has every place here blacklisted, so they’re all back in.");
   if (mine && ruledOut.has(mine) && !closed) notes.push("Your vote is on a place someone ruled out, so it can’t win. Tap another place.");
-  if (!closed) notes.push("Tap a place to vote. Tap it again to take your vote back. Ties are broken fairly by the app.");
+  if (!closed) notes.push("Tap a place to vote. Tap it again to take your vote back. The winner shows up right here, and ties are broken fairly.");
   $("vote-help").textContent = notes.join(" ");
 
   const list = $("options");

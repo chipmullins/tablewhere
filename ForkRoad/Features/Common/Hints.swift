@@ -10,6 +10,9 @@ enum Hint: String, CaseIterable {
     case myWheel
     case listsAdd
     case groupStart
+    /// Spin's Eat out | Eat in switch. Waits for a second visit, so the
+    /// first one stays about tapping Spin.
+    case eatIn
 
     var icon: String {
         switch self {
@@ -18,6 +21,7 @@ enum Hint: String, CaseIterable {
         case .myWheel: return "circle.dashed"
         case .listsAdd: return "plus.circle.fill"
         case .groupStart: return "person.3.fill"
+        case .eatIn: return "fork.knife"
         }
     }
 
@@ -28,6 +32,7 @@ enum Hint: String, CaseIterable {
         case .myWheel: return "Make a custom spin"
         case .listsAdd: return "Add any place"
         case .groupStart: return "Pick with friends"
+        case .eatIn: return "Staying in tonight?"
         }
     }
 
@@ -42,7 +47,9 @@ enum Hint: String, CaseIterable {
         case .listsAdd:
             return "Tap + to search for a restaurant, or add one that isn’t on Apple Maps with your own notes."
         case .groupStart:
-            return "Vote or spin with friends. They join from iMessage or a web link, no app needed."
+            return "Vote, spin, or just pick and send the plan. Friends join from a link, no app needed (but they should) 😉"
+        case .eatIn:
+            return "Switch to Eat in to spin your own home meals. Add them under Lists → Home."
         }
     }
 
@@ -50,7 +57,17 @@ enum Hint: String, CaseIterable {
     var waitsToBeShown: Bool { self == .spinFirst }
 
     /// A hint that should wait until another one is done.
-    var after: Hint? { self == .myWheel ? .spinFirst : nil }
+    var after: Hint? {
+        switch self {
+        case .myWheel: return .spinFirst
+        // Not after myWheel: plenty of people never close that one.
+        case .eatIn: return .spinFirst
+        default: return nil
+        }
+    }
+
+    /// Only from the second time the app is opened.
+    var waitsForSecondLaunch: Bool { self == .eatIn }
 
     @MainActor var isVisible: Bool { HintStore.shared.isVisible(self) }
     @MainActor func show() { HintStore.shared.show(self) }
@@ -64,18 +81,25 @@ final class HintStore {
     private static let seenKey = "seenHints"
     private static let pendingKey = "pendingHints"
 
+    private static let launchesKey = "hintLaunches"
+
     private(set) var seen: Set<String>
     private(set) var pending: Set<String>
+    /// How many times the app has been opened (counted once per launch).
+    private let launches: Int
 
     private init() {
         let defaults = UserDefaults.standard
         seen = Set(defaults.stringArray(forKey: Self.seenKey) ?? [])
         pending = Set(defaults.stringArray(forKey: Self.pendingKey) ?? [])
+        launches = defaults.integer(forKey: Self.launchesKey) + 1
+        defaults.set(launches, forKey: Self.launchesKey)
     }
 
     func isVisible(_ hint: Hint) -> Bool {
         guard !seen.contains(hint.rawValue) else { return false }
         if hint.waitsToBeShown && !pending.contains(hint.rawValue) { return false }
+        if hint.waitsForSecondLaunch && launches < 2 && !pending.contains(hint.rawValue) { return false }
         if let before = hint.after, isVisible(before) { return false }
         return true
     }
