@@ -14,8 +14,6 @@ struct GroupHomeView: View {
     @State private var isJoining = false
     @State private var errorMessage: String?
     @State private var recentIDs = SharedCache.recentSessionIDs()
-    /// "Make it the plan" from a place: the create sheet starts on I'll pick with it.
-    @State private var planPlace: Place?
 
     private enum PendingAction { case create, join }
 
@@ -26,15 +24,6 @@ struct GroupHomeView: View {
                 guard let id = model.pendingGroupSessionID else { return }
                 model.pendingGroupSessionID = nil
                 if path.last != id { path = [id] }
-            }
-            // "Make it the plan" from a place's details or the Spin result.
-            .onChange(of: model.pendingPlanPlace, initial: true) {
-                guard let place = model.pendingPlanPlace else { return }
-                model.pendingPlanPlace = nil
-                guard FirebaseSetup.isConfigured, !showCreate else { return }
-                path = []
-                planPlace = place
-                withName(.create)
             }
     }
 
@@ -77,8 +66,8 @@ struct GroupHomeView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { GroupLobbyView(sessionID: $0) }
-        .sheet(isPresented: $showCreate, onDismiss: { planPlace = nil }) {
-            CreateGroupView(startingPlace: planPlace) { session in
+        .sheet(isPresented: $showCreate) {
+            CreateGroupView { session in
                 showCreate = false
                 recentIDs = SharedCache.recentSessionIDs()
                 path.append(session.id)
@@ -192,10 +181,7 @@ struct GroupHomeView: View {
     }
 
     private func runPending() {
-        guard let action = pendingAction, let name = Identity.displayName else {
-            planPlace = nil  // closed the name prompt: don't prefill the next plan
-            return
-        }
+        guard let action = pendingAction, let name = Identity.displayName else { return }
         pendingAction = nil
         switch action {
         case .create:

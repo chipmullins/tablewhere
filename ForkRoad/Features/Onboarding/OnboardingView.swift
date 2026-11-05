@@ -53,7 +53,7 @@ struct OnboardingView: View {
             art: AnyView(ForkMark().frame(width: 140, height: 140)),
             title: "Every meal was a fork in the road.",
             titleView: AnyView(WelcomeTitle()),
-            text: "Not anymore! Spin when you can’t decide where to eat out, or what to cook in. Then make it the plan with friends.",
+            text: "Not anymore! Spin when you can’t decide where to eat out, or what to cook in. Then pick with friends.",
             primary: ("Get started", { page = 1 }),
             secondary: nil,
             footer: AnyView(

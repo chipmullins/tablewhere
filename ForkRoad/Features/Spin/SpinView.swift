@@ -557,7 +557,6 @@ private struct SpinStage: View {
                 }
                 .accessibilityLabel("Share your pick")
             }
-            MakeItThePlanButton(place: place)
             // Closed, too far, not in the mood: pass for tonight (not forever) and spin again.
             Button { skipTonight(place) } label: {
                 Label("Not tonight · spin again", systemImage: "arrow.uturn.right")
