@@ -20,6 +20,7 @@ enum GroupWording {
         case .spin:
             // Who's still picking shows just below (SpinProgressLine).
             let count = session.options.count
+            if session.isSurprise { return "\(count) places nearby on the wheel" }
             return "\(count) place\(count == 1 ? "" : "s") in the wheel"
         case .plan:
             return "Planned by \(session.createdByName)"
@@ -30,7 +31,10 @@ enum GroupWording {
     static func whoDecides(_ session: GroupSession) -> String {
         switch session.mode {
         case .vote: return "\(session.createdByName) will lock in the result"
-        case .spin: return "\(session.createdByName) will spin when everyone’s ready"
+        case .spin:
+            return session.isSurprise
+                ? "\(session.createdByName) will spin, and the wheel picks one of these"
+                : "\(session.createdByName) will spin when everyone’s ready"
         case .plan: return "\(session.createdByName) picked the place"
         }
     }
@@ -41,6 +45,8 @@ enum GroupWording {
         switch session.mode {
         case .vote:
             return "Help pick where we eat! Vote here, or join in ForkRoad with code \(code)."
+        case .spin where session.isSurprise:
+            return "Letting the wheel pick where we eat! Watch here, or join in ForkRoad with code \(code)."
         case .spin:
             return "Add your pick for the group spin! Add it here, or join in ForkRoad with code \(code)."
         case .plan:

@@ -54,6 +54,7 @@ service cloud.firestore {
         let picksBefore = before.get('picksBy', {});
         let picksAfter = after.get('picksBy', {});
         return acceptsPicks(before)
+          && before.get('surprise', false) != true
           && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
           // exactly one new place, nothing removed, still 12 or fewer
           && after.options.size() == before.options.size() + 1
@@ -77,6 +78,7 @@ service cloud.firestore {
         let removed = before.options.removeAll(after.options);
         let added = after.options.removeAll(before.options);
         return acceptsPicks(before)
+          && before.get('surprise', false) != true
           && request.auth.uid in picksBefore
           && after.diff(before).affectedKeys().hasOnly(['options', 'picksBy'])
           && after.options.size() == before.options.size()

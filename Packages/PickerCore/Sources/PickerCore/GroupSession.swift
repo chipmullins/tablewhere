@@ -120,13 +120,16 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     /// False while the creator is still watching the spin or setting the time
     /// in iMessage; nil on older sessions (treated as shared).
     public var announced: Bool?
+    /// "Surprise us": a spin whose wheel the creator's app filled with up to
+    /// 12 random places nearby. Nobody adds picks. Nil/false: a normal spin.
+    public var surprise: Bool?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
                 winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
                 note: String? = nil, area: GroupArea? = nil,
-                asksRSVP: Bool? = nil, rsvpBy: Date? = nil) {
+                asksRSVP: Bool? = nil, rsvpBy: Date? = nil, surprise: Bool? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -144,7 +147,11 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.area = area
         self.asksRSVP = asksRSVP
         self.rsvpBy = rsvpBy
+        self.surprise = surprise
     }
+
+    /// "Surprise us": the wheel is places nearby, not everyone's picks.
+    public var isSurprise: Bool { mode == .spin && surprise == true }
 
     /// The creator asked who's coming.
     public var hasRSVP: Bool { asksRSVP == true }
@@ -192,7 +199,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var acceptsChanges: Bool { status == .open && !isTimeUp }
 
     public func canAdd(userID: String) -> Bool {
-        guard mode != .plan, acceptsChanges, options.count < GroupSession.maxOptions else { return false }
+        guard mode != .plan, !isSurprise, acceptsChanges, options.count < GroupSession.maxOptions else { return false }
         if mode == .vote && isOwned(by: userID) { return true }
         return pick(of: userID) == nil
     }
@@ -262,7 +269,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     /// In a spin, the members who haven't added their pick yet. Once the
     /// wheel is full nobody else can add one, so nobody is waited on.
     public func waitingOnPicks(members: [GroupMember]) -> [GroupMember] {
-        guard mode == .spin, options.count < GroupSession.maxOptions else { return [] }
+        guard mode == .spin, !isSurprise, options.count < GroupSession.maxOptions else { return [] }
         return members.filter { pick(of: $0.id) == nil }
     }
 }

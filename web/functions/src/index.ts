@@ -186,6 +186,8 @@ async function everyoneIsIn(sessionId: string, session: DocumentData): Promise<{
   const members = (await ref.collection("members").get()).docs.map((d) => d.id).filter((id) => id !== creator);
   if (members.length === 0) return { ready: false, others: 0 };
   let done: Set<string>;
+  // "Surprise us": the wheel is places nearby; nobody adds a pick.
+  if (session.surprise === true) return { ready: false, others: members.length };
   if (session.mode === "spin") {
     // A full wheel (12 places) can't take more picks: nobody is left to wait on.
     if (optionsOf(session).length >= MAX_OPTIONS) return { ready: true, others: members.length };

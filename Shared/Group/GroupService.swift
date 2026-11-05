@@ -63,7 +63,8 @@ final class GroupService {
                        closesInMinutes: Int?, displayName: String,
                        area: GroupArea? = nil,
                        meetTime: Date? = nil, note: String? = nil,
-                       asksRSVP: Bool = false, rsvpBy: Date? = nil) async throws -> GroupSession {
+                       asksRSVP: Bool = false, rsvpBy: Date? = nil,
+                       surprise: Bool = false) async throws -> GroupSession {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
@@ -86,11 +87,13 @@ final class GroupService {
             winnerID: mode == .plan ? options.first?.id : nil,
             meetTime: mode == .plan ? meetTime : nil,
             // A spin creator's starting place is their one pick.
-            picksBy: mode == .spin ? options.first.map { [uid: $0.id] } : nil,
+            // ("Surprise us" fills the wheel itself; nobody has a pick.)
+            picksBy: mode == .spin && !surprise ? options.first.map { [uid: $0.id] } : nil,
             note: Self.cleanNote(note),
             area: area,
             asksRSVP: mode == .plan && asksRSVP ? true : nil,
-            rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil
+            rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil,
+            surprise: mode == .spin && surprise ? true : nil
         )
         var data = try Firestore.Encoder().encode(session)
         if mode == .plan { data["announced"] = true }
