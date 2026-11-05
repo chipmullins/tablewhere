@@ -529,6 +529,53 @@ async function vote(optionId, currentVote) {
   }
 }
 
+// A small map of where you're going, on the result. Tap it for directions.
+let winnerMap = null;
+let winnerMapFor = "";
+async function showWinnerMap(winner) {
+  const box = $("winner-map");
+  const lat = Number(winner.latitude), lon = Number(winner.longitude);
+  if (!mapkitToken || !Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) {
+    box.hidden = true;
+    return;
+  }
+  const key = `${winner.id}|${lat}|${lon}`;
+  if (key === winnerMapFor) return;  // live updates re-render; don't rebuild the map
+  winnerMapFor = key;
+  let mk;
+  try { mk = await loadMapKit(); } catch { box.hidden = true; winnerMapFor = ""; return; }
+  if (winnerMapFor !== key) return;  // the plan changed while MapKit loaded
+  box.hidden = false;
+  const spot = new mk.Coordinate(lat, lon);
+  const region = new mk.CoordinateRegion(spot, new mk.CoordinateSpan(0.008, 0.008));
+  if (!winnerMap) {
+    winnerMap = new mk.Map(box, {
+      region,
+      colorScheme: mk.Map.ColorSchemes.Dark,
+      isZoomEnabled: false,
+      isScrollEnabled: false,
+      isRotationEnabled: false,
+      showsCompass: mk.FeatureVisibility.Hidden,
+      showsZoomControl: false,
+      showsMapTypeControl: false,
+      showsPointsOfInterest: true,
+    });
+    box.addEventListener("click", () => {
+      const link = isApple ? $("apple-maps") : $("google-maps");
+      if (link.href) window.open(link.href, "_blank", "noopener");
+    });
+  } else {
+    winnerMap.removeAnnotations(winnerMap.annotations);
+    winnerMap.region = region;
+  }
+  winnerMap.addAnnotation(new mk.MarkerAnnotation(spot, {
+    color: "#FFB23F",
+    glyphText: "🍴",
+    title: winner.name,
+  }));
+  box.setAttribute("aria-label", `Map of ${winner.name}. Tap for directions.`);
+}
+
 function renderDecided() {
   const winner = (session.options || []).find((o) => o.id === session.winnerID);
   if (!winner) return renderVote();
@@ -564,6 +611,7 @@ function renderDecided() {
 
   const meet = toDate(session.meetTime);
   $("calendar").hidden = !meet || meet.getTime() < Date.now() - 15 * 60 * 1000;
+  showWinnerMap(winner);
   renderRSVP();
   renderBreakdown(winner.id);
   show("decided-step");
@@ -892,7 +940,7 @@ function loadMapKit() {
     script.crossOrigin = "anonymous";
     script.async = true;
     script.dataset.callback = "__forkroadMapKitLoaded";
-    script.dataset.libraries = "services";
+    script.dataset.libraries = "map,annotations,services";
     script.onerror = () => { mapkitReady = null; reject(new Error("MapKit JS failed to load")); };
     document.head.append(script);
   });

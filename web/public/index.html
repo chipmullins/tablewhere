@@ -46,6 +46,7 @@
     .winner { background: var(--saffron); color: var(--on-saffron); border-radius: 26px; padding: 20px; }
     .winner .label { font-size: 12px; font-weight: 800; letter-spacing: .1em; }
     .winner h2 { font: 800 32px/1.05 Outfit, sans-serif; margin: 8px 0; }
+    .winner-map { height: 170px; border-radius: 22px; overflow: hidden; margin-top: 12px; background: #1F1F29; cursor: pointer; }
     .btn { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; border: 0; font: 700 15px 'DM Sans', sans-serif; text-decoration: none; cursor: pointer; }
     .btn.primary { background: var(--saffron); color: var(--on-saffron); }
     .btn.light { background: var(--text); color: var(--night); }
@@ -139,6 +140,7 @@
         <h2 id="winner-name"></h2>
         <div id="winner-detail" style="font-weight:600"></div>
       </div>
+      <div class="winner-map" id="winner-map" hidden role="img" aria-label="Map of the restaurant. Tap for directions."></div>
       <div class="stack" style="margin-top:14px">
         <a class="btn light" id="apple-maps" target="_blank" rel="noopener">Directions in Apple Maps</a>
         <a class="btn ghost" id="google-maps" target="_blank" rel="noopener">Directions in Google Maps</a>
