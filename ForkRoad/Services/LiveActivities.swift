@@ -53,10 +53,9 @@ enum LiveActivities {
             if activity.content.state != state { await activity.update(content) }
         } else {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-            // iOS keeps a Live Activity for about 8 hours, so one started for a
-            // plan days out would vanish before dinner. Start it only in the
-            // last few hours; opening the app (or the leave-by reminder) then starts it.
-            guard plan.leaveAt.timeIntervalSinceNow < Self.startWindow else { return }
+            // Only close to the time (see `shouldStart`). Opening the app then,
+            // or tapping the heads-up / leave-by reminder, starts it.
+            guard Self.shouldStart(plan) else { return }
             let name = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let attributes = GroupPlanAttributes(sessionID: sessionID,
                                                  title: name.isEmpty ? "Group plan" : name,
@@ -115,8 +114,16 @@ enum LiveActivities {
         }
     }
 
-    /// How long before leave-by a Live Activity may start (under iOS's ~8-hour limit).
-    static let startWindow: TimeInterval = 6 * 60 * 60
+    /// A Live Activity starts 90 minutes before the meet time, or 15 minutes
+    /// before leave-by for a long drive, whichever comes first. Earlier, it
+    /// just sat on the Lock Screen for hours (and iOS caps them at ~8 hours).
+    static let startBeforeMeet: TimeInterval = 90 * 60
+    static let startBeforeLeave: TimeInterval = 15 * 60
+
+    static func shouldStart(_ plan: LeaveBy.Plan) -> Bool {
+        plan.meetTime.timeIntervalSinceNow <= startBeforeMeet
+            || plan.leaveAt.timeIntervalSinceNow <= startBeforeLeave
+    }
 
     private static var timers: [String: Task<Void, Never>] = [:]
 

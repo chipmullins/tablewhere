@@ -85,7 +85,8 @@ final class GroupService {
             status: mode == .plan ? .decided : .open,
             options: options,
             winnerID: mode == .plan ? options.first?.id : nil,
-            meetTime: mode == .plan ? meetTime : nil,
+            // Any mode can have a date & time; "I'll pick" requires one.
+            meetTime: meetTime,
             // A spin creator's starting place is their one pick.
             // ("Surprise us" fills the wheel itself; nobody has a pick.)
             picksBy: mode == .spin && !surprise ? options.first.map { [uid: $0.id] } : nil,
@@ -358,6 +359,9 @@ final class GroupService {
         ]
         // When it was held: the server shares it anyway after 10 minutes.
         update["heldAt"] = announce ? FieldValue.delete() : FieldValue.serverTimestamp()
+        // A time set days ago read "Tomorrow 7:00 PM"; the "It's decided!" push
+        // uses this label, so make it right for today.
+        if let meet = session.meetTime { update["meetTimeLabel"] = MeetTimes.label(for: meet) }
         try await sessionRef(session.id).updateData(update)
         return winner
     }

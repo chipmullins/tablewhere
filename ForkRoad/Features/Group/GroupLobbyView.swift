@@ -250,6 +250,12 @@ struct GroupLobbyView: View {
                     Text(session.title)
                         .font(Theme.display(32))
                         .foregroundStyle(Theme.text)
+                    // Set up front: everyone sees when, while you decide where.
+                    if session.status == .open, let meet = session.meetTime {
+                        Label(MeetTimes.label(for: meet), systemImage: "calendar")
+                            .font(Theme.body(15, .semibold))
+                            .foregroundStyle(Theme.accentText)
+                    }
                 }
                 Spacer()
                 VStack(spacing: 2) {
@@ -594,7 +600,7 @@ struct GroupLobbyView: View {
                     }
                 }
                 .sheet(isPresented: $showTimePicker) {
-                    MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setMeetTime($0) }
+                    PlanTimeSheet(initial: session.meetTime ?? slots.first ?? .now) { setMeetTime($0) }
                 }
             } else {
                 Text(session.meetTime.map { MeetTimes.label(for: $0) } ?? "\(session.createdByName) hasn’t set a time yet")

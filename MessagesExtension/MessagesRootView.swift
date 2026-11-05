@@ -337,6 +337,11 @@ struct MessageVoteView: View {
                     Text("\(live.members.count) in the group · \(GroupWording.line(session, nonVoterNames: live.waitingNames))")
                         .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
+                    if session.winner == nil, let meet = session.meetTime {
+                        Label(MeetTimes.label(for: meet), systemImage: "calendar")
+                            .font(Theme.body(14, .semibold))
+                            .foregroundStyle(Theme.accentText)
+                    }
 
                     if let winner = session.winner {
                         decidedSection(session, winner: winner)
@@ -996,7 +1001,7 @@ struct MessagePlanControls: View {
             if session.mode == .plan {
                 PlanTimeSheet(initial: session.meetTime ?? PlanSetupRows.defaultMeetTime()) { setTime($0) }
             } else {
-                MeetTimePickerSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
+                PlanTimeSheet(initial: session.meetTime ?? slots.first ?? .now) { setTime($0) }
             }
         }
         .sensoryFeedback(Haptic.tick, trigger: timeTaps)

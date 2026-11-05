@@ -46,6 +46,9 @@
     .winner { background: var(--saffron); color: var(--on-saffron); border-radius: 26px; padding: 20px; }
     .winner .label { font-size: 12px; font-weight: 800; letter-spacing: .1em; }
     .winner h2 { font: 800 32px/1.05 Outfit, sans-serif; margin: 8px 0; }
+    .meet-line { margin: 2px 0 6px; font-weight: 700; color: var(--saffron); }
+    .app-pitch { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface); font-size: 14px; }
+    .app-pitch b { display: block; margin-bottom: 2px; }
     .winner-map { height: 170px; border-radius: 22px; overflow: hidden; margin-top: 12px; background: #1F1F29; cursor: pointer; }
     .btn { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; border: 0; font: 700 15px 'DM Sans', sans-serif; text-decoration: none; cursor: pointer; }
     .btn.primary { background: var(--saffron); color: var(--on-saffron); }
@@ -115,6 +118,7 @@
 
     <section id="vote-step" hidden>
       <h1 id="title"></h1>
+      <p id="meet-line" class="meet-line" hidden></p>
       <p class="muted" id="status"></p>
       <p class="muted" style="margin:4px 0 0;font-size:13px"><span id="you-are"></span> <button class="linkish" id="change-name" type="button">Not you? Change name</button></p>
       <div id="options" class="stack" style="margin-top:18px"></div>
@@ -147,6 +151,10 @@
         <a class="btn ghost" id="website" target="_blank" rel="noopener" hidden>Menu &amp; hours</a>
         <button class="btn ghost" id="calendar" type="button" hidden>Add to Calendar</button>
       </div>
+      <div class="app-pitch" id="app-pitch" hidden>
+        <span aria-hidden="true" style="font-size:22px">🚗</span>
+        <div><b>Never be the one who’s late</b><span class="muted">The ForkRoad app tells you when to leave, with live traffic, and puts a countdown on your Lock Screen.</span></div>
+      </div>
       <div class="card rsvp" id="rsvp" hidden>
         <div class="section-label" style="margin-top:0">Who’s coming</div>
         <div class="rsvp-count" id="rsvp-count"></div>
@@ -176,7 +184,7 @@
     </section>
 
     <footer id="footer" hidden>
-      With the ForkRoad app you get an alert when it’s decided or the plan changes.<br>
+      With the ForkRoad app you get an alert when it’s decided or changes, plus a leave-by reminder and a Lock Screen countdown.<br>
       Have it? Join in the app with code <span class="code" id="code"></span>
     </footer>
     <p class="muted" style="text-align:center;font-size:12px;margin-top:18px">ForkRoad · Created by Chip Mullins</p>

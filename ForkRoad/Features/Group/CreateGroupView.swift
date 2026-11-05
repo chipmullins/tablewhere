@@ -76,7 +76,9 @@ struct CreateGroupView: View {
     @State private var surpriseFilters: PlacePickerFilters?
     @State private var wheel: [Place] = []
     @State private var isLoadingWheel = true
-    // "I'll pick"
+    /// Vote, spin, and Surprise us: "Set a date & time" (I'll pick always has one).
+    @State private var hasTime = false
+    // "I'll pick" (and the optional time for the others)
     @State private var meetTime = PlanSetupRows.defaultMeetTime()
     @State private var note = ""
     @State private var asksRSVP = false
@@ -128,6 +130,7 @@ struct CreateGroupView: View {
                                       hasReplyBy: $hasReplyBy, replyBy: $replyBy)
                     }
                 }
+                if setup != .plan { whenSection }
 
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(Theme.danger) }
@@ -222,6 +225,26 @@ struct CreateGroupView: View {
             TextField(setup.defaultTitle, text: $title)
         } header: {
             Text("Name")
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    /// Optional for Vote, Spin, and Surprise us: when you're eating, so
+    /// friends can plan around it (Saturday, not just "tonight").
+    private var whenSection: some View {
+        Section {
+            Toggle("Set a date & time", isOn: $hasTime.animation())
+                .tint(Theme.saffron)
+            if hasTime {
+                DatePicker("Date & time", selection: $meetTime, in: Date()...,
+                           displayedComponents: [.date, .hourAndMinute])
+            }
+        } header: {
+            Text("When")
+        } footer: {
+            Text(hasTime
+                 ? "Everyone sees it now. Once it’s decided, phones with the app get a leave-by reminder."
+                 : "Skip it to set the time after you decide.")
         }
         .listRowBackground(Theme.surface)
     }
@@ -343,6 +366,7 @@ struct CreateGroupView: View {
 
     /// What's missing, or what you're about to start.
     private var statusLine: String {
+        if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return "Pick a time that hasn’t passed" }
         switch setup {
         case .vote:
             if selected.count < 2 { return "Add at least 2 places" }
@@ -370,6 +394,7 @@ struct CreateGroupView: View {
     }
 
     private var canCreate: Bool {
+        if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return false }
         switch setup {
         case .vote: return selected.count >= 2
         case .spin: return selected.count >= 1
@@ -439,7 +464,7 @@ struct CreateGroupView: View {
                     closesInMinutes: setup == .vote ? closesIn : nil,
                     displayName: name,
                     area: groupArea(creatorName: name),
-                    meetTime: isPlan ? meetTime : nil,
+                    meetTime: isPlan || hasTime ? meetTime : nil,
                     note: isPlan ? note : nil,
                     asksRSVP: isPlan && asksRSVP,
                     rsvpBy: isPlan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil,

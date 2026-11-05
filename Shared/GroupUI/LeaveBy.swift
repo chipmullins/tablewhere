@@ -93,6 +93,12 @@ enum LeaveBy {
     // MARK: Reminders
 
     private static func requestID(_ sessionID: String) -> String { "leaveby.\(sessionID)" }
+    private static func headsUpID(_ sessionID: String) -> String { "headsup.\(sessionID)" }
+
+    /// The heads-up goes out this long before the meet time. Tapping it opens
+    /// the plan, which starts the Lock Screen countdown (an app can only start
+    /// a Live Activity while it's open).
+    static let headsUpBeforeMeet: TimeInterval = 90 * 60
 
     /// Schedules (or replaces) the "Time to head out" reminder for a group.
     /// `mayAsk`: whether this may show the notification permission prompt.
@@ -102,7 +108,7 @@ enum LeaveBy {
     static func schedule(_ plan: Plan, sessionID: String, winner: GroupOption, title: String? = nil,
                          mayAsk: Bool = true) async {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
+        center.removePendingNotificationRequests(withIdentifiers: [requestID(sessionID), headsUpID(sessionID)])
         // Before the reminder checks: the Live Activity also covers "Time to go"
         // after leave-by passes, and checks the reminder switch itself.
         activityUpdate?(plan, sessionID, winner, title)
@@ -128,10 +134,28 @@ enum LeaveBy {
         let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: plan.leaveAt)
         let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
         try? await center.add(UNNotificationRequest(identifier: requestID(sessionID), content: content, trigger: trigger))
+
+        // The heads-up, 90 minutes out. Skipped when it's already that close,
+        // or when leave-by comes first or right after (that reminder covers it).
+        let headsUpAt = plan.meetTime.addingTimeInterval(-headsUpBeforeMeet)
+        guard headsUpAt.timeIntervalSinceNow > 60,
+              plan.leaveAt.timeIntervalSince(headsUpAt) > 15 * 60 else { return }
+        let time = plan.meetTime.formatted(date: .omitted, time: .shortened)
+        let heads = UNMutableNotificationContent()
+        let name = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        heads.title = name.isEmpty ? "\(winner.name) at \(time)" : "\(name): \(winner.name) at \(time)"
+        heads.body = "Leave by \(plan.leaveAt.formatted(date: .omitted, time: .shortened)) (about \(plan.driveMinutes) min). "
+            + "Tap for your Lock Screen countdown."
+        heads.sound = .default
+        heads.userInfo = ["sessionId": sessionID]
+        let headsParts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: headsUpAt)
+        try? await center.add(UNNotificationRequest(
+            identifier: headsUpID(sessionID), content: heads,
+            trigger: UNCalendarNotificationTrigger(dateMatching: headsParts, repeats: false)))
     }
 
     static func cancel(sessionID: String) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID)])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID), headsUpID(sessionID)])
         activityEnd?(sessionID)
     }
 

@@ -386,6 +386,7 @@ function renderVote() {
   const slots = Math.max(members.length, t.total, 1);
 
   $("title").textContent = session.title;
+  showMeetLine();
   $("status").textContent = statusText();
   const closed = !acceptsChanges();
   const notes = [];
@@ -452,8 +453,21 @@ function renderVote() {
 
 // Group spin: everyone adds their pick, then whoever started it spins the
 // wheel in the app and one is picked at random. Nothing to vote on here.
+// A date & time set up front: everyone sees when while deciding where.
+function showMeetLine() {
+  const el = $("meet-line");
+  const meet = toDate(session.meetTime);
+  el.hidden = !meet;
+  if (meet) {
+    const day = meet.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const time = meet.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    el.textContent = `📅 ${day} · ${time}`;
+  }
+}
+
 function renderSpin() {
   $("title").textContent = session.title;
+  showMeetLine();
   $("status").textContent = statusText();
   const me = (myName() || "").trim().toLowerCase();
   const creator = session.createdByName || "Whoever started it";
@@ -621,6 +635,8 @@ function renderDecided() {
 
   const meet = toDate(session.meetTime);
   $("calendar").hidden = !meet || meet.getTime() < Date.now() - 15 * 60 * 1000;
+  // With a time to be somewhere, the app's leave-by reminder is worth a mention.
+  $("app-pitch").hidden = !meet || meet.getTime() < Date.now();
   showWinnerMap(winner);
   renderRSVP();
   renderBreakdown(winner.id);
