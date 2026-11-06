@@ -9,7 +9,12 @@ struct MessagesRootView: View {
 
     var body: some View {
         Group {
-            if !FirebaseSetup.isConfigured {
+            if !state.isReady {
+                // A split second while Firebase connects (after the first frame).
+                ProgressView()
+                    .tint(Theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !state.firebaseReady {
                 notice("Open ForkRoad to finish setting up group voting.")
             } else if !hasName {
                 if state.isExpanded {

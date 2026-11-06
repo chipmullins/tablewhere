@@ -24,8 +24,6 @@ final class MessagesViewController: MSMessagesAppViewController {
         // if it turns dark but stays empty, the SwiftUI view is the problem.
         view.backgroundColor = UIColor(Theme.night)
         messagesLog.notice("viewDidLoad")
-        let firebaseReady = FirebaseSetup.configureIfPossible()
-        messagesLog.notice("Firebase configured: \(firebaseReady, privacy: .public)")
         Theme.applyUIKitAppearance()
         state.controller = self
 
@@ -48,11 +46,26 @@ final class MessagesViewController: MSMessagesAppViewController {
         host.didMove(toParent: self)
         hosting = host
         messagesLog.notice("SwiftUI root attached")
+
+        // Connect after the first frame is on screen. Setting up Firebase (and
+        // its shared keychain sign-in) here used to hold up that first frame,
+        // and Messages showed a blank white pane until a close and reopen.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                let ready = FirebaseSetup.configureIfPossible()
+                messagesLog.notice("Firebase configured: \(ready, privacy: .public)")
+                guard let self else { return }
+                self.state.firebaseReady = ready
+                self.state.isReady = true
+                if ready { UsageStats.recordActiveDevice() }
+            }
+        }
     }
 
     override func willBecomeActive(with conversation: MSConversation) {
         super.willBecomeActive(with: conversation)
-        UsageStats.recordActiveDevice()
+        // (Usage stats wait for Firebase; see viewDidLoad. Later opens count here.)
+        if state.isReady && state.firebaseReady { UsageStats.recordActiveDevice() }
         messagesLog.notice("willBecomeActive, style \(self.presentationStyle.rawValue, privacy: .public)")
         state.style = presentationStyle
         state.open(message: conversation.selectedMessage)
@@ -80,6 +93,9 @@ final class MessagesViewController: MSMessagesAppViewController {
 final class MessagesState {
     var style: MSMessagesAppPresentationStyle = .compact
     private(set) var sessionID: String?
+    /// False for the first moment after launch, while Firebase connects.
+    var isReady = false
+    var firebaseReady = false
 
     @ObservationIgnored weak var controller: MSMessagesAppViewController?
 
