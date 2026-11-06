@@ -61,7 +61,7 @@ struct NewVoteView: View {
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var query = ""
-    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = true
 
     @State private var mode: GroupMode = .vote
     @State private var title = ""
@@ -382,7 +382,7 @@ struct MessageVoteView: View {
     private func decidedSection(_ session: GroupSession, winner: GroupOption) -> some View {
         WinnerCard(option: winner,
                    detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category,
-                   eyebrow: session.mode == .plan ? "THE PLAN" : "THE GROUP PICKED")
+                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED")
         HStack(spacing: 8) {
             ActionTile(title: "Directions", systemImage: "location.north.line",
                        tint: Theme.accentText, background: Theme.surface) {
@@ -784,7 +784,7 @@ struct MessageAddPlaceView: View {
     @State private var adding: String?
     @State private var errorMessage: String?
     @State private var query = ""
-    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = true
 
     /// You already picked, so choosing a place swaps it.
     private var isChanging: Bool {
@@ -911,7 +911,7 @@ struct MessageSearchField: View {
 /// The iMessage extension's "No fast food" chip (the app's reads AppModel).
 /// Same saved setting, so the app and extension stay in sync.
 struct NoFastFoodChip: View {
-    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = false
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = true
 
     var body: some View {
         FastFoodChip(isOn: $excludeFastFood)

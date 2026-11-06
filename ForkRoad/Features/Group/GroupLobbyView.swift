@@ -237,7 +237,11 @@ struct GroupLobbyView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
         .onChange(of: reveal == nil) { _, done in if done { announceIfHeld() } }
-        .onDisappear { announceIfHeld() }
+        .onAppear { OnScreenPlan.sessionID = sessionID }
+        .onDisappear {
+            if OnScreenPlan.sessionID == sessionID { OnScreenPlan.sessionID = nil }
+            announceIfHeld()
+        }
     }
 
     // MARK: Header
@@ -434,7 +438,7 @@ struct GroupLobbyView: View {
         let how = howDecided(session, votes: count)
         WinnerCard(option: winner,
                    detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0)) · \(how)" } ?? "\(how) · \(winner.category)",
-                   eyebrow: session.mode == .plan ? "THE PLAN" : "THE GROUP PICKED")
+                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED")
 
         HStack(spacing: 8) {
             ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {

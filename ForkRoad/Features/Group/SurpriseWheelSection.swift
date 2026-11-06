@@ -23,6 +23,8 @@ struct SurpriseWheelSection: View {
     @State private var showAreaSheet = false
     @State private var showAreaMap = false
     @State private var shuffles = 0
+    /// Places you swiped off the wheel: never drawn again while setting up.
+    @State private var removed: Set<String> = []
 
     private struct Key: Equatable {
         var filters: PlacePickerFilters
@@ -77,13 +79,19 @@ struct SurpriseWheelSection: View {
                         Text(place.distanceLabel).font(Theme.body(12)).foregroundStyle(Theme.muted)
                     }
                     .accessibilityElement(children: .combine)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) { withAnimation(.snappy) { remove(place) } } label: {
+                            Label("Remove", systemImage: "xmark")
+                        }
+                    }
+                    .accessibilityAction(named: "Remove from the wheel") { withAnimation(.snappy) { remove(place) } }
                 }
             }
         } header: {
             HStack {
                 Text(wheel.isEmpty ? "On the wheel" : "On the wheel (\(wheel.count))")
                 Spacer()
-                if pool.count > wheel.count {
+                if available.count > wheel.count {
                     Button {
                         shuffles += 1
                         withAnimation(.snappy) { draw() }
@@ -97,9 +105,9 @@ struct SurpriseWheelSection: View {
                 }
             }
         } footer: {
-            Text(pool.count > wheel.count
-                 ? "\(wheel.count) drawn at random from \(pool.count) places. Friends see this wheel, then you spin it."
-                 : "Friends see this wheel, then you spin it and it picks one at random.")
+            Text(available.count > wheel.count
+                 ? "\(wheel.count) drawn at random from \(available.count) places. Swipe one away to swap it. Friends see this wheel, then you spin it."
+                 : "Swipe one away to take it off. Friends see this wheel, then you spin it and it picks one at random.")
         }
         .listRowBackground(Theme.surface)
     }
@@ -153,10 +161,25 @@ struct SurpriseWheelSection: View {
         .buttonStyle(.plain)
     }
 
+    /// What can be drawn: the nearby pool minus anything you swiped away.
+    private var available: [Place] { pool.filter { !removed.contains($0.id) } }
+
     /// Up to 12 at random from everything that's allowed (blacklists, no fast
-    /// food, and the rest of your spin rules).
+    /// food, the rest of your spin rules, and nothing you swiped away).
     private func draw() {
-        wheel = Array(pool.shuffled().prefix(GroupSession.maxOptions))
+        wheel = Array(available.shuffled().prefix(GroupSession.maxOptions))
+    }
+
+    /// Takes one off and, when there are more nearby, draws one in its place.
+    private func remove(_ place: Place) {
+        removed.insert(place.id)
+        guard let index = wheel.firstIndex(of: place) else { return }
+        let onWheel = Set(wheel.map(\.id))
+        if let next = available.filter({ !onWheel.contains($0.id) }).randomElement() {
+            wheel[index] = next
+        } else {
+            wheel.remove(at: index)
+        }
     }
 
     private func load() async {

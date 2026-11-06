@@ -357,8 +357,16 @@ const endPress = () => {
 document.addEventListener("pointerup", endPress, true);
 document.addEventListener("pointercancel", endPress, true);
 
+// The browser tab (not the link preview, which never changes once sent).
+function updateTabTitle() {
+  const decided = session.status === "decided" && session.winnerID && session.announced !== false;
+  const stage = decided ? "Results" : isPlan() ? "Plan" : isSpin() ? "Spin" : "Vote";
+  document.title = `ForkRoad · ${stage}`;
+}
+
 function render() {
   if (!session) return;
+  updateTabTitle();
   if (pressing) { renderWaiting = true; return; }
   $("code").textContent = formatCode(session.joinCode);
   $("footer").hidden = false;
@@ -690,7 +698,7 @@ function renderDecided() {
   const winner = (session.options || []).find((o) => o.id === session.winnerID);
   if (!winner) return renderVote();
   $("winner-name").textContent = winner.name;
-  $("winner-label").textContent = isPlan() ? "THE PLAN" : "THE GROUP PICKED";
+  $("winner-label").textContent = isPlan() ? "THE PLAN" : isSpin() ? "THE WHEEL PICKED" : "THE GROUP PICKED";
   const time = formatTime(session.meetTime);
   const how = isPlan() ? `Picked by ${session.createdByName || "the organizer"} · ${winner.category}`
     : isSurprise() ? `Picked by the spin · ${winner.category}`

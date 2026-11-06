@@ -3,6 +3,12 @@ import UserNotifications
 import FirebaseCore
 import FirebaseMessaging
 
+/// The group plan on screen right now, so its own pushes don't show a banner over it.
+@MainActor
+enum OnScreenPlan {
+    static var sessionID: String?
+}
+
 /// Handles notifications: "How was it?" actions and group pick pushes.
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
@@ -44,7 +50,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// Show banners even while the app is open.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+        // Already looking at that plan: no banner over it (it would spoil the
+        // spin reveal with "It's decided! We're going to …"). It still goes to
+        // Notification Center.
+        if let sessionID = notification.request.content.userInfo["sessionId"] as? String,
+           await MainActor.run(body: { OnScreenPlan.sessionID == sessionID }) {
+            return [.list]
+        }
+        return [.banner, .sound, .list]
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
