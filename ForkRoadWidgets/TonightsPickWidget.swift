@@ -161,7 +161,7 @@ struct TonightsPickView: View {
                     .font(.caption)
                     .lineLimit(1)
             } else {
-                Text("Open ForkRoad to find places near you")
+                Text("Open Tablespin to find places near you")
                     .font(.caption)
                     .lineLimit(2)
             }
@@ -170,7 +170,7 @@ struct TonightsPickView: View {
     }
 
     private var header: some View {
-        Text("FORKROAD · YOUR PICK")
+        Text("TABLESPIN · YOUR PICK")
             .font(Theme.body(10, .bold))
             .tracking(0.8)
             .foregroundStyle(Theme.accentText)
@@ -179,7 +179,7 @@ struct TonightsPickView: View {
     }
 
     private var emptyText: some View {
-        Text("Open ForkRoad to find places near you")
+        Text("Open Tablespin to find places near you")
             .font(Theme.body(14, .semibold))
             .foregroundStyle(Theme.text)
             .lineLimit(3)

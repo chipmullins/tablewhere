@@ -16,6 +16,6 @@ struct SpinControl: ControlWidget {
             }
         }
         .displayName("Spin")
-        .description("Opens ForkRoad and spins for a place to eat.")
+        .description("Opens Tablespin and spins for a place to eat.")
     }
 }

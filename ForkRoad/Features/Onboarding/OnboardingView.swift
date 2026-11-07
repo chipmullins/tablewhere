@@ -51,13 +51,13 @@ struct OnboardingView: View {
     private var welcome: some View {
         stepPage(
             art: AnyView(ForkMark().frame(width: 140, height: 140)),
-            title: "Every meal was a fork in the road.",
+            title: "Where to eat? Let the table decide.",
             titleView: AnyView(WelcomeTitle()),
-            text: "Not anymore! Spin when you can’t decide where to eat out, or what to cook in. Then pick with friends.",
+            text: "Spin when you can’t decide where to eat out, or what to cook in. Then pick with friends.",
             primary: ("Get started", { page = 1 }),
             secondary: nil,
             footer: AnyView(
-                Text("ForkRoad · Created by Chip Mullins")
+                Text("Tablespin · Created by Chip Mullins")
                     .font(Theme.body(12))
                     .foregroundStyle(Theme.muted.opacity(0.7))
                     .frame(maxWidth: .infinity)
@@ -71,13 +71,13 @@ struct OnboardingView: View {
             title: locationDenied ? "No problem" : "Find food near you",
             text: locationDenied
                 ? "Location is off, so pick a city or neighborhood to search instead. You can turn location on later in Settings."
-                : "ForkRoad uses your location only while you’re using the app, to find restaurants around you and work out when to leave for group plans. You can also pick any city instead.",
+                : "Tablespin uses your location only while you’re using the app, to find restaurants around you and work out when to leave for group plans. You can also pick any city instead.",
             primary: locationDenied
                 ? ("Pick a city", { showCityPicker = true })
                 : (isAsking ? "One sec…" : "Use my location", askForLocation),
             secondary: locationDenied ? nil : ("Pick a city instead", { showCityPicker = true }),
             footer: AnyView(
-                Text("ForkRoad counts anonymous daily totals (like spins) to get better. Turn it off anytime in Settings.")
+                Text("Tablespin counts anonymous daily totals (like spins) to get better. Turn it off anytime in Settings.")
                     .font(Theme.body(12))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
@@ -190,17 +190,19 @@ struct OnboardingView: View {
     }
 }
 
-/// "Every meal *was* a fork in the road." — with a hand-drawn saffron
-/// underline under "was" that draws itself in.
+/// "Where to eat? Let the *table* decide." — with a hand-drawn saffron
+/// underline under "table" that draws itself in.
 private struct WelcomeTitle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drawn: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            Text("Where to eat?")
+                .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("Every meal ")
-                Text("was")
+                Text("Let the ")
+                Text("table")
                     .overlay(alignment: .bottom) {
                         Swoosh()
                             .trim(from: 0, to: drawn)
@@ -209,15 +211,15 @@ private struct WelcomeTitle: View {
                             .padding(.horizontal, -4)
                             .offset(y: 10)
                     }
+                Text(" decide.")
             }
-            Text("a fork in the road.")
         }
         .font(Theme.display(32))
         .foregroundStyle(Theme.text)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Every meal was a fork in the road.")
+        .accessibilityLabel("Where to eat? Let the table decide.")
         .accessibilityAddTraits(.isHeader)
         .task {
             if reduceMotion { drawn = 1; return }
@@ -250,6 +252,6 @@ struct ForkMark: View {
                                             style: .continuous))
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityLabel("ForkRoad logo")
+        .accessibilityLabel("Tablespin logo")
     }
 }

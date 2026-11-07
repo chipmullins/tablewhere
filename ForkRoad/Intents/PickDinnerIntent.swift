@@ -54,12 +54,12 @@ struct PickDinnerIntent: AppIntent {
         let message: String
         if let source {
             switch source {
-            case .favorites: message = "You don't have any Favorites to pick from yet. Open ForkRoad and save a few first."
-            case .wantToTry: message = "Your To try list is empty. Open ForkRoad and add a few places first."
-            case .nearby: message = "I don't have any nearby places yet. Open ForkRoad first so it can find restaurants near you."
+            case .favorites: message = "You don't have any Favorites to pick from yet. Open Tablespin and save a few first."
+            case .wantToTry: message = "Your To try list is empty. Open Tablespin and add a few places first."
+            case .nearby: message = "I don't have any nearby places yet. Open Tablespin first so it can find restaurants near you."
             }
         } else {
-            message = "I don't have any places yet. Open ForkRoad first so it can find restaurants near you."
+            message = "I don't have any places yet. Open Tablespin first so it can find restaurants near you."
         }
         return .result(dialog: "\(message)")
     }

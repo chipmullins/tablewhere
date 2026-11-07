@@ -63,7 +63,7 @@ struct ShareCard: View {
                         .scaledToFit()
                         .frame(width: 30, height: 30)
                         .clipShape(RoundedRectangle(cornerRadius: 30 * 0.225, style: .continuous))
-                    Text("forkroad")
+                    Text("tablespin")
                         .font(Theme.display(18))
                         .foregroundStyle(Color(hex: 0xF5F3EE))
                 }
@@ -113,7 +113,7 @@ struct ShareCard: View {
                     .fill(Theme.saffron)
                     .frame(width: 36, height: 4)
                     .padding(.bottom, 12)
-                Text("forkroad · where to eat, decided")
+                Text("tablespin · let the table decide")
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Color(hex: 0xA19FAA))
             }

@@ -1,4 +1,6 @@
-# ForkRoad
+# Tablespin
+
+Formerly ForkRoad. The public name is Tablespin; code, targets, bundle IDs, the iCloud container, the app group, Firebase (`forkroad-app`) and `forkroad://` links keep the ForkRoad name so existing installs and data keep working.
 
 **Every dinner is a fork in the road.** ForkRoad helps you decide where to eat: browse what's nearby, spin for a random pick, vote with friends in iMessage or on the web, and plan where to eat on trips.
 

@@ -400,7 +400,7 @@ struct GroupLobbyView: View {
             Label("It’s just you so far", systemImage: "person.badge.plus")
                 .font(Theme.body(16, .bold))
                 .foregroundStyle(Theme.text)
-            Text("Send the link to the group chat. Friends can \(session.mode == .vote ? "vote" : "add their pick") from the web, no app needed, or join in ForkRoad with code \(JoinCode.display(session.joinCode)).")
+            Text("Send the link to the group chat. Friends can \(session.mode == .vote ? "vote" : "add their pick") from the web, no app needed, or join in Tablespin with code \(JoinCode.display(session.joinCode)).")
                 .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)

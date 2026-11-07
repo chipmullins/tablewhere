@@ -128,7 +128,7 @@ final class MessagesState {
         conversation.insert(message) { @Sendable _ in }
         Self.rememberPosted(session)
         if includeWebLink, let url = GroupLinks.webURL(sessionID: session.id, host: AppConfig.webHost) {
-            conversation.insertText("No ForkRoad? Vote here: \(url.absoluteString)") { @Sendable _ in }
+            conversation.insertText("No Tablespin? Vote here: \(url.absoluteString)") { @Sendable _ in }
         }
         collapse()
     }

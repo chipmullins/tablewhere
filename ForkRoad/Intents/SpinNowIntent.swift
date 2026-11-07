@@ -28,7 +28,7 @@ enum SpinLink {
 /// Hidden from Shortcuts: the "Spin" App Shortcut (OpenSpinIntent) does the same there.
 struct SpinNowIntent: AppIntent {
     static var title: LocalizedStringResource = "Spin for a place to eat"
-    static var description = IntentDescription("Opens ForkRoad on the Spin tab and spins.")
+    static var description = IntentDescription("Opens Tablespin on the Spin tab and spins.")
     static var openAppWhenRun: Bool = true
     static var isDiscoverable: Bool = false
 

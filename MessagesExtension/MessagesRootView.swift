@@ -15,12 +15,12 @@ struct MessagesRootView: View {
                     .tint(Theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !state.firebaseReady {
-                notice("Open ForkRoad to finish setting up group voting.")
+                notice("Open Tablespin to finish setting up group voting.")
             } else if !hasName {
                 if state.isExpanded {
                     NamePromptView { _ in hasName = true }
                 } else {
-                    startButton(title: "Set up ForkRoad voting") { state.expand() }
+                    startButton(title: "Set up Tablespin voting") { state.expand() }
                 }
             } else if let sessionID = state.sessionID {
                 MessageVoteView(sessionID: sessionID, state: state)
@@ -178,7 +178,7 @@ struct NewVoteView: View {
                                        onAreaChange: { pickedArea = $0 },
                                        onTap: toggle)
                     Section {
-                        Toggle("Also send a web link for friends without ForkRoad", isOn: $includeWebLink)
+                        Toggle("Also send a web link for friends without Tablespin", isOn: $includeWebLink)
                             .tint(Theme.saffron)
                     }
                     .listRowBackground(Theme.surface)
@@ -645,7 +645,7 @@ struct MessageVoteView: View {
             Label("Waiting for friends", systemImage: "person.badge.plus")
                 .font(Theme.body(15, .bold))
                 .foregroundStyle(Theme.text)
-            Text("Friends with ForkRoad tap the bubble to join. Anyone without it can use the web link.")
+            Text("Friends with Tablespin tap the bubble to join. Anyone without it can use the web link.")
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -692,7 +692,7 @@ struct MessageVoteView: View {
 
     private func answer(going: Bool, guests: Int, session: GroupSession) {
         guard let name = Identity.displayName else {
-            errorMessage = "Open ForkRoad and add your name to reply."
+            errorMessage = "Open Tablespin and add your name to reply."
             return
         }
         if !state.isExpanded { state.expand() }
@@ -709,7 +709,7 @@ struct MessageVoteView: View {
 
     private func vote(_ option: GroupOption, session: GroupSession) {
         guard let name = Identity.displayName else {
-            errorMessage = "Open ForkRoad and add your name to vote."
+            errorMessage = "Open Tablespin and add your name to vote."
             return
         }
         if !state.isExpanded { state.expand() }

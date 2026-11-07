@@ -38,7 +38,7 @@ struct AcknowledgementsView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("ForkRoad")
+                    Text("Tablespin")
                         .font(Theme.display(26))
                         .foregroundStyle(Theme.text)
                     Text("Created by Chip Mullins")
@@ -79,7 +79,7 @@ struct AcknowledgementsView: View {
             } header: {
                 Text("Open-source fonts and software")
             } footer: {
-                Text("ForkRoad is built with these open-source fonts and libraries. Tap one for its full license. Thank you to their authors.")
+                Text("Tablespin is built with these open-source fonts and libraries. Tap one for its full license. Thank you to their authors.")
             }
             .listRowBackground(Theme.surface)
         }
@@ -108,7 +108,7 @@ private struct LicenseTextView: View {
             ?? Bundle.main.url(forResource: credit.file, withExtension: "txt")
         guard let url,
               let contents = try? String(contentsOf: url, encoding: .utf8) else {
-            return "\(credit.license)\n\nThe full license text is in the ForkRoad source code (Licenses/\(credit.file).txt)."
+            return "\(credit.license)\n\nThe full license text is in the Tablespin source code (Licenses/\(credit.file).txt)."
         }
         return contents
     }

@@ -1,4 +1,4 @@
-// ForkRoad web vote page: https://<host>/v/<sessionId>
+// Tablespin web vote page: https://<host>/v/<sessionId>
 // Same Firestore data as the app and iMessage extension.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -361,7 +361,7 @@ document.addEventListener("pointercancel", endPress, true);
 function updateTabTitle() {
   const decided = session.status === "decided" && session.winnerID && session.announced !== false;
   const stage = decided ? "Results" : isPlan() ? "Plan" : isSpin() ? "Spin" : "Vote";
-  document.title = `ForkRoad · ${stage}`;
+  document.title = `Tablespin · ${stage}`;
 }
 
 function render() {
@@ -574,7 +574,7 @@ function renderSpin() {
     ? `You’re in the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
     : mapkitToken
       ? `Add your pick to the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
-      : `${creator} spins when everyone’s ready, and the app picks one at random. To add a pick, join in the ForkRoad app with the code below.`;
+      : `${creator} spins when everyone’s ready, and the app picks one at random. To add a pick, join in the Tablespin app with the code below.`;
 
   const list = $("options");
   list.replaceChildren();
@@ -887,7 +887,7 @@ function downloadCalendar() {
     return;
   }
   const lines = [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ForkRoad//Plan//EN", "BEGIN:VEVENT",
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Tablespin//Plan//EN", "BEGIN:VEVENT",
     `UID:${sessionId}@forkroad`,
     `DTSTAMP:${icsDate(new Date())}`,
     `DTSTART:${icsDate(start)}`,
@@ -903,7 +903,7 @@ function downloadCalendar() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "forkroad-plan.ics";
+  a.download = "tablespin-plan.ics";
   document.body.append(a);
   a.click();
   a.remove();
