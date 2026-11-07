@@ -2,7 +2,7 @@
 
 Formerly ForkRoad. The public name is Tablespin; code, targets, bundle IDs, the iCloud container, the app group, Firebase (`forkroad-app`) and `forkroad://` links keep the ForkRoad name so existing installs and data keep working.
 
-**Every dinner is a fork in the road.** ForkRoad helps you decide where to eat: browse what's nearby, spin for a random pick, vote with friends in iMessage or on the web, and plan where to eat on trips.
+**Let the table decide.** Tablespin helps you decide where to eat: browse what’s nearby, spin for a pick (or a home meal), and plan with friends in the app, iMessage, or on the web.
 
 Built with SwiftUI, SwiftData + CloudKit, MapKit, and Firebase. iOS 17+. Type is Outfit (headings) and DM Sans (body), bundled under the SIL Open Font License (see `Licenses/`).
 
