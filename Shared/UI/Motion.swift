@@ -28,7 +28,7 @@ struct PressableStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .contentShape(Rectangle())
+                .contentShape(.interaction, Rectangle())
                 .scaleEffect(configuration.isPressed && !reduceMotion && isEnabled ? scale : 1)
                 .opacity(configuration.isPressed && isEnabled ? 0.82 : 1)
                 .animation(Motion.quick, value: configuration.isPressed)

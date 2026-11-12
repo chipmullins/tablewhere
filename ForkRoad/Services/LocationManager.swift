@@ -80,7 +80,8 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Task { @MainActor in self.onUpdate?() }
+        // Already searching from a fix (the last-known one): a failed refresh changes nothing.
+        Task { @MainActor in if self.coordinate == nil { self.onUpdate?() } }
     }
 
     private func lookUpPlaceName(for location: CLLocation) async {

@@ -21,6 +21,8 @@ final class LiveSession {
     private(set) var isGone = false
 
     @ObservationIgnored nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
+    /// Signing in before listening: a second start (a double-tapped Try again) waits it out.
+    @ObservationIgnored private var isStarting = false
 
     init(sessionID: String) {
         self.sessionID = sessionID
@@ -86,7 +88,9 @@ final class LiveSession {
 
     /// Signs in if needed and starts listening.
     func start() async {
-        guard listeners.isEmpty else { return }
+        guard listeners.isEmpty, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         do {
             _ = try await GroupService.shared.userID()
         } catch {

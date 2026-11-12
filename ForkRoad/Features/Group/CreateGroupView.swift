@@ -92,7 +92,7 @@ struct CreateGroupView: View {
             }
             .listSectionSpacing(.compact)
             .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboard(.interactively)
             .background(Theme.night)
             .sensoryFeedback(Haptic.tick, trigger: setup)
             .onChange(of: setup) {
@@ -421,7 +421,7 @@ private struct PickerSheetContent: View {
         }
         .listSectionSpacing(.compact)
         .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.interactively)
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search restaurants or cravings")

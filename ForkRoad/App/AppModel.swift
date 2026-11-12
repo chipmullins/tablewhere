@@ -268,6 +268,7 @@ final class AppModel {
         guard !cached.isEmpty else { return }
         places = cached
         hasSearched = true
+        Task { await refreshCurrentCity() }
     }
 
     /// Runs a filtered nearby search without touching Discover's results

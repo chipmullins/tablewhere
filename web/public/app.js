@@ -17,7 +17,8 @@ $("error-retry")?.addEventListener("click", () => location.reload());
 
 function fail(message, canRetry = false) {
   $("error-text").textContent = message;
-  $("error-retry").hidden = !canRetry;
+  const retry = $("error-retry");
+  if (retry) retry.hidden = !canRetry;
   show("error");
 }
 
