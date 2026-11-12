@@ -54,7 +54,7 @@ struct AddToCalendarButton: View {
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(added || working)
             if let errorMessage {
                 Text(errorMessage).font(Theme.body(12)).foregroundStyle(Theme.danger)

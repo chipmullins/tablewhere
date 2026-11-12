@@ -41,7 +41,7 @@ struct RadiusSlider: View {
                         .foregroundStyle(isOn ? Theme.night : Theme.text)
                         .background(isOn ? Theme.text : Theme.surfaceHigh,
                                     in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                 }
             }
         }
@@ -116,7 +116,7 @@ struct FastFoodChip: View {
                 .background(isOn ? Theme.saffron : Theme.surface, in: Capsule())
                 .overlay(Capsule().strokeBorder(isOn ? .clear : Theme.hairline))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: isOn)
     }

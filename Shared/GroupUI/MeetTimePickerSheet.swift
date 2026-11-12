@@ -48,7 +48,7 @@ struct MeetTimePickerSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 54)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .padding(16)
             .background(Theme.night)

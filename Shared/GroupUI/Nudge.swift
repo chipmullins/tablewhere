@@ -53,7 +53,7 @@ struct OwnerGroupTools: View {
             if let nudge {
                 if let sendNudge {
                     Button { sendNudge(nudge) } label: { nudgeLabel }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                 } else {
                     ShareLink(item: nudge) { nudgeLabel }
                 }

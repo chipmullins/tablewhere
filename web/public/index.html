@@ -73,6 +73,9 @@
     .winner-map { height: 170px; border-radius: 22px; overflow: hidden; margin-top: 12px; background: #1F1F29; cursor: pointer; }
     .btn { display: flex; align-items: center; justify-content: center; min-height: 52px; border-radius: 16px; border: 0; font: 700 15px 'DM Sans', sans-serif; text-decoration: none; cursor: pointer; }
     .btn.primary { background: var(--saffron); color: var(--on-saffron); }
+    .btn { transition: transform .12s ease, opacity .12s ease; -webkit-tap-highlight-color: transparent; }
+    .btn:active:not(:disabled) { transform: scale(.97); opacity: .85; }
+    @media (prefers-reduced-motion: reduce) { .btn:active:not(:disabled) { transform: none; } }
     .btn.light { background: var(--text); color: var(--night); }
     .btn.ghost { background: var(--surface-high); color: var(--text); }
     .btn:disabled { opacity: .5; }
@@ -125,6 +128,7 @@
     <section id="error" hidden>
       <h1>Hmm.</h1>
       <p class="error" id="error-text"></p>
+      <button type="button" class="btn primary wide" id="error-retry" hidden style="margin-top:16px">Try again</button>
     </section>
 
     <section id="name-step" hidden>

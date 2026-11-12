@@ -84,7 +84,7 @@ struct RSVPPanel: View {
                 .background(isOn ? Theme.saffron : Theme.surfaceHigh,
                             in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .sensoryFeedback(Haptic.tick, trigger: isOn)
     }
@@ -230,7 +230,7 @@ struct PlanTimeSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 54)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .padding(16)
             .background(Theme.night)

@@ -36,6 +36,8 @@ struct RootTabView: View {
         }
         .toolbarBackground(Theme.night, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        // Big text, but not so big the fixed-size pieces (Spin button, reel) break.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .overlay(alignment: .bottom) { UndoToastHost() }
         // A toast from one tab doesn't follow you to the next.
         .onChange(of: model.selectedTab) { UndoCenter.shared.hide() }
@@ -184,7 +186,7 @@ struct HowWasItSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(filled ? .clear : Theme.hairline))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityHint(note)
     }
 

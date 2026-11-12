@@ -108,7 +108,7 @@ struct NearbyMap: View {
                         .background(Theme.saffron, in: Capsule())
                         .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.top, isExpanded ? 12 : 10)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -122,7 +122,7 @@ struct NearbyMap: View {
                         .frame(width: 34, height: 34)
                         .background(Theme.night.opacity(0.85), in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(10)
                 .accessibilityLabel("Expand map")
             }
@@ -147,7 +147,7 @@ struct NearbyMap: View {
             } else {
                 Circle().fill(Theme.open).frame(width: 7, height: 7)
             }
-            Text(model.isLoading ? "Searching…" : "\(places.count) places within \(model.radiusLabel)")
+            Text(model.isLoading ? "Searching…" : "\(plural(places.count, "place")) within \(model.radiusLabel)")
         }
         .font(Theme.body(12, .semibold))
         .foregroundStyle(Theme.text)
@@ -257,7 +257,7 @@ private struct MapPlaceCard: View {
                         .frame(width: 32, height: 32)
                         .background(Theme.surfaceHigh, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Close")
             }
             HStack(spacing: 8) {
@@ -268,7 +268,7 @@ private struct MapPlaceCard: View {
                         .frame(maxWidth: .infinity, minHeight: 46)
                         .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 Button {
                     PlaceLinks.openDirections(place)
                     VisitFollowUp.record(place, in: context)
@@ -279,7 +279,7 @@ private struct MapPlaceCard: View {
                         .frame(maxWidth: .infinity, minHeight: 46)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .padding(14)

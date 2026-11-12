@@ -135,6 +135,15 @@ final class LiveSession {
         })
     }
 
+    /// "Try again" after a failed start (no connection when it opened):
+    /// listens from scratch. Firestore reconnects on its own once listening.
+    func retry() async {
+        stop()
+        errorMessage = nil
+        isLoaded = false
+        await start()
+    }
+
     func stop() {
         listeners.forEach { $0.remove() }
         listeners.removeAll()

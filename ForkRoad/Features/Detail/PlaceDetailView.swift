@@ -110,7 +110,7 @@ struct PlaceDetailView: View {
                             Text("Leave out of spins")
                                 .font(Theme.body(15, .semibold))
                                 .foregroundStyle(Theme.text)
-                            Text("Stays in your \(onList.title), but the dice skips it.")
+                            Text("Stays in your \(onList.title), but the wheel skips it.")
                                 .font(Theme.body(12))
                                 .foregroundStyle(Theme.muted)
                         }
@@ -142,6 +142,7 @@ struct PlaceDetailView: View {
             }
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
@@ -213,7 +214,7 @@ struct PlaceDetailView: View {
             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(place.websiteURL == nil)
         .opacity(place.websiteURL == nil ? 0.5 : 1)
     }

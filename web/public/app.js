@@ -13,8 +13,11 @@ function show(id) {
   sections.forEach((s) => { $(s).hidden = s !== id; });
 }
 
-function fail(message) {
+$("error-retry")?.addEventListener("click", () => location.reload());
+
+function fail(message, canRetry = false) {
   $("error-text").textContent = message;
+  $("error-retry").hidden = !canRetry;
   show("error");
 }
 
@@ -94,7 +97,7 @@ async function refreshRuledOut() {
 
 const sessionId = (location.pathname.match(/^\/v\/([^/]+)/) || [])[1];
 if (!sessionId) {
-  fail("This link is missing its vote ID. Ask whoever sent it to share it again.");
+  fail("This link is missing part of its address. Ask whoever sent it to share it again.");
   throw new Error("No session id");
 }
 
@@ -103,7 +106,7 @@ let firebaseConfig;
 try {
   ({ firebaseConfig } = await import("./firebase-config.js"));
 } catch {
-  fail("This vote page isn’t set up yet. (Missing firebase-config.js — see the README.)");
+  fail("This page isn’t set up yet. (Missing firebase-config.js — see the README.)");
   throw new Error("Missing firebase-config.js");
 }
 
@@ -141,7 +144,7 @@ const store = {
 onAuthStateChanged(auth, (user) => {
   if (user) { uid = user.uid; start(); }
 });
-signInAnonymously(auth).catch(() => fail("Couldn’t connect. Check your connection and reload."));
+signInAnonymously(auth).catch(() => fail("Couldn’t connect. Check your connection and try again.", true));
 
 // Anonymous daily counts for the stats page (stats/{yyyy-mm-dd}, UTC): one
 // number per thing per day, nothing about who. Same as UsageStats in the app.
@@ -165,11 +168,11 @@ function start() {
   countVisitOncePerDay();
 
   onSnapshot(sessionRef, (snap) => {
-    if (!snap.exists()) return fail("This vote doesn’t exist anymore.");
+    if (!snap.exists()) return fail("This group plan has ended. Whoever started it ended it, or it no longer exists.");
     session = snap.data();
     render();
     refreshRuledOut();
-  }, () => fail("Couldn’t load this vote."));
+  }, () => fail("Couldn’t load this plan. Check your connection and try again.", true));
 
   onSnapshot(collection(sessionRef, "votes"), (snap) => {
     votes = snap.docs.map((d) => d.data());

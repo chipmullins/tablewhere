@@ -4,10 +4,17 @@ import SwiftUI
 /// will be closed. Apple Maps doesn't give ForkRoad opening hours, so the
 /// app can't tell which.
 struct LateNightNote: View {
+    /// How many places are in play. Late at night with plenty of results the
+    /// note is just noise; it shows when the list has thinned out.
+    var placeCount: Int
+
+    /// Fewer than this many places late at night: worth a heads-up.
+    static let fewPlaces = 12
+
     var body: some View {
         // Re-checked each minute, so it appears (and goes) on its own.
         TimelineView(.everyMinute) { context in
-            if Self.isLate(context.date) {
+            if Self.isLate(context.date) && placeCount < Self.fewPlaces {
                 Label("It’s late, so some places may be closed. Call or check hours before you go.",
                       systemImage: "moon.stars")
                     .font(Theme.body(13, .medium))

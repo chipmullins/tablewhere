@@ -52,7 +52,7 @@ struct LeaveByCard: View {
                         .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.accentText)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             if let plan, !plan.isTimeToGo {
                 Toggle("Remind me when it’s time to leave", isOn: $remind)

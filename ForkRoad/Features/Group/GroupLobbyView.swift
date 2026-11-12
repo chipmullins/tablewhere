@@ -94,7 +94,8 @@ struct GroupLobbyView: View {
                               action: ("Back to Group", { SharedCache.forgetSession(sessionID); dismiss() }))
                         .padding(.top, 40)
                 } else if let message = live.errorMessage {
-                    StateCard(icon: "wifi.slash", title: "Can’t reach this group", message: message)
+                    StateCard(icon: "wifi.slash", title: "Can’t reach this group", message: message,
+                              action: ("Try again", { Task { await live.retry() } }))
                         .padding(.top, 40)
                 } else {
                     GroupPlanSkeleton()
@@ -103,6 +104,7 @@ struct GroupLobbyView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 120)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private func withChrome<V: View>(_ view: V) -> some View {
@@ -482,7 +484,7 @@ struct GroupLobbyView: View {
 
     private func howDecided(_ session: GroupSession, votes: Int) -> String {
         switch session.mode {
-        case .vote: return "\(votes) of \(live.tally.totalVotes) votes"
+        case .vote: return "\(votes) of \(plural(live.tally.totalVotes, "vote"))"
         case .spin: return "Picked by the spin"
         case .plan: return "Picked by \(session.createdByName)"
         }
@@ -525,7 +527,7 @@ struct GroupLobbyView: View {
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     /// The creator can turn RSVPs on or off, and set or clear the reply-by time.
@@ -626,7 +628,7 @@ struct GroupLobbyView: View {
             .foregroundStyle(isOn ? Theme.night : Theme.text)
             .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
@@ -653,7 +655,7 @@ struct GroupLobbyView: View {
                             .padding(.horizontal, 14)
                             .frame(minHeight: 48)
                             .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                     }
                 }
                 Text("Everyone sees it with the plan. \(noteDraft.count)/\(GroupSession.maxNoteLength)")
@@ -722,7 +724,7 @@ struct GroupLobbyView: View {
                             .frame(maxWidth: .infinity, minHeight: 56)
                             .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .disabled(isWorking || session.options.isEmpty)
                 } else {
                     Text(GroupWording.whoDecides(session))

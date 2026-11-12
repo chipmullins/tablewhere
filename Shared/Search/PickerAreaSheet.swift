@@ -82,7 +82,7 @@ struct PickerAreaSheet: View {
                             Button { search.query = "" } label: {
                                 Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressable)
                             .accessibilityLabel("Clear search")
                         }
                     }
@@ -242,7 +242,7 @@ struct PickerMapView: View {
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .disabled(isNaming)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 40)  // clear of the home indicator

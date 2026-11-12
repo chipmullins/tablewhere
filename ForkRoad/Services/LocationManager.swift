@@ -39,6 +39,13 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
+            // A recent last-known fix gets the first search going at once;
+            // the fresh fix below refines it.
+            if coordinate == nil, let last = manager.location,
+               -last.timestamp.timeIntervalSinceNow < 15 * 60 {
+                coordinate = last.coordinate
+                onUpdate?()
+            }
             manager.requestLocation()
         default:
             break
@@ -62,8 +69,12 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         Task { @MainActor in
+            // Barely moved since the last-known fix: keep its results (no second search).
+            let moved = self.coordinate.map {
+                CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: location) > 200
+            } ?? true
             self.coordinate = location.coordinate
-            self.onUpdate?()
+            if moved { self.onUpdate?() }
             await self.lookUpPlaceName(for: location)
         }
     }

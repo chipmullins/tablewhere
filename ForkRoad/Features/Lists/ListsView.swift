@@ -159,7 +159,7 @@ struct ListsView: View {
                         .foregroundStyle(Theme.accentText)
                     addPlaceLink
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             .listRowBackground(Color.clear)
         } else {
@@ -211,7 +211,7 @@ struct ListsView: View {
                 .font(Theme.body(15, .semibold))
                 .foregroundStyle(Theme.accentText)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private func spinTitle(_ list: SavedList, area: String?) -> String {

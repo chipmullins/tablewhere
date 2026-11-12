@@ -2,7 +2,7 @@ import SwiftUI
 import CoreLocation
 import PickerCore
 
-enum AppTab: Hashable {
+enum AppTab: String, Hashable {
     case discover, spin, lists, group
 }
 
@@ -43,7 +43,10 @@ enum SpinSource: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class AppModel {
-    var selectedTab: AppTab = .discover
+    /// Opens where you left off (iOS often closes the app in the background).
+    var selectedTab: AppTab = AppTab(rawValue: UserDefaults.standard.string(forKey: "lastTab") ?? "") ?? .discover {
+        didSet { UserDefaults.standard.set(selectedTab.rawValue, forKey: "lastTab") }
+    }
     var spinSource: SpinSource = .nearby
     /// Spin → Eat in: spin your home meals instead of restaurants.
     var eatIn = false
@@ -245,9 +248,26 @@ final class AppModel {
         // with context (or the user picks a city instead).
         let onboarded = UserDefaults.standard.bool(forKey: "didOnboard")
         if onboarded && chosenLocation == nil { location.start() }
+        showCachedResults()
         // The first search runs once there's somewhere to look (a GPS fix or
         // a chosen place); the location callback schedules it.
         if hasLocation { scheduleSearch() }
+    }
+
+    /// Opens on the last results right away when they fit where and how
+    /// we're about to search, so launch never shows an empty screen while
+    /// Apple Maps answers. The fresh search replaces them quietly.
+    private func showCachedResults() {
+        guard places.isEmpty, hasLocation,
+              let area = SharedCache.loadSearchArea(),
+              area.radiusMiles == radiusMiles, area.cuisines == cuisines.filter({ $0 != .all }), area.diet == diet else { return }
+        let here = CLLocation(latitude: center.latitude, longitude: center.longitude)
+        let there = CLLocation(latitude: area.latitude, longitude: area.longitude)
+        guard here.distance(from: there) < 500 else { return }
+        let cached = SharedCache.loadNearby()
+        guard !cached.isEmpty else { return }
+        places = cached
+        hasSearched = true
     }
 
     /// Runs a filtered nearby search without touching Discover's results

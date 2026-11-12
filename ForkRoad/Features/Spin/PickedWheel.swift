@@ -25,7 +25,7 @@ struct PickedWheelEditor: View {
                             .frame(minHeight: 48)
                             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
                 .padding(.vertical, 24)
                 .frame(maxWidth: .infinity)
@@ -50,7 +50,7 @@ struct PickedWheelEditor: View {
                         .frame(height: 40)
                         .background(Theme.accentSoft, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(model.pickedWheel.count >= AppModel.maxPicked)
                 if !model.pickedWheel.isEmpty {
                     Button("Clear") {
@@ -66,7 +66,7 @@ struct PickedWheelEditor: View {
                         .padding(.horizontal, 14)
                         .frame(height: 40)
                         .background(Theme.surface, in: Capsule())
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                 }
                 Spacer(minLength: 0)
             }
@@ -98,7 +98,7 @@ private struct FlowChips: View {
                     .background(Theme.surface, in: Capsule())
                     .overlay(Capsule().strokeBorder(Theme.hairline))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Remove \(place.name) from the wheel")
             }
         }
@@ -236,7 +236,7 @@ struct WheelPickerSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 52)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(Theme.night)

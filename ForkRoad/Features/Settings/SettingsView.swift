@@ -143,6 +143,7 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.night)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

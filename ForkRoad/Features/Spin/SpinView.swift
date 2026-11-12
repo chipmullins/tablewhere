@@ -62,6 +62,7 @@ struct SpinView: View {
         @Bindable var model = model
         let pool = self.pool
 
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Can’t decide?\nWe got you.")
@@ -80,7 +81,7 @@ struct SpinView: View {
                     eatInHeader
                 } else {
                     eatOutControls
-                    LateNightNote()
+                    LateNightNote(placeCount: pool.count)
                 }
 
                 // The reel, Spin button, and result live in their own view, so
@@ -93,7 +94,11 @@ struct SpinView: View {
                           isHome: model.eatIn,
                           notes: recipeNotes,
                           rulesAtSpin: { rules },
-                          reveal: $reveal)
+                          reveal: $reveal,
+                          onLanded: {
+                              // Bring the pick up: the reel at the top, the result card under it.
+                              withAnimation(Motion.standard) { proxy.scrollTo(SpinStage.reelID, anchor: .top) }
+                          })
 
                 if !model.eatIn {
                     HintCard(.spinFirst)
@@ -103,6 +108,7 @@ struct SpinView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
+        }
         }
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
@@ -137,7 +143,7 @@ struct SpinView: View {
                                   title: model.locationName,
                                   detail: nearbyFilterDetail)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityLabel("Filters: \(model.locationName), \(nearbyFilterDetail)")
                     .accessibilityHint("Change where, how far, and what kind of food")
                     .sheet(isPresented: $showFilters) { SpinFiltersSheet() }
@@ -176,14 +182,14 @@ struct SpinView: View {
                         .font(Theme.body(14, .bold))
                         .foregroundStyle(Theme.accentText)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 Button("Edit") {
                     model.showHomeList = true
                     model.selectedTab = .lists
                 }
                 .font(Theme.body(14, .bold))
                 .foregroundStyle(Theme.accentText)
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityHint("Opens your Home list in Lists")
             }
             .padding(.horizontal, 14)
@@ -251,7 +257,12 @@ struct SpinView: View {
     private var emptyReelText: String {
         if model.eatIn { return recipes.isEmpty ? "Add a few meals first" : "Nothing left for tonight" }
         switch model.spinSource {
-        case .nearby: return model.hasLocation ? "No places in range" : "Pick a location above"
+        case .nearby:
+            if model.location.isDenied && model.isUsingCurrentLocation { return "Location is off. Pick a city above" }
+            if !model.hasLocation { return "Pick a location above" }
+            if model.errorMessage != nil { return "Can’t reach Apple Maps. Check your connection" }
+            if model.isLoading || !model.hasSearched { return "Finding places nearby…" }
+            return "No places in range. Try a bigger radius"
         case .picked: return "Add a few places to your wheel"
         case .favorites:
             return model.listCity == .all ? "Heart some favorites first" : "No favorites around here yet"
@@ -301,6 +312,10 @@ private struct SpinStage: View {
     @State private var landCount = 0
     @State private var message: String?
     @Binding var reveal: SpinRevealRequest?
+    /// A pick landed: SpinView scrolls it into view.
+    var onLanded: () -> Void = {}
+    /// Scroll target: the top of the reel.
+    static let reelID = "spinReel"
     /// Settings → "Full-screen spin". On: the Group Spin reveal. Off: just the reel.
     @AppStorage("spinReveal") private var useReveal = true
     /// The pick waiting for the reveal to finish.
@@ -333,6 +348,7 @@ private struct SpinStage: View {
                     SpringKeyframe(1.0, duration: 0.35, spring: .bouncy)
                 }
                 .overlay { LandingBurst(trigger: landCount).allowsHitTesting(false) }
+                .id(Self.reelID)
             }
 
             HStack {
@@ -427,10 +443,10 @@ private struct SpinStage: View {
         return VStack(spacing: 14) {
             if idle {
                 IdleBar(width: 190)
-            } else {
-                // Once it lands, only the pick shows (no neighbors that read like runners-up).
+            } else if !landed {
+                // Once it lands, only the pick shows (no neighbors that read like
+                // runners-up), and the reel tightens so the result card sits close.
                 Text(previous).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
-                    .opacity(landed ? 0 : 1)
             }
             HStack(spacing: 12) {
                 if idle {
@@ -442,6 +458,8 @@ private struct SpinStage: View {
                         .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
                     Text(revealing ? "Spinning…" : "Ready to spin")
                         .font(Theme.display(24))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .foregroundStyle(Theme.muted)
                 } else if let current {
                     MonogramTile(name: current.name, category: current.category, size: 40)
@@ -466,28 +484,31 @@ private struct SpinStage: View {
             .padding(.horizontal, 14)
             if idle {
                 IdleBar(width: 150)
-            } else {
+            } else if !landed {
                 Text(next).font(Theme.body(17, .semibold)).foregroundStyle(Theme.muted.opacity(0.35))
-                    .opacity(landed ? 0 : 1)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 250)
+        .padding(.vertical, landed ? 16 : 0)
+        .frame(maxWidth: .infinity, minHeight: landed ? 0 : 250)
         .card(radius: 28)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(revealing ? "Spinning" : ready ? "Ready to spin, \(count) places" :(current.map { "Reel showing \($0.name)" } ?? "Reel is empty"))
+        .accessibilityLabel(revealing ? "Spinning" : ready ? "Ready to spin, \(plural(count, "place"))" :(current.map { "Reel showing \($0.name)" } ?? "Reel is empty"))
     }
 
     private func spinButton(_ pool: [Place]) -> some View {
         Button { spin(pool) } label: {
             Text(isSpinning ? "…" : (winner == nil ? "Spin" : "Again"))
                 .font(Theme.display(20))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 10)
                 .foregroundStyle(Theme.onSaffron)
-                .frame(width: 104, height: 104)
+                .frame(width: winner == nil ? 104 : 84, height: winner == nil ? 104 : 84)
                 .background(Theme.saffron, in: Circle())
                 .overlay(Circle().strokeBorder(Theme.saffron.opacity(0.25), lineWidth: 6))
                 .shadow(color: Theme.saffron.opacity(0.28), radius: 20, y: 12)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         // Your own wheel needs at least two to be a choice.
         .disabled(isSpinning || pool.count < minimumToSpin)
         .opacity(pool.count < minimumToSpin ? 0.4 : 1)
@@ -547,7 +568,7 @@ private struct SpinStage: View {
                     .foregroundStyle(Theme.night)
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 SharePickButton(place: place, context: .spin) {
                     Image(systemName: "square.and.arrow.up")
                         .font(Theme.body(17, .semibold))
@@ -564,7 +585,7 @@ private struct SpinStage: View {
                     .foregroundStyle(Theme.accentText)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityHint("Leaves it out of spins for a few hours, then spins again")
     }
 
@@ -606,7 +627,7 @@ private struct SpinStage: View {
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             Button { skipTonight(meal) } label: {
                 Label("Missing something? Not tonight · spin again", systemImage: "arrow.uturn.right")
@@ -614,7 +635,7 @@ private struct SpinStage: View {
                     .foregroundStyle(Theme.accentText)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityHint("Leaves it out for tonight, then spins again")
         }
         .padding(18)
@@ -693,6 +714,15 @@ private struct SpinStage: View {
             return
         }
 
+        // Reduce Motion: no rolling reel; a beat, then the pick fades in.
+        if reduceMotion {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                land(pick, at: target)
+            }
+            return
+        }
+
         // Start the reel exactly `steps` positions before the winner, so it
         // lands on it naturally instead of jumping at the end. (The start
         // position change isn't noticeable because the reel begins fast.)
@@ -721,6 +751,11 @@ private struct SpinStage: View {
         if !pick.id.hasPrefix("typed|") && !HomeRecipe.isRecipe(pick) { actions.recordSpin(pick) }
         UsageStats.record(.spins)
         AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
+        // After the reel tightens and the card starts in.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            onLanded()
+        }
     }
 
     private func reset() {
@@ -765,7 +800,7 @@ private struct LandingBurst: View {
                     let point = CGPoint(x: center.x + cos(angle) * distance * 1.6,
                                         y: center.y + sin(angle) * distance * 0.8)
                     let radius = (i % 3 == 0 ? 5.0 : 3.5) * (1 - progress * 0.6)
-                    let color = i % 4 == 0 ? Color.white : Color(hex: 0xFFB23F)
+                    let color = i % 4 == 0 ? Theme.accentText : Color(hex: 0xFFB23F)
                     context.opacity = Double(1 - progress)
                     context.fill(Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius,
                                                         width: radius * 2, height: radius * 2)),
@@ -865,7 +900,7 @@ private struct SpinFiltersSheet: View {
                         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .accessibilityHint("Search for a city or neighborhood")
 
                     HStack(spacing: 8) {
@@ -901,6 +936,6 @@ private struct SpinFiltersSheet: View {
                 .frame(minHeight: 40)
                 .background(Theme.accentSoft, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

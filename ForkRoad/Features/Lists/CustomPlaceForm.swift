@@ -23,6 +23,7 @@ struct CustomPlaceForm: View {
     @Query(sort: \SavedArea.addedAt) private var areas: [SavedArea]
 
     @State private var name = ""
+    @FocusState private var addressFocused: Bool
     @State private var category = "Restaurant"
     @State private var address = ""
     @State private var areaKey = AreaChoice.here.key
@@ -90,6 +91,8 @@ struct CustomPlaceForm: View {
                 Section {
                     TextField("Name", text: $name)
                         .textInputAutocapitalization(.words)
+                        .submitLabel(.next)
+                        .onSubmit { addressFocused = true }
                     Picker("Type", selection: $category) {
                         ForEach(Self.types, id: \.self) { Text($0).tag($0) }
                     }
@@ -98,6 +101,7 @@ struct CustomPlaceForm: View {
 
                 Section {
                     TextField("Address (optional)", text: $address, axis: .vertical)
+                        .focused($addressFocused)
                         .textContentType(.fullStreetAddress)
                         .lineLimit(1...3)
                     if trimmedAddress.isEmpty {
@@ -141,6 +145,7 @@ struct CustomPlaceForm: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.night)
             .navigationTitle(existing == nil ? "Add a restaurant" : "Edit restaurant")
             .navigationBarTitleDisplayMode(.inline)

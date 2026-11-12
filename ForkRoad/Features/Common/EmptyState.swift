@@ -35,7 +35,7 @@ struct EmptyState: View {
                         .frame(minHeight: 50)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.top, 6)
             }
             if let secondary {

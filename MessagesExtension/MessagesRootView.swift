@@ -31,6 +31,7 @@ struct MessagesRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.night)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     private func notice(_ text: String) -> some View {
@@ -50,12 +51,14 @@ struct MessagesRootView: View {
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .padding(16)
     }
 }
 
-/// Pick places from your Favorites, Interested list, and last nearby search, then send a vote.
+/// Start a group plan from the chat, the same way as the app: choose how to
+/// decide (Vote, Spin our picks, Surprise us, I'll pick), a name, the places,
+/// and optionally when.
 struct NewVoteView: View {
     @Bindable var state: MessagesState
 
@@ -67,35 +70,45 @@ struct NewVoteView: View {
     @State private var errorMessage: String?
     @State private var query = ""
     @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var excludeFastFood = true
+    @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var excludeCoffeeAndSweets = true
 
-    @State private var mode: GroupMode = .vote
+    @State private var setup: SetupMode = .vote
     @State private var title = ""
     @State private var closesIn: Int? = nil
     @State private var sendTaps = 0
-    // "I'll pick"
+    // Surprise us (its own area, so switching modes doesn't mix them up)
+    @State private var surpriseArea: PickerArea?
+    @State private var surpriseFilters: PlacePickerFilters?
+    @State private var wheel: [Place] = []
+    @State private var isLoadingWheel = true
+    /// Vote, spin, and Surprise us: an optional date and time.
+    @State private var hasTime = false
+    // "I'll pick" (and the optional time for the others)
     @State private var meetTime = PlanSetupRows.defaultMeetTime()
     @State private var note = ""
     @State private var asksRSVP = false
     @State private var hasReplyBy = false
     @State private var replyBy = PlanSetupRows.defaultReplyBy(for: PlanSetupRows.defaultMeetTime())
 
+    // What the app shares with the extension, read once.
+    @State private var searchArea = SharedCache.loadSearchArea()
+    @State private var nearby = SharedCache.loadNearby()
+    @State private var areaName: String?
+
     /// A vote starts with 2–8 of your places; a spin starts with your one
     /// pick; an "I'll pick" plan has its one place.
-    private var maxOptions: Int { mode == .vote ? GroupMode.maxStartingVoteOptions : 1 }
-    private var minOptions: Int { mode == .vote ? 2 : 1 }
-    private var canSend: Bool {
-        selected.count >= minOptions && !isSending && (mode != .plan || meetTime.timeIntervalSinceNow > 0)
+    private var maxOptions: Int { setup == .vote ? GroupMode.maxStartingVoteOptions : 1 }
+    private var isSingle: Bool { setup != .vote }
+
+    private var rules: Randomizer.Rules {
+        var rules = SharedCache.pickRules()
+        rules.excludeFastFood = excludeFastFood
+        rules.excludeCoffeeAndSweets = excludeCoffeeAndSweets
+        return rules
     }
 
-    private var modeFooter: String {
-        switch mode {
-        case .vote:
-            return "Start with 2–\(GroupMode.maxStartingVoteOptions) places (you can add more later, up to \(GroupSession.maxOptions)). Everyone else can suggest one. Most votes wins; ties are broken fairly."
-        case .spin:
-            return "Pick your one place. Everyone adds theirs, then you spin and the app picks one at random."
-        case .plan:
-            return "You choose the place and time. Everyone gets the plan, and can say if they’re in if you ask."
-        }
+    private var startingFilters: PlacePickerFilters {
+        searchArea.map { PlacePickerFilters($0) } ?? PlacePickerFilters()
     }
 
     var body: some View {
@@ -109,7 +122,7 @@ struct NewVoteView: View {
                         .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Start a group plan").font(Theme.display(18))
-                        Text("Vote, spin, or send a plan you’ve already picked").font(Theme.body(12, .medium))
+                        Text("Vote, spin, or let the wheel surprise you").font(Theme.body(12, .medium))
                     }
                     Spacer()
                 }
@@ -117,93 +130,195 @@ struct NewVoteView: View {
                 .padding(14)
                 .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .padding(16)
         } else {
-            VStack(spacing: 0) {
-                List {
-                    Section {
-                        Picker("Who picks", selection: $mode) {
-                            Text("Vote").tag(GroupMode.vote)
-                            Text("Spin").tag(GroupMode.spin)
-                            Text("I’ll pick").tag(GroupMode.plan)
-                        }
-                        .pickerStyle(.segmented)
-                        .sensoryFeedback(Haptic.tick, trigger: mode)
-                        .onChange(of: mode) {
-                            if mode != .vote && selected.count > 1 { selected = Array(selected.prefix(1)) }
-                        }
-                        TextField("Name (\(mode.defaultTitle))", text: $title)
-                            .foregroundStyle(Theme.text)
-                            .submitLabel(.done)
-                        if mode == .vote {
-                            Picker("Voting closes", selection: $closesIn) {
-                                Text("When I lock it in").tag(Int?.none)
-                                Text("In 5 min").tag(Int?.some(5))
-                                Text("In 15 min").tag(Int?.some(15))
-                                Text("In 30 min").tag(Int?.some(30))
-                            }
-                            .tint(Theme.accentText)
-                        }
-                    } footer: {
-                        Text(modeFooter)
-                    }
-                    .listRowBackground(Theme.surface)
-                    Section {
-                        MessageSearchField(text: $query)
-                    }
-                    .listRowBackground(Theme.surface)
-                    if !selected.isEmpty {
-                        Section(mode == .vote ? "Picked (\(selected.count) of \(maxOptions))" : (mode == .plan ? "The place" : "Your pick")) {
-                            ForEach(selected) { place in
-                                Button { toggle(place) } label: {
-                                    HStack(spacing: 12) {
-                                        MonogramTile(name: place.name, category: place.category, size: 30)
-                                        Text(place.name).foregroundStyle(Theme.text).lineLimit(1)
-                                        Spacer()
-                                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
-                                    }
-                                }
-                            }
-                        }
-                        .listRowBackground(Theme.surface)
-                    }
-                    if mode == .plan {
+            List {
+                modeSection
+                Section {
+                    TextField(setup.defaultTitle, text: $title)
+                        .foregroundStyle(Theme.text)
+                        .submitLabel(.done)
+                } header: {
+                    Text("Name")
+                }
+                .listRowBackground(Theme.surface)
+
+                switch setup {
+                case .surprise:
+                    SurpriseWheelSection(
+                        center: searchArea?.center,
+                        centerName: areaName ?? "Your last search area",
+                        startingFilters: startingFilters,
+                        startingNearby: nearby,
+                        rules: rules,
+                        search: MapKitPlaceSearch(),
+                        area: $surpriseArea,
+                        filters: Binding(get: { surpriseFilters ?? startingFilters },
+                                         set: { surpriseFilters = $0 }),
+                        wheel: $wheel,
+                        isLoading: $isLoadingWheel
+                    )
+                case .vote, .spin, .plan:
+                    placesSections
+                    if setup == .plan {
                         PlanSetupRows(meetTime: $meetTime, note: $note, asksRSVP: $asksRSVP,
                                       hasReplyBy: $hasReplyBy, replyBy: $replyBy)
                     }
-                    MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
-                                       accessory: { .check(isOn: selected.contains($0)) },
-                                       isDisabled: { mode == .vote && !selected.contains($0) && selected.count >= maxOptions },
-                                       onAreaChange: { pickedArea = $0 },
-                                       onTap: toggle)
-                    Section {
-                        Toggle("Also send a web link for friends without Tablespin", isOn: $includeWebLink)
-                            .tint(Theme.saffron)
-                    }
-                    .listRowBackground(Theme.surface)
-                    if let errorMessage {
-                        Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
-                    }
                 }
-                .scrollContentBackground(.hidden)
+                if setup != .plan { PlanWhenSection(hasTime: $hasTime, meetTime: $meetTime) }
 
-                Button(action: send) {
-                    Group {
-                        if isSending { ProgressView().tint(Theme.onSaffron) }
-                        else { Text(sendTitle) }
-                    }
-                    .font(Theme.display(17))
-                    .foregroundStyle(Theme.onSaffron)
-                    .frame(maxWidth: .infinity, minHeight: 54)
-                    .background(Theme.saffron.opacity(canSend ? 1 : 0.45),
-                                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                Section {
+                    Toggle("Also send a web link for friends without Tablespin", isOn: $includeWebLink)
+                        .tint(Theme.saffron)
                 }
-                .buttonStyle(.plain)
-                .disabled(!canSend)
-                .sensoryFeedback(Haptic.commit, trigger: sendTaps)
-                .padding(16)
+                .listRowBackground(Theme.surface)
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(Theme.danger).listRowBackground(Color.clear)
+                }
             }
+            .listSectionSpacing(.compact)
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .sensoryFeedback(Haptic.tick, trigger: setup)
+            .onChange(of: setup) {
+                if isSingle && selected.count > 1 { selected = Array(selected.prefix(1)) }
+            }
+            .safeAreaInset(edge: .bottom) { bottomBar }
+            .task {
+                guard let center = searchArea?.center, areaName == nil else { return }
+                areaName = await PickerArea.cityName(for: center)
+            }
+        }
+    }
+
+    // MARK: Sections
+
+    private var modeSection: some View {
+        Section {
+            ForEach(SetupMode.allCases) { option in
+                Button {
+                    withAnimation(.snappy) { setup = option }
+                } label: {
+                    SetupModeRow(option: option, isOn: setup == option)
+                }
+                .buttonStyle(.pressable)
+                .accessibilityAddTraits(setup == option ? .isSelected : [])
+            }
+            if setup == .vote {
+                Picker("Voting closes", selection: $closesIn) {
+                    Text("When I lock it in").tag(Int?.none)
+                    Text("In 5 min").tag(Int?.some(5))
+                    Text("In 15 min").tag(Int?.some(15))
+                    Text("In 30 min").tag(Int?.some(30))
+                }
+                .tint(Theme.accentText)
+            }
+        } header: {
+            Text("How do you want to decide?")
+        }
+        .listRowBackground(Theme.surface)
+    }
+
+    /// Search, what you've picked, and the picker (the drawer has no nav bar
+    /// for `.searchable`, so the search field is a row).
+    @ViewBuilder private var placesSections: some View {
+        Section {
+            ForEach(selected) { place in
+                HStack(spacing: 12) {
+                    MonogramTile(name: place.name, category: place.category, size: 30)
+                    Text(place.name).foregroundStyle(Theme.text).lineLimit(1)
+                    Spacer()
+                    Button { toggle(place) } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Remove \(place.name)")
+                }
+            }
+            MessageSearchField(text: $query)
+        } header: {
+            Text(placesHeader)
+        } footer: {
+            if setup == .vote {
+                Text("Start with 2–\(GroupMode.maxStartingVoteOptions). Friends can suggest one each, up to \(GroupSession.maxOptions) in all.")
+            } else if setup == .spin {
+                Text("Friends add theirs from the bubble or the link. You spin when everyone’s in.")
+            }
+        }
+        .listRowBackground(Theme.surface)
+        MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
+                           accessory: { .check(isOn: selected.contains($0)) },
+                           isDisabled: { setup == .vote && !selected.contains($0) && selected.count >= maxOptions },
+                           onAreaChange: { pickedArea = $0 },
+                           onTap: toggle)
+    }
+
+    private var placesHeader: String {
+        switch setup {
+        case .vote: return selected.isEmpty ? "Places" : "Places (\(selected.count) of \(maxOptions))"
+        case .spin: return "Your pick"
+        default: return "The place"
+        }
+    }
+
+    // MARK: Send
+
+    private var bottomBar: some View {
+        VStack(spacing: 8) {
+            Text(statusLine)
+                .font(Theme.body(13, .semibold))
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+            Button(action: send) {
+                HStack(spacing: 8) {
+                    if isSending { ProgressView().tint(Theme.onSaffron) }
+                    Text(setup.startTitle)
+                }
+                .font(Theme.display(17))
+                .foregroundStyle(canSend ? Theme.onSaffron : Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(canSend ? Theme.saffron : Theme.surfaceHigh,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+            .disabled(!canSend || isSending)
+            .sensoryFeedback(Haptic.commit, trigger: sendTaps)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity)
+        .background(Theme.night)
+        .animation(.snappy, value: canSend)
+    }
+
+    private var statusLine: String {
+        if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return "Pick a time that hasn’t passed" }
+        switch setup {
+        case .vote:
+            if selected.count < 2 { return "Add at least 2 places" }
+            return "\(selected.count) places to vote on"
+        case .spin:
+            return selected.first.map { "Your pick: \($0.name)" } ?? "Choose your pick to start"
+        case .surprise:
+            if isLoadingWheel && wheel.isEmpty { return "Finding places nearby…" }
+            if wheel.count < 2 { return "Need 2+ places nearby. Try a bigger radius." }
+            return "\(wheel.count) places on the wheel"
+        case .plan:
+            guard let place = selected.first else { return "Choose the place to send the plan" }
+            if meetTime.timeIntervalSinceNow <= 0 { return "Pick a time that hasn’t passed" }
+            return "\(place.name) · \(MeetTimes.label(for: meetTime))"
+        }
+    }
+
+    private var canSend: Bool {
+        if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return false }
+        switch setup {
+        case .vote: return selected.count >= 2
+        case .spin: return selected.count >= 1
+        case .surprise: return wheel.count >= 2 && !isLoadingWheel
+        case .plan: return selected.count == 1 && meetTime.timeIntervalSinceNow > 0
         }
     }
 
@@ -211,51 +326,50 @@ struct NewVoteView: View {
     private var groupTitle: String {
         let typed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !typed.isEmpty { return String(typed.prefix(60)) }
-        return mode.defaultTitle
-    }
-
-    private var sendTitle: String {
-        switch mode {
-        case .vote: return selected.count < 2 ? "Pick at least 2 places" : "Send vote · \(selected.count) places"
-        case .spin: return selected.first.map { "Start the spin · \($0.name)" } ?? "Pick your place"
-        case .plan: return selected.isEmpty ? "Pick the place" : "Send the plan · \(MeetTimes.label(for: meetTime))"
-        }
+        return setup.defaultTitle
     }
 
     private func toggle(_ place: Place) {
         if let i = selected.firstIndex(of: place) { selected.remove(at: i) }
-        else if mode != .vote { selected = [place] }  // one pick: tapping another swaps it
+        else if isSingle { selected = [place] }  // one pick: tapping another swaps it
         else if selected.count < maxOptions { selected.append(place) }
     }
 
     /// Where everyone else's picker starts: the area picked here, else the
     /// app's last search area (named, since the extension doesn't know it).
     private func groupArea(creatorName: String) async -> GroupArea? {
-        if let pickedArea { return pickedArea.groupArea }
-        guard let center = SharedCache.loadSearchArea()?.center else { return nil }
-        let name = await PickerArea.cityName(for: center) ?? "\(creatorName)’s area"
+        if let chosen = setup == .surprise ? surpriseArea : pickedArea { return chosen.groupArea }
+        guard let center = searchArea?.center else { return nil }
+        let name: String
+        if let areaName { name = areaName }
+        else { name = await PickerArea.cityName(for: center) ?? "\(creatorName)’s area" }
         return GroupArea(name: name, latitude: center.latitude, longitude: center.longitude)
     }
 
     private func send() {
-        guard let name = Identity.displayName else { return }
+        guard let name = Identity.displayName, canSend else { return }
         sendTaps += 1
         isSending = true
         errorMessage = nil
+        let setup = self.setup
+        let isPlan = setup == .plan
+        let places = setup == .surprise ? wheel : selected
         Task {
             defer { isSending = false }
             do {
                 let session = try await GroupService.shared.createSession(
                     title: groupTitle,
-                    mode: mode,
-                    options: selected.map { GroupOption(place: $0, addedBy: name) },
-                    closesInMinutes: mode == .vote ? closesIn : nil,
+                    mode: setup.groupMode,
+                    // Surprise us: the rows say "added by the wheel", not you.
+                    options: places.map { GroupOption(place: $0, addedBy: setup == .surprise ? "the wheel" : name) },
+                    closesInMinutes: setup == .vote ? closesIn : nil,
                     displayName: name,
                     area: await groupArea(creatorName: name),
-                    meetTime: mode == .plan ? meetTime : nil,
-                    note: mode == .plan ? note : nil,
-                    asksRSVP: mode == .plan && asksRSVP,
-                    rsvpBy: mode == .plan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil
+                    meetTime: isPlan || hasTime ? meetTime : nil,
+                    note: isPlan ? note : nil,
+                    asksRSVP: isPlan && asksRSVP,
+                    rsvpBy: isPlan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil,
+                    surprise: setup == .surprise
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
@@ -286,6 +400,7 @@ struct MessageVoteView: View {
     /// The plan's status as of the last change seen (nil until it loads).
     @State private var lastStatus: GroupStatus?
     @State private var lockInTaps = 0
+    @State private var rsvpTaps = 0
     @State private var removeTaps = 0
 
     init(sessionID: String, state: MessagesState) {
@@ -368,13 +483,16 @@ struct MessageVoteView: View {
                     Text("This group plan has ended.")
                         .font(Theme.body(15, .semibold))
                         .foregroundStyle(Theme.muted)
-                    Button("Start a new vote") { state.showNewVote() }
+                    Button("Start a new plan") { state.showNewVote() }
                         .font(Theme.body(15, .bold))
                         .foregroundStyle(Theme.accentText)
                 } else if let message = live.errorMessage {
                     Label(message, systemImage: "wifi.slash")
                         .font(Theme.body(14, .semibold))
                         .foregroundStyle(Theme.muted)
+                    Button("Try again") { Task { await live.retry() } }
+                        .font(Theme.body(15, .bold))
+                        .foregroundStyle(Theme.accentText)
                 } else {
                     GroupPlanSkeleton(compact: true)
                 }
@@ -433,7 +551,7 @@ struct MessageVoteView: View {
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         } else if let note = session.trimmedNote {
             PlanNoteCard(note: note, author: session.createdByName)
@@ -479,7 +597,7 @@ struct MessageVoteView: View {
                     .foregroundStyle(Theme.accentText)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 
@@ -546,7 +664,7 @@ struct MessageVoteView: View {
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(isWorking || session.options.isEmpty)
         } else {
             Text(GroupWording.whoDecides(session))
@@ -567,6 +685,7 @@ struct MessageVoteView: View {
         .sensoryFeedback(Haptic.commit, trigger: lockInTaps)
         .sensoryFeedback(Haptic.commit, trigger: postedTick)
         .sensoryFeedback(Haptic.destructive, trigger: removeTaps)
+        .sensoryFeedback(Haptic.commit, trigger: rsvpTaps)
         // Watch only; you join when you vote or add a place.
         .task { await live.start() }
         // A timed vote locks itself in when time's up, if the creator has it open.
@@ -660,7 +779,7 @@ struct MessageVoteView: View {
                         .frame(minHeight: 40)
                         .background(Theme.accentSoft, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         .padding(14)
@@ -696,6 +815,7 @@ struct MessageVoteView: View {
             return
         }
         if !state.isExpanded { state.expand() }
+        rsvpTaps += 1
         isWorking = true
         Task {
             defer { isWorking = false }
@@ -906,7 +1026,7 @@ struct MessageSearchField: View {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Clear search")
             }
         }
@@ -925,7 +1045,7 @@ struct NoFastFoodChip: View {
 
 /// The iMessage extension's "Filters" chip (same saved settings as the app).
 struct PlaceFiltersChip: View {
-    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var noFastFood = false
+    @AppStorage(Preferences.noFastFoodKey, store: SharedDefaults.store) private var noFastFood = true
     @AppStorage(Preferences.noCoffeeSweetsKey, store: SharedDefaults.store) private var noCoffee = true
 
     var body: some View {
@@ -990,7 +1110,7 @@ struct MessagePlanControls: View {
                         .padding(.horizontal, 14)
                         .frame(minHeight: 46)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .disabled(savingNote)
                 }
             }
@@ -1026,7 +1146,7 @@ struct MessagePlanControls: View {
                 .foregroundStyle(isOn ? Theme.night : Theme.text)
                 .background(isOn ? Theme.text : Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 

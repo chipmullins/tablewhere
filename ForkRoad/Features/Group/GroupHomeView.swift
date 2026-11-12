@@ -63,6 +63,7 @@ struct GroupHomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { GroupLobbyView(sessionID: $0) }
@@ -122,7 +123,7 @@ struct GroupHomeView: View {
             .padding(16)
             .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private var joinCard: some View {
@@ -149,7 +150,7 @@ struct GroupHomeView: View {
                 .foregroundStyle(Theme.night)
                 .frame(width: 80, height: 50)
                 .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .disabled(JoinCode.normalize(joinCode).count != 6 || isJoining)
             }
         }
@@ -241,7 +242,7 @@ private struct RecentSessionRow: View {
             .padding(14)
             .card()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .task { await live.start() }
         .onDisappear { live.stop() }
         .contextMenu {
@@ -253,6 +254,6 @@ private struct RecentSessionRow: View {
         if live.isGone { return "Tap to remove it from Recent" }
         guard let session = live.session else { return live.errorMessage ?? " " }
         if let winner = session.winner { return "Picked \(winner.name)" }
-        return "\(session.options.count) options · \(live.members.count) in"
+        return "\(plural(session.options.count, "option")) · \(live.members.count) in"
     }
 }

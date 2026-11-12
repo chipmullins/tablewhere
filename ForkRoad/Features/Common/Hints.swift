@@ -165,7 +165,7 @@ struct HintCard: View {
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Close tip")
             }
             .padding(12)

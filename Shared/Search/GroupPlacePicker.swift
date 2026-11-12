@@ -253,7 +253,7 @@ struct GroupPlacePicker: View {
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityHint("Search for a city, neighborhood, or address")
 
             HStack(spacing: 8) {
@@ -276,7 +276,7 @@ struct GroupPlacePicker: View {
                 .frame(minHeight: 40)
                 .background(Theme.accentSoft, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     @ViewBuilder

@@ -31,7 +31,7 @@ struct NamePromptView: View {
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(trimmed.isEmpty)
             .opacity(trimmed.isEmpty ? 0.5 : 1)
         }
@@ -140,7 +140,7 @@ struct VoteOptionRow: View {
             .opacity(isRuledOut ? 0.6 : 1)
             .animation(.snappy, value: votes)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityText)
         .sensoryFeedback(Haptic.tick, trigger: taps)
@@ -418,7 +418,7 @@ struct AddPlaceButton: View {
                     .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(full || userID.map { !session.canAdd(userID: $0) } ?? false)
         }
     }

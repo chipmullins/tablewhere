@@ -23,7 +23,7 @@ struct RestaurantSearchField: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Clear search")
             }
         }
@@ -85,7 +85,7 @@ struct RestaurantSearchResults: View {
                             }
                             .zoomSource(id: place.id, ns: zoom)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
         }

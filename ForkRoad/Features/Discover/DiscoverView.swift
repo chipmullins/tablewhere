@@ -44,13 +44,14 @@ struct DiscoverView: View {
                     RadiusControl()
                     cuisineChips
                     spinBanner
-                    LateNightNote()
+                    LateNightNote(placeCount: visiblePlaces.count)
                     results
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Place.self) { place in
@@ -96,7 +97,7 @@ struct DiscoverView: View {
                         .frame(maxWidth: .infinity, minHeight: 52)
                         .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
             Button { showLocationPicker = true } label: {
                 Text("Pick a city or neighborhood")
@@ -105,7 +106,7 @@ struct DiscoverView: View {
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
         .padding(20)
         .frame(maxWidth: .infinity)
@@ -133,7 +134,7 @@ struct DiscoverView: View {
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel("Searching near \(model.locationName). Change location")
             if !model.isUsingCurrentLocation && !model.location.isDenied {
                 Button { model.useCurrentLocation() } label: {
@@ -146,7 +147,7 @@ struct DiscoverView: View {
                         .frame(width: 44, height: 44)
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Use my location")
             }
             Spacer()
@@ -158,7 +159,7 @@ struct DiscoverView: View {
                     .background(Theme.surface, in: Circle())
                     .overlay(Circle().strokeBorder(Theme.hairline))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .accessibilityLabel("Settings")
         }
         .padding(.top, 8)
@@ -205,7 +206,7 @@ struct DiscoverView: View {
             .padding(16)
             .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .disabled(visiblePlaces.isEmpty)
     }
 
@@ -243,7 +244,7 @@ struct DiscoverView: View {
                 NavigationLink(value: place) {
                     PlaceRow(place: place).zoomSource(id: place.id, ns: zoom)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
             }
         }
         if visiblePlaces.count > shown.count {
@@ -256,7 +257,7 @@ struct DiscoverView: View {
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
         }
     }
 }

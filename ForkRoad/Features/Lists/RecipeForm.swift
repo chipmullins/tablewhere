@@ -13,6 +13,7 @@ struct RecipeForm: View {
     @State private var link = ""
     @State private var saveTaps = 0
     @State private var confirmDelete = false
+    @FocusState private var noteFocused: Bool
     @FocusState private var nameFocused: Bool
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -27,6 +28,7 @@ struct RecipeForm: View {
                     TextField("Chicken tacos", text: $name)
                         .focused($nameFocused)
                         .submitLabel(.next)
+                        .onSubmit { noteFocused = true }
                 } header: {
                     Text("What you make")
                 }
@@ -35,11 +37,13 @@ struct RecipeForm: View {
                 Section {
                     TextField("Note, like “Mom’s recipe” (optional)", text: $note, axis: .vertical)
                         .lineLimit(1...3)
+                        .focused($noteFocused)
                     TextField("Recipe link (optional)", text: $link)
                         .keyboardType(.URL)
                         .textContentType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .submitLabel(.done)
                 } footer: {
                     Text(linkIsBad ? "That doesn’t look like a web address." : "When the wheel lands on it, the link opens the recipe.")
                         .foregroundStyle(linkIsBad ? Theme.danger : Theme.muted)
@@ -61,6 +65,7 @@ struct RecipeForm: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.night)
             .navigationTitle(recipe == nil ? "Add a home meal" : "Edit meal")
             .navigationBarTitleDisplayMode(.inline)

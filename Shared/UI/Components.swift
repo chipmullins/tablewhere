@@ -76,7 +76,7 @@ struct Chip: View {
                 .background(isSelected ? Theme.text : Theme.surface, in: Capsule())
                 .overlay(Capsule().strokeBorder(isSelected ? .clear : Theme.hairline))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .sensoryFeedback(trigger: taps) { _, _ in haptic }
     }
@@ -118,7 +118,7 @@ struct ActionTile: View {
             .background(background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .opacity(isEnabled ? 1 : 0.4)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
         .sensoryFeedback(trigger: taps) { _, _ in haptic }
 
         if let isOn {
@@ -232,7 +232,7 @@ struct StateCard: View {
                         .frame(minHeight: 44)
                         .background(Theme.saffron, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .padding(.top, 4)
             }
         }

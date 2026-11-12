@@ -151,7 +151,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 
     private func symbolArt(_ name: String) -> some View {
