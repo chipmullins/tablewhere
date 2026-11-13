@@ -36,8 +36,11 @@ export function serve() {
 }
 
 /** A new page with the stubs routed in. `before` runs in the page before app.js (seed data there). */
-export async function openPlan(browser, base, { id = "s1", setup = "", storage = {}, context: existing } = {}) {
-  const context = existing || await browser.newContext({ viewport: { width: 420, height: 900 } });
+export async function openPlan(browser, base, { id = "s1", setup = "", storage = {}, context: existing, geo = null } = {}) {
+  const context = existing || await browser.newContext({
+    viewport: { width: 420, height: 900 },
+    ...(geo ? { geolocation: geo, permissions: ["geolocation"] } : {}),
+  });
   await context.route(/gstatic\.com\/firebasejs/, (r) => r.fulfill({ contentType: "text/javascript", body: stub("firebase.js") }));
   await context.route(/apple-mapkit\.com/, (r) => r.fulfill({ contentType: "text/javascript", body: stub("mapkit.js") }));
   await context.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ body: "" }));

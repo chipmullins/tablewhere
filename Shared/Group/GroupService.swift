@@ -400,6 +400,36 @@ final class GroupService {
         UsageStats.record(.groupPicks)
     }
 
+    // MARK: On my way (1.1)
+
+    /// Shares your arrival time (never your location) with the plan.
+    /// Replaces your earlier one. Joins the group too.
+    func shareETA(sessionID: String, eta: Date?, status: GroupETA.Status,
+                  lateMinutes: Int? = nil, lateNote: String? = nil, leftAt: Date? = nil) async throws {
+        let uid = try await userID()
+        try await joinIfNeeded(sessionID: sessionID)
+        var data: [String: Any] = [
+            "userID": uid,
+            "name": String(Self.name(in: sessionID, fallback: Identity.displayName ?? "Someone").prefix(40)),
+            "status": status.rawValue,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        if let eta {
+            data["eta"] = Timestamp(date: eta)
+            data["etaLabel"] = eta.formatted(date: .omitted, time: .shortened)
+        }
+        if let leftAt { data["leftAt"] = Timestamp(date: leftAt) }
+        if let lateMinutes { data["lateMinutes"] = lateMinutes }
+        if let lateNote { data["lateNote"] = lateNote }
+        try await sessionRef(sessionID).collection("eta").document(uid).setData(data)
+    }
+
+    /// Stops sharing ("Stop sharing", or the plan changed).
+    func removeETA(sessionID: String) async {
+        guard let uid = try? await userID() else { return }
+        try? await sessionRef(sessionID).collection("eta").document(uid).delete()
+    }
+
     // MARK: RSVPs ("I'll pick" plans)
 
     /// Answers a plan: in (with guests) or can't make it. Joins the group too,

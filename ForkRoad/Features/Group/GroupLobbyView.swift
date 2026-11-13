@@ -489,6 +489,18 @@ struct GroupLobbyView: View {
                 return LeaveBy.origin(model)
             }
         }
+        if let meet = session.meetTime, OnMyWay.isRelevant(meetTime: meet) {
+            OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
+                        line: live.arrivalLine, mine: live.myETA, updatesLive: true)
+                // Friends' times on your Lock Screen countdown while the app is open.
+                .onChange(of: live.etas, initial: true) {
+                    let me = GroupService.shared.currentUserID
+                    let arrivals = live.etas.filter { $0.userID != me }.map {
+                        GroupPlanAttributes.Arrival(name: $0.name, eta: $0.eta, status: $0.status.rawValue)
+                    }
+                    Task { await LiveActivities.updateArrivals(sessionID: session.id, arrivals) }
+                }
+        }
         noteSection(session)
 
         if session.mode == .vote {

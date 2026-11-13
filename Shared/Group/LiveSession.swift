@@ -15,6 +15,8 @@ final class LiveSession {
     private(set) var members: [GroupMember] = []
     /// Answers to an "I'll pick" plan.
     private(set) var rsvps: [GroupRSVP] = []
+    /// "On my way" arrival times (1.1).
+    private(set) var etas: [GroupETA] = []
     private(set) var errorMessage: String?
     private(set) var isLoaded = false
     /// The group was ended (its document is gone), as opposed to a network hiccup.
@@ -103,6 +105,19 @@ final class LiveSession {
         return session.isOwned(by: uid)
     }
 
+    var myETA: GroupETA? {
+        guard let uid = GroupService.shared.currentUserID else { return nil }
+        return etas.first { $0.userID == uid }
+    }
+
+    /// "Sam ~7:05 · Alex ~7:12 · Jo hasn't left", or nil before anyone shares.
+    var arrivalLine: String? {
+        guard !etas.isEmpty else { return nil }
+        return ArrivalBoard.line(etas: etas, members: members, me: GroupService.shared.currentUserID) {
+            $0.formatted(date: .omitted, time: .shortened)
+        }
+    }
+
     var myVote: String? {
         guard let uid = GroupService.shared.currentUserID else { return nil }
         return votes.first { $0.voterID == uid }?.optionID
@@ -153,6 +168,11 @@ final class LiveSession {
         listeners.append(ref.collection("rsvps").addSnapshotListener { [weak self] snapshot, _ in
             let rsvps = snapshot?.documents.compactMap { try? $0.data(as: GroupRSVP.self) } ?? []
             Task { @MainActor in self?.rsvps = rsvps }
+        })
+
+        listeners.append(ref.collection("eta").addSnapshotListener { [weak self] snapshot, _ in
+            let etas = snapshot?.documents.compactMap { try? $0.data(as: GroupETA.self) } ?? []
+            Task { @MainActor in self?.etas = etas }
         })
 
         listeners.append(ref.collection("members").addSnapshotListener { [weak self] snapshot, _ in

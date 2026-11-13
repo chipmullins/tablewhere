@@ -39,6 +39,7 @@ function setPath(obj, dotted, value) {
   o[keys.at(-1)] = value;
 }
 function resolveValue(old, v) {
+  if (v instanceof Date) return { __ts: v.getTime() };
   if (v && v.__op === "serverTimestamp") return { __ts: Date.now() };
   if (v && v.__op === "increment") return (typeof old === "number" ? old : 0) + v.by;
   if (v && v.__op === "delete") return undefined;

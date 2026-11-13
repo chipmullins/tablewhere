@@ -14,6 +14,8 @@ struct ForkRoadApp: App {
         Theme.applyUIKitAppearance()
         // Group plans show "Leave by" on the Lock Screen (app-only; see LeaveBy.activityUpdate).
         LiveActivities.install()
+        // "On my way" keeps your arrival time fresh while you drive (1.1).
+        OnMyWayLive.install()
     }
 
     var body: some Scene {

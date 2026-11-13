@@ -210,6 +210,75 @@ await test("Organizer turns a filter on after the page loaded: the add is refuse
   await context.close();
 });
 
+// ---------------------------------------------------------------------------
+// #4 On my way (web: one-shot)
+
+function decidedSeed(meetInMin, extra = {}) {
+  const sora = opt("Sora Ramen", near(0.05, 0.05));
+  return { mode: "plan", status: "decided", options: [sora], winnerID: sora.id,
+    meetTime: { __ts: Date.now() + meetInMin * 60000 }, announced: true, ...extra };
+}
+
+await test("On my way: one tap shares an arrival time; the list shows it", async () => {
+  const { page, context, errors } = await openPlan(browser, base, {
+    setup: setupScript({ session: decidedSeed(30) }) + "window.__mk.travelSeconds = 600;",
+    storage: named, geo: { latitude: LEX.lat, longitude: LEX.lon } });
+  await page.waitForSelector("#omw:not([hidden])");
+  assert((await page.textContent("#omw-line")) === "Nobody’s left yet", await page.textContent("#omw-line"));
+  await page.click("#omw-go");
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user"));
+  const e = await page.evaluate(() => window.__fake.get("sessions/s1/eta/web-user"));
+  assert(e.status === "onTheWay" && e.name === "Sam" && e.userID === "web-user", JSON.stringify(e));
+  assert(Math.abs(e.eta.__ts - (Date.now() + 600000)) < 15000, `eta ~10 min: ${e.eta.__ts - Date.now()}`);
+  assert(typeof e.etaLabel === "string" && e.etaLabel.length > 3, "label");
+  await page.waitForFunction(() => document.querySelector("#omw-line").textContent.startsWith("You ~"));
+  const line = await page.textContent("#omw-line");
+  assert(line.includes("Chip hasn’t left") && line.includes("you") === false, line);
+  assert(await page.isHidden("#omw-go"), "button swaps for the late / here row");
+  assert(!errors.length, errors.join("; "));
+
+  await page.click("#omw [data-late='15']");
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user").status === "late");
+  const late = await page.evaluate(() => window.__fake.get("sessions/s1/eta/web-user"));
+  assert(late.lateMinutes === 15 && late.leftAt, JSON.stringify(late));
+  await page.waitForFunction(() => document.querySelector("#omw-line").textContent.includes("You ~15 min late"));
+
+  await page.click("#omw-here");
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user").status === "arrived");
+  await page.waitForFunction(() => document.querySelector("#omw-help").textContent.includes("You’re here"));
+  if (process.env.SHOTS) await page.screenshot({ path: "/tmp/shot-omw.png", fullPage: true });
+  await context.close();
+});
+
+await test("On my way: others' times, and no card far from the meet time", async () => {
+  const extra = { "sessions/s1/eta/alex": { userID: "alex", name: "Alex Smith", status: "onTheWay", eta: { __ts: Date.now() + 12 * 60000 } } };
+  const members = { alex: { id: "alex", name: "Alex Smith" }, jo: { id: "jo", name: "Jo" } };
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ session: decidedSeed(30), members, extra }), storage: named });
+  await page.waitForSelector("#omw:not([hidden])");
+  await page.waitForFunction(() => document.querySelector("#omw-line").textContent.startsWith("Alex ~"));
+  const line = await page.textContent("#omw-line");
+  assert(/Chip, Jo haven’t left|Jo, Chip haven’t left/.test(line), line);
+  await context.close();
+  const far = await openPlan(browser, base, { setup: setupScript({ session: decidedSeed(6 * 60) }), storage: named });
+  await far.page.waitForSelector("#decided-step:not([hidden])");
+  assert(await far.page.isHidden("#omw"), "hidden 6 hours out");
+  await far.context.close();
+});
+
+await test("On my way without a name asks for it first, then shares", async () => {
+  const { page, context } = await openPlan(browser, base, {
+    setup: setupScript({ session: decidedSeed(20) }), geo: { latitude: LEX.lat, longitude: LEX.lon } });
+  await page.waitForSelector("#omw:not([hidden])");
+  await page.click("#omw-go");
+  await page.waitForSelector("#name-step:not([hidden])");
+  await page.fill("#name-input", "Jo");
+  await page.click("#name-form button[type=submit]");
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user")?.status === "onTheWay");
+  assert((await page.evaluate(() => window.__fake.get("sessions/s1/eta/web-user").name)) === "Jo", "name");
+  assert(await page.evaluate(() => !!window.__fake.get("sessions/s1/members/web-user")), "joined");
+  await context.close();
+});
+
 export { browser, base, setupScript, basePlaces, named, P, near, LEX, HOUR };
 if (!process.env.MORE_TESTS) {
   const failed = summary();

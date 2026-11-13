@@ -590,6 +590,10 @@ struct MessageVoteView: View {
                         origin: { await MessageLeaveOrigin.current() },
                         askForLocation: { await OneShotLocation.shared.requestPermission() })
         }
+        if let meet = session.meetTime, OnMyWay.isRelevant(meetTime: meet) {
+            OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
+                        line: live.arrivalLine, mine: live.myETA)
+        }
         if session.hasRSVP {
             RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,
                       isOwner: live.isOwner, isWorking: isWorking, noReply: live.noRSVPYet) { going, guests in

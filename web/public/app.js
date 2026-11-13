@@ -135,6 +135,7 @@ let session = null;
 let votes = [];
 let members = [];
 let rsvps = [];
+let etas = [];          // "On my way" (sessions/{id}/eta)
 let busy = false;
 // An RSVP tapped before we knew your name: sent once you've typed it.
 let pendingRSVP = null;
@@ -191,6 +192,12 @@ function start() {
     rsvps = snap.docs.map((d) => d.data());
     render();
   }, () => {});
+
+  onSnapshot(collection(sessionRef, "eta"), (snap) => {
+    etas = snap.docs.map((d) => d.data());
+    render();
+  }, () => {});
+  wireOnMyWay();
 
   $("rsvp-in").addEventListener("click", () => {
     const mine = rsvps.find((r) => r.userID === uid);
@@ -392,8 +399,8 @@ function render() {
     // Watching when the spin landed: play the wheel first (the places stay behind it).
     if (shouldReveal()) { playReveal(!sawUndecided); return; }
     if (revealing) return;
-    // Tapped I'm in / Can't make it without a name yet: ask for it first.
-    if (pendingRSVP && !myName()) {
+    // Tapped I'm in / Can't make it / On my way without a name yet: ask for it first.
+    if ((pendingRSVP || pendingOMW) && !myName()) {
       $("name-title").textContent = session.title || "The plan";
       $("name-sub").textContent = `Your name, so ${session.createdByName || "the organizer"} knows who’s coming.`;
       show("name-step");
@@ -404,6 +411,11 @@ function render() {
       const { going, guests } = pendingRSVP;
       pendingRSVP = null;
       answerRSVP(going, guests);
+    }
+    if (pendingOMW && myName()) {
+      const next = pendingOMW;
+      pendingOMW = null;
+      next();
     }
     return;
   }
@@ -778,6 +790,7 @@ function renderDecided() {
   $("app-pitch").hidden = !meet || meet.getTime() < Date.now();
   showWinnerMap(winner);
   renderRSVP();
+  renderOnMyWay(winner);
   renderBreakdown(winner.id);
   show("decided-step");
 }
@@ -894,6 +907,173 @@ async function answerRSVP(going, guests) {
     busy = false;
     render();
   }
+}
+
+// ---------------------------------------------------------------------------
+// "On my way" (1.1): share when you'll get there, never where you are. One
+// arrival time from here (browser location + Apple Maps directions); a
+// browser can't keep updating it once the page is closed, so it's one-shot
+// (the app updates as you drive). Same doc as the app: sessions/{id}/eta/{uid}.
+
+let pendingOMW = null;   // an "On my way" tap waiting on your name
+let omwBusy = false;
+
+function omwRelevant(meet) {
+  if (!meet) return false;
+  const until = meet.getTime() - Date.now();
+  return until < 4 * 3600 * 1000 && until > -45 * 60 * 1000;
+}
+
+const shortTime = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const firstName = (n) => String(n || "Someone").trim().split(/\s+/)[0];
+
+/** "Sam ~7:05", "Sam arrived", "Sam ~15 min late" (same as GroupETA.short in the app). */
+function etaShort(e, isMe) {
+  const who = isMe ? "You" : firstName(e.name);
+  const at = toDate(e.eta);
+  if (e.status === "arrived") return `${who} arrived`;
+  if (e.status === "late") {
+    if (typeof e.lateMinutes === "number") return `${who} ~${e.lateMinutes} min late`;
+    return at ? `${who} late, ~${shortTime(at)}` : `${who} running late`;
+  }
+  return at ? `${who} ~${shortTime(at)}` : `${who} on the way`;
+}
+
+/** "Sam ~7:05 · Alex ~7:12 · Jo hasn't left" (ArrivalBoard in the app). */
+function arrivalLine() {
+  const sorted = [...etas].sort((a, b) => {
+    if ((a.status === "arrived") !== (b.status === "arrived")) return a.status === "arrived" ? -1 : 1;
+    const ta = toDate(a.eta)?.getTime() ?? Infinity, tb = toDate(b.eta)?.getTime() ?? Infinity;
+    return ta - tb;
+  });
+  const parts = sorted.map((e) => etaShort(e, e.userID === uid));
+  const shared = new Set(etas.map((e) => e.userID));
+  const notYet = members.filter((m) => !shared.has(m.id)).map((m) => (m.id === uid ? "you" : firstName(m.name)));
+  if (notYet.length) {
+    parts.push(notYet.length === 1 ? `${notYet[0]} hasn’t left`
+      : notYet.length <= 3 ? `${notYet.join(", ")} haven’t left` : `${notYet.length} haven’t left`);
+  }
+  return parts.join(" · ");
+}
+
+function renderOnMyWay(winner) {
+  const box = $("omw");
+  const meet = toDate(session.meetTime);
+  if (!omwRelevant(meet)) { box.hidden = true; return; }
+  box.hidden = false;
+  const mine = etas.find((e) => e.userID === uid);
+  $("omw-line").textContent = etas.length ? arrivalLine() : "Nobody’s left yet";
+  $("omw-go").hidden = !!mine;
+  $("omw-go").disabled = omwBusy;
+  $("omw-going").hidden = !mine || mine.status === "arrived";
+  for (const chip of document.querySelectorAll("#omw [data-late]")) {
+    const v = chip.dataset.late;
+    const on = mine?.status === "late" && (v === "text" ? mine.lateNote === "text" : mine.lateMinutes === Number(v));
+    chip.setAttribute("aria-pressed", on ? "true" : "false");
+    chip.disabled = omwBusy;
+  }
+  $("omw-here").disabled = $("omw-stop").disabled = omwBusy;
+  if (!$("omw-help").dataset.error) {
+    $("omw-help").textContent = mine?.status === "arrived" ? "You’re here. Enjoy!"
+      : "Shares when you’ll get there, never where you are. The Tablewhere app keeps it updated as you drive.";
+  }
+  box.dataset.winner = winner.id;
+}
+
+function omwError(text) {
+  $("omw-help").dataset.error = "1";
+  $("omw-help").textContent = text;
+}
+
+/** Your position, once (null if you say no or it times out). */
+function hereOnce() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+  });
+}
+
+/** Driving time from `from` to `to`, in seconds (null when there's no route). */
+async function driveSeconds(from, to) {
+  if (!mapkitToken) return null;
+  let mk;
+  try { mk = await loadMapKit(); } catch { return null; }
+  if (typeof mk.Directions !== "function") return null;
+  return new Promise((resolve) => {
+    try {
+      new mk.Directions().route({
+        origin: new mk.Coordinate(from.lat, from.lon),
+        destination: new mk.Coordinate(to.lat, to.lon),
+        transportType: mk.Directions.Transport.Automobile,
+      }, (error, data) => resolve(error ? null : (data?.routes?.[0]?.expectedTravelTime ?? null)));
+    } catch { resolve(null); }
+  });
+}
+
+async function writeETA(fields) {
+  await ensureJoined();
+  const data = {
+    userID: uid,
+    name: String(myName() || "Someone").slice(0, 40),
+    updatedAt: serverTimestamp(),
+    ...fields,
+  };
+  if (data.eta instanceof Date) data.etaLabel = shortTime(data.eta);
+  await setDoc(doc(sessionRef, "eta", uid), data);
+}
+
+async function omwAction(work) {
+  if (omwBusy) return;
+  if (!myName()) {
+    pendingOMW = () => omwAction(work);
+    render();
+    $("name-input").focus();
+    return;
+  }
+  omwBusy = true;
+  delete $("omw-help").dataset.error;
+  render();
+  try {
+    await work();
+  } catch {
+    omwError(navigator.onLine === false ? "You’re offline. Check your connection and try again."
+      : "That didn’t go through. Reload to see the latest.");
+  } finally {
+    omwBusy = false;
+    render();
+  }
+}
+
+function wireOnMyWay() {
+  $("omw-go").addEventListener("click", () => omwAction(async () => {
+    const winner = (session.options || []).find((o) => o.id === session.winnerID);
+    if (!winner) return;
+    const place = { lat: Number(winner.latitude), lon: Number(winner.longitude) };
+    const here = await hereOnce();
+    if (here && milesBetween(here, place) * 1609.34 <= 100) {
+      await writeETA({ status: "arrived", eta: new Date(), leftAt: new Date() });
+      return;
+    }
+    const secs = here ? await driveSeconds(here, place) : null;
+    const eta = typeof secs === "number" ? new Date(Date.now() + secs * 1000) : null;
+    await writeETA({ status: "onTheWay", leftAt: new Date(), ...(eta ? { eta } : {}) });
+    if (!here) omwError("Location is off, so friends see that you’re on the way, without a time.");
+  }));
+  for (const chip of document.querySelectorAll("#omw [data-late]")) {
+    chip.addEventListener("click", () => omwAction(async () => {
+      const meet = toDate(session.meetTime);
+      const v = chip.dataset.late;
+      const mine = etas.find((e) => e.userID === uid);
+      const keep = mine?.leftAt ? { leftAt: toDate(mine.leftAt) } : {};
+      if (v === "text") await writeETA({ status: "late", lateNote: "text", ...keep });
+      else await writeETA({ status: "late", lateMinutes: Number(v), eta: new Date(meet.getTime() + Number(v) * 60000), ...keep });
+    }));
+  }
+  $("omw-here").addEventListener("click", () => omwAction(() => writeETA({ status: "arrived", eta: new Date() })));
+  $("omw-stop").addEventListener("click", () => omwAction(() => deleteDoc(doc(sessionRef, "eta", uid))));
 }
 
 // ---------------------------------------------------------------------------

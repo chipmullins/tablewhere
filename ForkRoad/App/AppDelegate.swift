@@ -1,5 +1,6 @@
 import UIKit
 import UserNotifications
+import CoreLocation
 import FirebaseCore
 import FirebaseMessaging
 
@@ -80,6 +81,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
         if response.actionIdentifier == LeaveBy.directionsAction {
             await MainActor.run { LeaveBy.openDirections(from: info) }
+            return
+        }
+
+        // "I'm on my way" on the leave-by reminder (opens the app, which a
+        // live update session needs), then shows the plan.
+        if response.actionIdentifier == LeaveBy.onMyWayAction,
+           let sessionID = info["sessionId"] as? String,
+           let lat = info["lat"] as? Double, let lon = info["lon"] as? Double,
+           let meet = info["meet"] as? Double {
+            await MainActor.run { DeepLink.post("group:\(sessionID)") }
+            _ = try? await OnMyWay.start(sessionID: sessionID,
+                                         destination: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                                         meetTime: Date(timeIntervalSince1970: meet))
             return
         }
 

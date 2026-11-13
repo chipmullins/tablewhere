@@ -94,7 +94,9 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [remote-notification]
+        # location: "On my way" keeps your arrival time fresh while you drive
+        # (CLBackgroundActivitySession, While Using permission, blue pill).
+        UIBackgroundModes: [remote-notification, location]
         CFBundleURLTypes:
           - CFBundleURLName: com.chipmullins.forkroad
             CFBundleURLSchemes: [forkroad]
@@ -106,10 +108,12 @@ targets:
           - DMSans-Medium.ttf
           - DMSans-SemiBold.ttf
           - DMSans-Bold.ttf
-        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
+        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to find restaurants near you, to work out when to leave for group plans, and, when you tap On my way, to share when you’ll arrive. Your location itself stays on your phone."
         NSCalendarsWriteOnlyAccessUsageDescription: "Tablewhere adds your group’s plan to your calendar when you ask."
         # "Leave by" for group plans on the Lock Screen and Dynamic Island.
         NSSupportsLiveActivities: true
+        # Friends' "On my way" times update the countdown as they drive.
+        NSSupportsLiveActivitiesFrequentUpdates: true
         AppIdentifierPrefix: $(AppIdentifierPrefix)
     entitlements:
       path: ForkRoad/ForkRoad.entitlements
@@ -156,7 +160,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts: *appFonts
-        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to work out when you should leave to meet your group. It stays on your phone."
+        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to work out when you should leave to meet your group and, when you tap On my way, when you’ll arrive. Your location itself stays on your phone."
         NSCalendarsWriteOnlyAccessUsageDescription: "Tablewhere adds your group’s plan to your calendar when you ask."
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider

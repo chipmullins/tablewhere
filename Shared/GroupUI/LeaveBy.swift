@@ -144,7 +144,8 @@ enum LeaveBy {
         content.sound = .default
         content.categoryIdentifier = categoryID
         content.userInfo = ["sessionId": sessionID, "name": winner.name,
-                            "lat": winner.latitude, "lon": winner.longitude]
+                            "lat": winner.latitude, "lon": winner.longitude,
+                            "meet": plan.meetTime.timeIntervalSince1970]
 
         let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: plan.leaveAt)
         let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
@@ -174,6 +175,8 @@ enum LeaveBy {
     static func cancel(sessionID: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID), headsUpID(sessionID)])
         activityEnd?(sessionID)
+        // No plan anymore: stop "On my way" updates too.
+        OnMyWay.stopTracker?(sessionID)
     }
 
     // MARK: Live Activity

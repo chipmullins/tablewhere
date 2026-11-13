@@ -459,3 +459,90 @@ public struct GroupMember: Codable, Hashable, Identifiable, Sendable {
         self.blockedHashes = blockedHashes
     }
 }
+
+// MARK: - On my way (1.1)
+
+/// One person's "On my way": an arrival time and a status, never a
+/// location. Stored one per person at sessions/{id}/eta/{uid}; deleted with
+/// the plan (and by the server a couple of hours after the meet time).
+public struct GroupETA: Codable, Hashable, Identifiable, Sendable {
+    public enum Status: String, Codable, Sendable {
+        case onTheWay, late, arrived
+    }
+
+    public var userID: String
+    public var name: String
+    /// When they expect to get there. Nil for "Running late · I'll text you".
+    public var eta: Date?
+    /// "7:05 PM" in their time zone, for the server's push text.
+    public var etaLabel: String?
+    public var leftAt: Date?
+    public var status: Status
+    /// "Running late": +10, +15, or +30 minutes.
+    public var lateMinutes: Int?
+    /// "text": running late, will text.
+    public var lateNote: String?
+
+    public var id: String { userID }
+
+    /// The "Running late" choices, in minutes.
+    public static let lateChoices = [10, 15, 30]
+
+    public init(userID: String, name: String, eta: Date?, etaLabel: String? = nil, leftAt: Date? = nil,
+                status: Status, lateMinutes: Int? = nil, lateNote: String? = nil) {
+        self.userID = userID
+        self.name = name
+        self.eta = eta
+        self.etaLabel = etaLabel
+        self.leftAt = leftAt
+        self.status = status
+        self.lateMinutes = lateMinutes
+        self.lateNote = lateNote
+    }
+
+    /// "Sam ~7:05", "Sam arrived", "Sam ~15 min late", "Sam running late".
+    public func short(time: (Date) -> String) -> String {
+        let first = name.split(separator: " ").first.map(String.init) ?? name
+        switch status {
+        case .arrived: return "\(first) arrived"
+        case .late:
+            if let lateMinutes { return "\(first) ~\(lateMinutes) min late" }
+            if let eta { return "\(first) late, ~\(time(eta))" }
+            return "\(first) running late"
+        case .onTheWay:
+            if let eta { return "\(first) ~\(time(eta))" }
+            return "\(first) on the way"
+        }
+    }
+}
+
+/// "Sam ~7:05 · Alex ~7:12 · Jo hasn't left": who's on the way, then
+/// members who haven't shared yet. You show as "you".
+public enum ArrivalBoard {
+    public static func line(etas: [GroupETA], members: [GroupMember], me: String?,
+                            time: (Date) -> String) -> String? {
+        let sorted = etas.sorted { a, b in
+            // Arrived first, then by arrival time; unknown times last.
+            if (a.status == .arrived) != (b.status == .arrived) { return a.status == .arrived }
+            return (a.eta?.timeIntervalSinceReferenceDate ?? .greatestFiniteMagnitude)
+                < (b.eta?.timeIntervalSinceReferenceDate ?? .greatestFiniteMagnitude)
+        }
+        var parts = sorted.map { eta -> String in
+            if eta.userID == me {
+                var mine = eta
+                mine.name = "You"
+                return mine.short(time: time)
+            }
+            return eta.short(time: time)
+        }
+        let shared = Set(etas.map(\.userID))
+        let notYet = members.filter { !shared.contains($0.id) }
+            .map { $0.id == me ? "you" : ($0.name.split(separator: " ").first.map(String.init) ?? $0.name) }
+        if !notYet.isEmpty {
+            parts.append(notYet.count == 1 ? "\(notYet[0]) hasn’t left"
+                         : notYet.count <= 3 ? "\(notYet.joined(separator: ", ")) haven’t left"
+                         : "\(notYet.count) haven’t left")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}

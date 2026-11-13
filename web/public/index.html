@@ -134,6 +134,14 @@
     .pick-confirm.pop { animation: pc-pop .45s cubic-bezier(.3, 1.5, .5, 1); }
     @keyframes pc-pop { from { transform: scale(.94); opacity: .4 } to { transform: none; opacity: 1 } }
     @media (prefers-reduced-motion: reduce) { .pick-confirm.pop { animation: none; } }
+    .omw { margin-top: 14px; }
+    .omw-line { font: 700 17px/1.3 'DM Sans', sans-serif; }
+    .omw-late { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; }
+    .chip { border: 0; border-radius: 999px; padding: 8px 12px; background: var(--surface-high); color: var(--text); font: 700 13px 'DM Sans', sans-serif; cursor: pointer; }
+    .chip[aria-pressed="true"] { background: var(--saffron); color: var(--on-saffron); }
+    .chip:disabled { opacity: .5; }
+    .omw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .omw-help { font-size: 12px; margin: 10px 0 0; }
     [hidden] { display: none !important; }
   </style>
   <link rel="icon" type="image/png" href="/favicon.png">
@@ -232,6 +240,25 @@
         <div class="rsvp-names" id="rsvp-names"></div>
         <div class="muted" id="rsvp-help" role="status"></div>
       </div>
+      <div class="card omw" id="omw" hidden>
+        <div class="section-label" style="margin-top:0">On my way</div>
+        <div class="omw-line" id="omw-line" aria-live="polite"></div>
+        <button class="btn primary" id="omw-go" type="button" style="margin-top:12px;width:100%">🚗 I’m on my way</button>
+        <div id="omw-going" hidden>
+          <div class="omw-late" role="group" aria-label="Running late">
+            <span class="muted">Running late:</span>
+            <button class="chip" type="button" data-late="10">+10 min</button>
+            <button class="chip" type="button" data-late="15">+15</button>
+            <button class="chip" type="button" data-late="30">+30</button>
+            <button class="chip" type="button" data-late="text">I’ll text you</button>
+          </div>
+          <div class="omw-row">
+            <button class="btn ghost" id="omw-here" type="button">✓ I’m here</button>
+            <button class="btn ghost" id="omw-stop" type="button">Stop sharing</button>
+          </div>
+        </div>
+        <p class="muted omw-help" id="omw-help">Shares when you’ll get there, never where you are.</p>
+      </div>
       <div class="note" id="note" hidden>
         <span aria-hidden="true">💬</span>
         <div><div id="note-text" style="font-weight:600"></div><div class="by" id="note-by"></div></div>
@@ -249,6 +276,6 @@
     <p class="muted" style="text-align:center;font-size:12px;margin-top:18px">Tablewhere · Created by Chip Mullins</p>
   </main>
 
-  <script type="module" src="/app.js?v=43"></script>
+  <script type="module" src="/app.js?v=44"></script>
 </body>
 </html>
