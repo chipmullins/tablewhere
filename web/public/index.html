@@ -112,6 +112,18 @@
     .result:disabled { cursor: default; opacity: .55; }
     .result .add { margin-left: auto; color: var(--saffron); font-weight: 700; font-size: 14px; white-space: nowrap; }
     .result .tile { width: 36px; height: 36px; border-radius: 10px; font-size: 16px; }
+    .pick-map { height: 180px; border-radius: 16px; overflow: hidden; background: #1F1F29; }
+    .suggest-results { max-height: 360px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .list-label { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: -2px; }
+    .result.flash { border-color: var(--saffron); }
+    .pin-add { border: 0; border-radius: 10px; background: var(--saffron); color: var(--on-saffron); font: 700 13px 'DM Sans', sans-serif; padding: 6px 10px; margin-left: 6px; cursor: pointer; }
+    .pick-confirm { margin-top: 16px; border-color: rgba(255,178,63,0.35); background: rgba(255,178,63,0.08); }
+    .pick-confirm .pc-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--saffron); }
+    .pick-confirm .pc-head { font: 700 19px/1.2 Outfit, sans-serif; margin: 6px 0 4px; overflow-wrap: anywhere; }
+    .pick-confirm p { margin: 0 0 12px; font-size: 13px; }
+    .pick-confirm.pop { animation: pc-pop .45s cubic-bezier(.3, 1.5, .5, 1); }
+    @keyframes pc-pop { from { transform: scale(.94); opacity: .4 } to { transform: none; opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .pick-confirm.pop { animation: none; } }
     [hidden] { display: none !important; }
   </style>
   <link rel="icon" type="image/png" href="/favicon.png">
@@ -149,16 +161,24 @@
       <p id="meet-line" class="meet-line" hidden></p>
       <p class="muted" id="status"></p>
       <p class="muted" style="margin:4px 0 0;font-size:13px"><span id="you-are"></span> <button class="linkish" id="change-name" type="button">Not you? Change name</button></p>
+      <div class="card pick-confirm" id="pick-confirm" role="status" hidden>
+        <div class="pc-eyebrow">✓ YOU’RE IN</div>
+        <div class="pc-head" id="pick-confirm-head"></div>
+        <p class="muted" id="pick-confirm-sub"></p>
+        <button class="btn ghost wide" id="pick-change" type="button" style="width:100%">Change my pick</button>
+      </div>
       <div id="options" class="stack" style="margin-top:18px"></div>
       <div id="suggest" style="margin-top:10px" hidden>
         <button class="btn ghost" id="suggest-open" type="button" style="width:100%">+ Suggest a place</button>
         <div id="suggest-panel" class="card stack suggest-panel" hidden>
           <div>
-            <label for="suggest-input">Search restaurants</label>
+            <label for="suggest-input">Find a restaurant</label>
             <input id="suggest-input" type="search" placeholder="A name or a craving, like “tacos”" autocomplete="off" enterkeyhint="search">
           </div>
+          <div class="pick-map" id="suggest-map" hidden role="region" aria-label="Map of restaurants near the group. Tap a pin to add it."></div>
           <p class="muted" id="suggest-status" style="margin:0;font-size:13px" aria-live="polite"></p>
-          <div id="suggest-results" class="stack"></div>
+          <div class="list-label" id="suggest-list-label" hidden>Nearby</div>
+          <div id="suggest-results" class="stack suggest-results"></div>
           <p class="muted" style="margin:0;font-size:11px">Search by Apple Maps. Map data © Apple and its data providers.</p>
           <button class="btn ghost" id="suggest-close" type="button">Done</button>
         </div>

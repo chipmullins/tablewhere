@@ -369,7 +369,9 @@ struct NewVoteView: View {
                     note: isPlan ? note : nil,
                     asksRSVP: isPlan && asksRSVP,
                     rsvpBy: isPlan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil,
-                    surprise: setup == .surprise
+                    surprise: setup == .surprise,
+                    // Everyone in this chat: "3 of 5 picks in" from the start.
+                    expectedCount: state.conversationSize
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
@@ -388,6 +390,7 @@ struct MessageVoteView: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var showAdd = false
+    @State private var pickToast: PickToastInfo?
     @State private var confirmEnd = false
     @State private var confirmLeave = false
     @State private var confirmLockIn = false
@@ -454,7 +457,7 @@ struct MessageVoteView: View {
                                 .foregroundStyle(Theme.accentText)
                         }
                     }
-                    Text("\(live.members.count) in the group · \(GroupWording.line(session, nonVoterNames: live.waitingNames))")
+                    Text(headerLine(session))
                         .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
                     if session.winner == nil, let meet = session.meetTime {
@@ -615,8 +618,13 @@ struct MessageVoteView: View {
         if live.isOwner && live.members.count <= 1 {
             inviteCard(session)
         }
+        // Filled in from the chat; the creator can fix it ("only 3 of us are eating").
+        if live.isOwner && session.countsPeople && session.acceptsChanges && session.expectedCount != nil {
+            ExpectedCountCard(session: session, joined: live.members.count)
+        }
         if session.mode == .spin && !session.isSurprise {
-            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
+            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count,
+                             picksIn: live.picksIn, headcount: live.headcount, notJoined: live.notJoinedYet)
         }
         VoteNotices(session: session, isOwner: live.isOwner,
                     everythingRuledOut: live.everythingRuledOut,
@@ -635,7 +643,8 @@ struct MessageVoteView: View {
                 vote(option, session: session)
             }
         }
-        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) {
+        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID,
+                       waitingNote: session.mode == .spin ? "The result shows up in this chat when the wheel spins." : "Now vote for your favorite.") {
             state.expand()
             Task {
                 // Adding a place is taking part: join first.
@@ -688,6 +697,14 @@ struct MessageVoteView: View {
         .sensoryFeedback(Haptic.commit, trigger: rsvpTaps)
         // Watch only; you join when you vote or add a place.
         .task { await live.start() }
+        // The creator opened it in this chat: the chat's size raises the
+        // expected count (people may have been added). Never lowers it.
+        .task(id: live.session?.id) {
+            guard live.isOwner, let session = live.session, session.countsPeople,
+                  session.status == .open, session.expectedCount != nil,
+                  let size = state.conversationSize, size > (session.expectedCount ?? 0) else { return }
+            await GroupService.shared.raiseExpectedCount(sessionID: session.id, to: size)
+        }
         // A timed vote locks itself in when time's up, if the creator has it open.
         .task(id: live.session?.closesAt) { await autoCloseWhenTimeIsUp() }
         .task(id: live.session?.closesAt) {
@@ -711,6 +728,14 @@ struct MessageVoteView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .pickConfirmedToast($pickToast)
+    }
+
+    private func headerLine(_ session: GroupSession) -> String {
+        let count = GroupWording.groupCount(joined: live.members.count, headcount: live.headcount)
+        let line = GroupWording.line(session, nonVoterNames: live.waitingNames, voted: live.votedCount,
+                                     headcount: live.headcount, notJoined: live.notJoinedYet)
+        return "\(count) · \(line)"
     }
 
     private var removingBinding: Binding<Bool> {
@@ -728,7 +753,11 @@ struct MessageVoteView: View {
         }
         .sheet(isPresented: $showAdd) {
             if let session = live.session {
-                MessageAddPlaceView(session: session, groupBlockedHashes: live.groupBlockedHashes)
+                MessageAddPlaceView(session: session, groupBlockedHashes: live.groupBlockedHashes) { option, swapped in
+                    pickToast = PickToastInfo(name: option.name, swapped: swapped,
+                                         isExtraPlace: session.mode == .vote && live.isOwner,
+                                         isVote: session.mode == .vote)
+                }
             }
         }
         .confirmationDialog("End this group plan?", isPresented: $confirmEnd, titleVisibility: .visible) {
@@ -905,6 +934,8 @@ struct MessageVoteView: View {
 struct MessageAddPlaceView: View {
     let session: GroupSession
     var groupBlockedHashes: Set<String> = []
+    /// After it's in: the option, and whether it swapped out your old pick.
+    var onAdded: (GroupOption, Bool) -> Void = { _, _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var adding: String?
     @State private var errorMessage: String?
@@ -944,12 +975,13 @@ struct MessageAddPlaceView: View {
 
     private func add(_ place: Place) {
         adding = place.id
+        let swapped = isChanging
         Task {
             defer { adding = nil }
             do {
-                try await GroupService.shared.addOption(
-                    sessionID: session.id,
-                    option: GroupOption(place: place, addedBy: Identity.displayName ?? "Someone"))
+                let option = GroupOption(place: place, addedBy: Identity.displayName ?? "Someone")
+                try await GroupService.shared.addOption(sessionID: session.id, option: option)
+                onAdded(option, swapped)
                 dismiss()
             } catch {
                 errorMessage = GroupService.message(for: error)

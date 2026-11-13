@@ -68,6 +68,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         if state.isReady && state.firebaseReady { UsageStats.recordActiveDevice() }
         messagesLog.notice("willBecomeActive, style \(self.presentationStyle.rawValue, privacy: .public)")
         state.style = presentationStyle
+        state.noteConversation(conversation)
         state.open(message: conversation.selectedMessage)
     }
 
@@ -78,6 +79,7 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     override func didSelect(_ message: MSMessage, conversation: MSConversation) {
         super.didSelect(message, conversation: conversation)
+        state.noteConversation(conversation)
         state.open(message: message)
     }
 
@@ -100,6 +102,15 @@ final class MessagesState {
     @ObservationIgnored weak var controller: MSMessagesAppViewController?
 
     var isExpanded: Bool { style == .expanded }
+
+    /// People in this chat, counting you (iMessage only tells us how many,
+    /// not who). Nil in a chat with nobody else.
+    private(set) var conversationSize: Int?
+
+    func noteConversation(_ conversation: MSConversation) {
+        let others = conversation.remoteParticipantIdentifiers.count
+        conversationSize = others > 0 ? others + 1 : nil
+    }
 
     func open(message: MSMessage?) {
         sessionID = message?.url.flatMap(GroupLinks.sessionID(from:))

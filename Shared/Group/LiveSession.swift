@@ -46,6 +46,21 @@ final class LiveSession {
     /// In a spin, who hasn't added their pick yet.
     var waitingOnPicks: [GroupMember] { session?.waitingOnPicks(members: members) ?? [] }
 
+    /// How many the plan is for, when known ("3 of 6 picks in"); nil: count joins.
+    var headcount: Int? { session?.headcount(joined: members.count) }
+
+    /// Expected people who haven't opened the link yet.
+    var notJoinedYet: Int { session?.notJoinedYet(joined: members.count) ?? 0 }
+
+    /// People whose pick is on the wheel.
+    var picksIn: Int {
+        guard let session else { return 0 }
+        return members.filter { session.pick(of: $0.id) != nil }.count
+    }
+
+    /// People who have voted.
+    var votedCount: Int { Set(votes.map(\.voterID)).count }
+
     /// Names of members who haven't voted.
     var nonVoterNames: [String] {
         let voted = Set(votes.map(\.voterID))

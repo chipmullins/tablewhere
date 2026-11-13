@@ -177,14 +177,21 @@ async function removeTokens(sessionId: string, dead: Recipient[]): Promise<void>
 // MARK: - "Everyone's in" → the session creator
 
 /**
- * Whether everyone who joined (besides the creator) has done their part:
- * voted, or (in a spin) added their pick. `others` is how many that is.
+ * Whether everyone (besides the creator) has done their part: voted, or (in a
+ * spin) added their pick. `others` is how many people that is. When the
+ * creator said how many are eating (`expectedCount`, counting them, or the
+ * iMessage chat's size), it waits for that many even if some haven't opened
+ * the link yet; more joins than expected count too. This only decides the
+ * "everyone's in" push: it never stops the creator from spinning or locking in.
  */
 async function everyoneIsIn(sessionId: string, session: DocumentData): Promise<{ ready: boolean; others: number }> {
   const creator = str(session.createdBy);
   const ref = db.collection("sessions").doc(sessionId);
   const members = (await ref.collection("members").get()).docs.map((d) => d.id).filter((id) => id !== creator);
-  if (members.length === 0) return { ready: false, others: 0 };
+  const expected = typeof session.expectedCount === "number" && Number.isFinite(session.expectedCount)
+    ? Math.max(0, Math.floor(session.expectedCount) - 1) : 0;
+  const others = Math.max(members.length, expected);
+  if (members.length === 0) return { ready: false, others };
   let done: Set<string>;
   // "Surprise us": the wheel is places nearby; nobody adds a pick.
   if (session.surprise === true) return { ready: false, others: members.length };
@@ -196,7 +203,7 @@ async function everyoneIsIn(sessionId: string, session: DocumentData): Promise<{
   } else {
     done = new Set((await ref.collection("votes").get()).docs.map((d) => d.id));
   }
-  return { ready: members.every((id) => done.has(id)), others: members.length };
+  return { ready: members.length >= expected && members.every((id) => done.has(id)), others };
 }
 
 /**

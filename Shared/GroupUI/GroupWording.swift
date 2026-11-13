@@ -5,7 +5,10 @@ import PickerCore
 /// say the same thing.
 enum GroupWording {
     /// "Waiting on Sam, Alex", "Everyone has voted", "Locked in by Chip".
-    static func line(_ session: GroupSession, nonVoterNames: [String]) -> String {
+    /// With a known group size: "3 of 6 voted · waiting on Sam + 2 more"
+    /// (`notJoined`: expected people who haven't opened the link yet).
+    static func line(_ session: GroupSession, nonVoterNames: [String],
+                     voted: Int = 0, headcount: Int? = nil, notJoined: Int = 0) -> String {
         if session.status == .decided {
             switch session.mode {
             case .vote: return "Locked in by \(session.createdByName)"
@@ -15,8 +18,10 @@ enum GroupWording {
         }
         switch session.mode {
         case .vote:
-            if nonVoterNames.isEmpty { return "Everyone has voted" }
-            return "Waiting on " + list(nonVoterNames)
+            if nonVoterNames.isEmpty && notJoined == 0 { return "Everyone has voted" }
+            let who = list(nonVoterNames, extra: notJoined)
+            if let headcount { return "\(voted) of \(headcount) voted · waiting on \(who)" }
+            return "Waiting on " + who
         case .spin:
             // Who's still picking shows just below (SpinProgressLine).
             let count = session.options.count
@@ -71,9 +76,18 @@ enum GroupWording {
         return ("Nobody has voted yet", "The app will pick at random from all \(session.options.count) places.")
     }
 
-    private static func list(_ names: [String]) -> String {
+    /// "Sam, Alex, Jo + 2 more"; `extra` people without names add to the "more".
+    static func list(_ names: [String], extra: Int = 0) -> String {
         let shown = names.prefix(3).joined(separator: ", ")
-        return names.count > 3 ? "\(shown) + \(names.count - 3) more" : shown
+        let more = max(0, names.count - 3) + extra
+        if shown.isEmpty { return "\(more) more" }
+        return more > 0 ? "\(shown) + \(more) more" : shown
+    }
+
+    /// "4 in the group", or "4 of 6 here" when the group size is known.
+    static func groupCount(joined: Int, headcount: Int?) -> String {
+        if let headcount, headcount > joined { return "\(joined) of \(headcount) here" }
+        return "\(joined) in the group"
     }
 }
 

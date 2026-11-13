@@ -123,13 +123,18 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     /// "Surprise us": a spin whose wheel the creator's app filled with up to
     /// 12 random places nearby. Nobody adds picks. Nil/false: a normal spin.
     public var surprise: Bool?
+    /// How many people the plan is for, counting the creator: the iMessage
+    /// chat's size, or what the creator set ("How many are eating?"). Only the
+    /// creator writes it (rules). Nil: unknown, so count people as they join.
+    public var expectedCount: Int?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
                 mode: GroupMode, status: GroupStatus = .open, options: [GroupOption],
                 winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
                 note: String? = nil, area: GroupArea? = nil,
-                asksRSVP: Bool? = nil, rsvpBy: Date? = nil, surprise: Bool? = nil) {
+                asksRSVP: Bool? = nil, rsvpBy: Date? = nil, surprise: Bool? = nil,
+                expectedCount: Int? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -148,6 +153,27 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.asksRSVP = asksRSVP
         self.rsvpBy = rsvpBy
         self.surprise = surprise
+        self.expectedCount = expectedCount
+    }
+
+    /// What "How many are eating?" allows (the Firestore rules check the same).
+    public static let expectedCountRange = 2...30
+
+    /// Plans that wait on everyone: votes and spins where people add picks.
+    public var countsPeople: Bool { mode == .vote || (mode == .spin && !isSurprise) }
+
+    /// How many people this plan is for, when known: the expected count, or
+    /// more if more joined. Joins can only raise it, never lower it.
+    public func headcount(joined: Int) -> Int? {
+        guard countsPeople, status == .open, let expectedCount else { return nil }
+        return max(expectedCount, joined)
+    }
+
+    /// People expected who haven't opened the link yet. Zero when unknown,
+    /// and on a full wheel (nobody is waited on then).
+    public func notJoinedYet(joined: Int) -> Int {
+        guard countsPeople, status == .open, !(mode == .spin && options.count >= GroupSession.maxOptions) else { return 0 }
+        return max(0, (expectedCount ?? 0) - joined)
     }
 
     /// "Surprise us": the wheel is places nearby, not everyone's picks.

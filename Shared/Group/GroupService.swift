@@ -64,7 +64,7 @@ final class GroupService {
                        area: GroupArea? = nil,
                        meetTime: Date? = nil, note: String? = nil,
                        asksRSVP: Bool = false, rsvpBy: Date? = nil,
-                       surprise: Bool = false) async throws -> GroupSession {
+                       surprise: Bool = false, expectedCount: Int? = nil) async throws -> GroupSession {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
@@ -94,7 +94,8 @@ final class GroupService {
             area: area,
             asksRSVP: mode == .plan && asksRSVP ? true : nil,
             rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil,
-            surprise: mode == .spin && surprise ? true : nil
+            surprise: mode == .spin && surprise ? true : nil,
+            expectedCount: Self.clampedExpected(expectedCount, mode: mode, surprise: surprise)
         )
         var data = try Firestore.Encoder().encode(session)
         if mode == .plan { data["announced"] = true }
@@ -111,6 +112,37 @@ final class GroupService {
         case .plan: UsageStats.record(.groupsPlan)
         }
         return session
+    }
+
+    /// Only for plans that wait on everyone, within the allowed range.
+    nonisolated static func clampedExpected(_ count: Int?, mode: GroupMode, surprise: Bool) -> Int? {
+        guard let count, mode == .vote || (mode == .spin && !surprise) else { return nil }
+        let range = GroupSession.expectedCountRange
+        return min(max(count, range.lowerBound), range.upperBound)
+    }
+
+    /// "How many are eating?" (creator only). Nil clears it: back to counting joins.
+    func setExpectedCount(sessionID: String, count: Int?) async throws {
+        let range = GroupSession.expectedCountRange
+        let value: Any = count.map { min(max($0, range.lowerBound), range.upperBound) } ?? FieldValue.delete()
+        try await sessionRef(sessionID).updateData(["expectedCount": value])
+    }
+
+    /// iMessage: the creator opened the plan in a chat with this many people
+    /// (counting them). Raises the expected count, never lowers it.
+    func raiseExpectedCount(sessionID: String, to count: Int) async {
+        guard let uid = try? await userID() else { return }
+        let ref = sessionRef(sessionID)
+        let target = min(count, GroupSession.expectedCountRange.upperBound)
+        _ = try? await db.runTransaction { transaction, errorPointer in
+            guard let snap = try? transaction.getDocument(ref), let data = snap.data(),
+                  data["createdBy"] as? String == uid, data["status"] as? String == "open" else { return nil }
+            let current = (data["expectedCount"] as? NSNumber)?.intValue ?? 0
+            if target > current, target >= GroupSession.expectedCountRange.lowerBound {
+                transaction.updateData(["expectedCount": target], forDocument: ref)
+            }
+            return nil
+        }
     }
 
     private static func cleanNote(_ note: String?) -> String? {

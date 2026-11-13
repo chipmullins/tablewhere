@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PickerCore
 
 /// Asks for the name friends will see. Shared by the app and the iMessage extension.
@@ -380,11 +381,13 @@ struct PlanNoteCard: View {
 
 /// "Add your pick" / "Suggest a place", following the group's limits: one
 /// place each in a spin (creator too); in a vote, the creator can add up to
-/// 12 and everyone else can suggest one. Once your pick is in, it shows it,
-/// with Change to swap it for another place.
+/// 12 and everyone else can suggest one. Once your pick is in, it turns into
+/// a confirmation ("Your pick is in: La Taquiza") with Change to swap it.
 struct AddPlaceButton: View {
     let session: GroupSession
     let userID: String?
+    /// Under the confirmation while you wait, e.g. "We’ll let you know when the wheel spins."
+    var waitingNote: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -392,22 +395,7 @@ struct AddPlaceButton: View {
             // The wheel is places nearby; nobody adds one.
             EmptyView()
         } else if let userID, let mine = session.pick(of: userID), !(session.mode == .vote && session.isOwned(by: userID)) {
-            HStack(spacing: 10) {
-                Label("Your pick: \(mine.name)", systemImage: "checkmark.circle.fill")
-                    .font(Theme.body(14, .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                if session.status == .open {
-                    Button("Change", action: action)
-                        .font(Theme.body(14, .bold))
-                        .foregroundStyle(Theme.accentText)
-                        .accessibilityLabel("Change your pick")
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            confirmation(mine)
         } else {
             let full = session.options.count >= GroupSession.maxOptions
             Button(action: action) {
@@ -423,6 +411,43 @@ struct AddPlaceButton: View {
         }
     }
 
+    private func confirmation(_ mine: GroupOption) -> some View {
+        let open = session.status == .open
+        let lead = session.mode == .spin ? "Your pick is in: " : "Your place is in the vote: "
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Theme.accentText)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(lead)\(Text(mine.name).bold())")
+                    .font(Theme.body(15, .semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(2)
+                if open, let waitingNote {
+                    Text(waitingNote)
+                        .font(Theme.body(12))
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if open {
+                Button("Change", action: action)
+                    .font(Theme.body(14, .bold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel(session.mode == .spin ? "Change my pick" : "Change my place")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+        .accessibilityElement(children: .contain)
+    }
+
     private var title: String {
         switch session.mode {
         case .spin: return "Add your pick to the wheel"
@@ -434,22 +459,100 @@ struct AddPlaceButton: View {
     }
 }
 
-/// "Waiting on picks from Amy, Ben" / "Everyone’s in", for a spin.
+/// "Your pick is in: La Taquiza" for a few seconds after you add or swap
+/// your pick. The lobby row keeps saying it (with Change) afterwards.
+struct PickToastInfo: Equatable, Identifiable {
+    let id = UUID()
+    let name: String
+    /// "Your pick is in: ", "Swapped in: ", or "Added: " (an organizer's extra places).
+    let lead: String
+
+    init(name: String, swapped: Bool, isExtraPlace: Bool = false, isVote: Bool = false) {
+        self.name = name
+        lead = isExtraPlace ? "Added: "
+            : swapped ? "Swapped in: "
+            : isVote ? "Your place is in the vote: " : "Your pick is in: "
+    }
+}
+
+extension View {
+    /// Shows `PickConfirmedToast` at the top for a few seconds, with a success haptic.
+    func pickConfirmedToast(_ info: Binding<PickToastInfo?>) -> some View {
+        overlay(alignment: .top) {
+            if let toast = info.wrappedValue {
+                PickConfirmedToast(name: toast.name, lead: toast.lead)
+                    .id(toast.id)
+                    .onTapGesture { info.wrappedValue = nil }
+                    .task(id: toast.id) {
+                        UIAccessibility.post(notification: .announcement,
+                                             argument: toast.lead + toast.name)
+                        try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 6 : 3))
+                        if !Task.isCancelled, info.wrappedValue?.id == toast.id { info.wrappedValue = nil }
+                    }
+            }
+        }
+        .animation(.snappy, value: info.wrappedValue?.id)
+        .sensoryFeedback(Haptic.decided, trigger: info.wrappedValue?.id) { _, new in new != nil }
+    }
+}
+
+struct PickConfirmedToast: View {
+    let name: String
+    let lead: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18, weight: .bold))
+                .accessibilityHidden(true)
+            Text("\(lead)\(Text(name).bold())")
+                .font(Theme.body(14, .semibold))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Theme.onSaffron)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Waiting on picks from Amy, Ben" / "Everyone’s in", for a spin. When
+/// the group size is known: "3 of 6 picks in · waiting on Amy + 2 more"
+/// (the "more" includes people who haven't opened the link yet).
 struct SpinProgressLine: View {
     let waiting: [GroupMember]
     let memberCount: Int
+    var picksIn: Int = 0
+    /// Nil when nobody said how many are coming.
+    var headcount: Int? = nil
+    var notJoined: Int = 0
+
+    private var allIn: Bool { waiting.isEmpty && notJoined == 0 }
 
     var body: some View {
-        Label(text, systemImage: waiting.isEmpty ? "checkmark.circle.fill" : "hourglass")
+        Label(text, systemImage: allIn ? "checkmark.circle.fill" : "hourglass")
             .font(Theme.body(13, .semibold))
-            .foregroundStyle(waiting.isEmpty ? Theme.accentText : Theme.muted)
+            .foregroundStyle(allIn ? Theme.accentText : Theme.muted)
     }
 
     private var text: String {
-        if waiting.isEmpty { return memberCount > 1 ? "Everyone’s pick is in. Ready to spin!" : "Your pick is in. Invite friends to add theirs." }
+        if allIn {
+            let people = headcount ?? memberCount
+            return people > 1 ? "Everyone’s pick is in. Ready to spin!" : "Your pick is in. Invite friends to add theirs."
+        }
         let names = waiting.map(\.name)
-        let list = names.count <= 3 ? names.joined(separator: ", ") : "\(names.prefix(3).joined(separator: ", ")) + \(names.count - 3) more"
-        return "Waiting on picks from \(list)"
+        let shown = Array(names.prefix(3))
+        let more = names.count - shown.count + notJoined
+        let who = shown.isEmpty ? "\(more) more"
+            : shown.joined(separator: ", ") + (more > 0 ? " + \(more) more" : "")
+        if let headcount { return "\(picksIn) of \(headcount) picks in · waiting on \(who)" }
+        return "Waiting on picks from \(who)"
     }
 }
 

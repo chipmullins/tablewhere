@@ -16,6 +16,7 @@ struct GroupLobbyView: View {
     @State private var confirmLeave = false
     @State private var live: LiveSession
     @State private var showAddPlace = false
+    @State private var pickToast: PickToastInfo?
     /// "I'll pick" plans: the creator moves it somewhere else.
     @State private var showChangePlace = false
     @State private var rsvpTaps = 0
@@ -175,7 +176,11 @@ struct GroupLobbyView: View {
             Text(errorMessage ?? "")
         }
         .sheet(isPresented: $showAddPlace) {
-            if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) }
+            if let session = live.session { AddOptionView(session: session, groupBlockedHashes: live.groupBlockedHashes) { option, swapped in
+                pickToast = PickToastInfo(name: option.name, swapped: swapped,
+                                         isExtraPlace: session.mode == .vote && live.isOwner,
+                                         isVote: session.mode == .vote)
+            } }
         }
         .sheet(item: $browserURL) { SafariView(url: $0).ignoresSafeArea() }
         .confirmationDialog("Remove \(removing?.name ?? "this place")?",
@@ -238,6 +243,7 @@ struct GroupLobbyView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reveal?.id)
+        .pickConfirmedToast($pickToast)
         .onChange(of: reveal == nil) { _, done in if done { announceIfHeld() } }
         .onAppear { OnScreenPlan.sessionID = sessionID }
         .onDisappear {
@@ -279,7 +285,7 @@ struct GroupLobbyView: View {
             HStack(spacing: 12) {
                 memberAvatars
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(live.members.count) in the group")
+                    Text(GroupWording.groupCount(joined: live.members.count, headcount: live.headcount))
                         .font(Theme.body(15, .semibold))
                         .foregroundStyle(Theme.text)
                     Text(statusLine(session))
@@ -328,7 +334,8 @@ struct GroupLobbyView: View {
     }
 
     private func statusLine(_ session: GroupSession) -> String {
-        GroupWording.line(session, nonVoterNames: live.waitingNames)
+        GroupWording.line(session, nonVoterNames: live.waitingNames, voted: live.votedCount,
+                          headcount: live.headcount, notJoined: live.notJoinedYet)
     }
 
     // MARK: Deciding
@@ -342,6 +349,9 @@ struct GroupLobbyView: View {
         if live.isOwner && live.members.count <= 1 {
             inviteCard(session)
         }
+        if live.isOwner && session.countsPeople && session.acceptsChanges {
+            ExpectedCountCard(session: session, joined: live.members.count)
+        }
 
         let tally = live.tally
         let slots = max(live.members.count, tally.totalVotes, 1)
@@ -350,7 +360,8 @@ struct GroupLobbyView: View {
         let open = session.acceptsChanges
         let leader = session.eligibleLeader(votes: live.votes, ruledOut: ruledOut)
         if session.mode == .spin && !session.isSurprise {
-            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count)
+            SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count,
+                             picksIn: live.picksIn, headcount: live.headcount, notJoined: live.notJoinedYet)
         }
         VoteNotices(session: session, isOwner: live.isOwner,
                     everythingRuledOut: live.everythingRuledOut,
@@ -381,7 +392,10 @@ struct GroupLobbyView: View {
             }
         }
 
-        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID) { showAddPlace = true }
+        AddPlaceButton(session: session, userID: GroupService.shared.currentUserID,
+                       waitingNote: session.mode == .spin ? "We’ll let you know when the wheel spins." : "Now vote for your favorite.") {
+            showAddPlace = true
+        }
 
         if live.isOwner {
             OwnerGroupTools(session: session,
@@ -895,6 +909,8 @@ struct GroupLobbyView: View {
 private struct AddOptionView: View {
     let session: GroupSession
     var groupBlockedHashes: Set<String> = []
+    /// After it's in: the option, and whether it swapped out your old pick.
+    var onAdded: (GroupOption, Bool) -> Void = { _, _ in }
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -957,10 +973,13 @@ private struct AddOptionView: View {
         let name = Identity.displayName ?? "Someone"
         adding = place.id
         errorMessage = nil
+        let swapped = isChanging
         Task {
             defer { adding = nil }
             do {
-                try await GroupService.shared.addOption(sessionID: session.id, option: GroupOption(place: place, addedBy: name))
+                let option = GroupOption(place: place, addedBy: name)
+                try await GroupService.shared.addOption(sessionID: session.id, option: option)
+                onAdded(option, swapped)
                 dismiss()
             } catch {
                 // Offline, closed, full, or ended: say which.

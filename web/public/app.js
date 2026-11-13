@@ -439,27 +439,57 @@ function isSpin() { return session.mode === "spin"; }
 function isSurprise() { return isSpin() && session.surprise === true; }
 function isPlan() { return session.mode === "plan"; }
 
+// "How many are eating?" (the creator's count, or the iMessage chat's size).
+// Joins can only raise it. Null when unknown: count people as they join.
+function groupSize() {
+  const n = session.expectedCount;
+  if (typeof n !== "number" || !Number.isFinite(n) || isSurprise() || isPlan()) return null;
+  return Math.max(n, members.length);
+}
+// Expected people who haven't opened the link yet.
+function notJoinedYet() {
+  const h = groupSize();
+  return h === null ? 0 : Math.max(0, h - members.length);
+}
+// "Sam, Alex, Jo + 2 more"; `extra` unnamed people add to the "more".
+function whoList(names, extra = 0) {
+  const shown = names.slice(0, 3);
+  const more = names.length - shown.length + extra;
+  if (!shown.length) return `${more} more`;
+  return shown.join(", ") + (more > 0 ? ` + ${more} more` : "");
+}
+function groupCountText() {
+  const h = groupSize();
+  return h !== null && h > members.length ? `${members.length} of ${h} here` : `${members.length} in the group`;
+}
+
 function statusText() {
   if (isSurprise()) {
     const n = (session.options || []).length;
     return `${n} places nearby on the wheel · ${session.createdByName || "the organizer"} spins when everyone’s here`;
   }
+  const h = groupSize();
   if (isSpin()) {
     const n = (session.options || []).length;
     const picks = session.picksBy || {};
+    const hasPick = (m) => !!picks[m.id] || (session.options || []).some((o) => o.addedByID === m.id);
     // A full wheel can't take more picks, so nobody is waited on.
-    const waiting = n >= MAX_OPTIONS ? []
-      : members.filter((m) => !picks[m.id] && !(session.options || []).some((o) => o.addedByID === m.id));
-    const names = waiting.map((m) => m.name);
-    const tail = n >= MAX_OPTIONS ? "the wheel is full" : !waiting.length ? "everyone’s pick is in"
-      : `waiting on picks from ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`;
+    const full = n >= MAX_OPTIONS;
+    const waiting = full ? [] : members.filter((m) => !hasPick(m));
+    const extra = full ? 0 : notJoinedYet();
+    const names = waiting.map((m) => (m.id === uid ? "you" : m.name));
+    const tail = full ? "the wheel is full" : !waiting.length && !extra ? "everyone’s pick is in"
+      : h !== null ? `${members.filter(hasPick).length} of ${h} picks in · waiting on ${whoList(names, extra)}`
+      : `waiting on picks from ${whoList(names)}`;
     return `${n} place${n === 1 ? "" : "s"} in the wheel · ${tail}`;
   }
   const voted = new Set(votes.map((v) => v.voterID));
   const names = members.filter((m) => !voted.has(m.id)).map((m) => (m.id === uid ? "you" : m.name));
-  let text = `${members.length} in the group · ` +
-    (!names.length ? "everyone has voted"
-      : `waiting on ${names.length <= 3 ? names.join(", ") : names.slice(0, 3).join(", ") + ` + ${names.length - 3} more`}`);
+  const extra = notJoinedYet();
+  let text = `${groupCountText()} · ` +
+    (!names.length && !extra ? "everyone has voted"
+      : h !== null ? `${voted.size} of ${h} voted · waiting on ${whoList(names, extra)}`
+      : `waiting on ${whoList(names)}`);
   const closes = session.closesAt && session.closesAt.toDate ? session.closesAt.toDate() : null;
   if (closes) {
     const left = Math.max(0, Math.floor((closes - Date.now()) / 1000));
@@ -482,7 +512,7 @@ function renderVote() {
   if (isSpin()) return renderSpin();
   const t = tally();
   const mine = votes.find((v) => v.voterID === uid)?.optionID;
-  const slots = Math.max(members.length, t.total, 1);
+  const slots = Math.max(groupSize() || 0, members.length, t.total, 1);
 
   $("title").textContent = session.title;
   showMeetLine();
@@ -575,7 +605,7 @@ function renderSpin() {
   $("vote-help").textContent = isSurprise()
     ? `${creator} let the wheel fill itself with places nearby. When they spin, it picks one at random and the result shows up right here.`
     : havePick
-    ? `You’re in the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
+    ? `${creator} spins when everyone’s ready, and the app picks one at random.`
     : mapkitToken
       ? `Add your pick to the wheel. ${creator} spins when everyone’s ready, and the app picks one at random.`
       : `${creator} spins when everyone’s ready, and the app picks one at random. To add a pick, join in the Tablewhere app with the code below.`;
@@ -985,45 +1015,75 @@ let suggestWired = false;
 let searchTimer = null;
 let searchSeq = 0;
 let adding = false;
+let panelOpen = false;
+let justAdded = null;     // option id added on this page a moment ago (pops the card once)
+
+// "Your pick is in" card at the top while waiting on the others. It replaces
+// the add button; "Change my pick" opens the picker again (swaps in place).
+function renderPickConfirm(mine, open) {
+  const card = $("pick-confirm");
+  const showIt = !!mine && open && !isSurprise();
+  card.hidden = !showIt;
+  if (!showIt) return;
+  const head = $("pick-confirm-head");
+  head.replaceChildren(isSpin() ? "Your pick is in: " : "Your place is in the vote: ");
+  const b = document.createElement("b");
+  b.textContent = mine.name;
+  head.append(b, ".");
+  $("pick-confirm-sub").textContent = isSpin()
+    ? "We’ll show the result here when the wheel spins. Keep this page open to watch it, or get the Tablewhere app and we’ll let you know."
+    : "Now tap a place below to vote. The winner shows up right here.";
+  const change = $("pick-change");
+  change.textContent = isSpin() ? "Change my pick" : "Change my place";
+  change.hidden = !mapkitToken || panelOpen;
+  if (justAdded === mine.id) {
+    justAdded = null;
+    card.classList.remove("pop");
+    void card.offsetWidth;  // restart the animation
+    card.classList.add("pop");
+  }
+}
 
 function updateSuggest() {
   const open = acceptsChanges();
   const full = (session.options || []).length >= MAX_OPTIONS;
   const mine = myPick();
-  $("suggest").hidden = !mapkitToken || !open || isSurprise();
+  renderPickConfirm(mine, open);
+  $("suggest").hidden = !mapkitToken || !open || isSurprise() || (!!mine && !panelOpen);
   const button = $("suggest-open");
   button.style.width = "100%";
-  if (mine) {
-    // One pick each: once yours is in, the button shows it and lets you swap it.
-    button.className = "btn ghost wide";
-    button.textContent = `✓ Your pick: ${mine.name} · Change`;
-    button.disabled = false;
-  } else {
-    button.className = isSpin() && !full ? "btn primary wide" : "btn ghost wide";
-    button.textContent = full
-      ? (isSpin() ? "The wheel is full (12 places)" : "This vote is full (12 places)")
-      : (isSpin() ? "+ Add your pick" : "+ Suggest a place (one each)");
-    button.disabled = full;
-    if (full) $("suggest-panel").hidden = true;
-  }
+  button.hidden = panelOpen || !!mine;
+  button.className = isSpin() && !full ? "btn primary wide" : "btn ghost wide";
+  button.textContent = full
+    ? (isSpin() ? "The wheel is full (12 places)" : "This vote is full (12 places)")
+    : (isSpin() ? "+ Add your pick" : "+ Suggest a place (one each)");
+  button.disabled = full;
+  if (full && !mine && panelOpen) closeSuggest();
   if (!suggestWired && mapkitToken) wireSuggest();
+}
+
+async function openSuggest() {
+  $("suggest-input").placeholder = myPick() ? "Search for a place to swap in" : "Search by name or craving, like “tacos”";
+  panelOpen = true;
+  updateSuggest();
+  $("suggest-panel").hidden = false;
+  if (myPick()) $("suggest").scrollIntoView({ behavior: "smooth", block: "start" });
+  // Phones: don't pop the keyboard over the map and list; the nearby list needs no typing.
+  if (!matchMedia("(pointer: coarse)").matches) $("suggest-input").focus();
+  try {
+    await loadMapKit();
+    setStatus("");
+  } catch {
+    setStatus("Search isn’t available right now. You can still vote.");
+    return;
+  }
+  loadNearby();
 }
 
 function wireSuggest() {
   suggestWired = true;
-  $("suggest-open").addEventListener("click", async () => {
-    const near = session.area?.name ? ` near ${session.area.name}` : "";
-    $("suggest-input").placeholder = myPick() ? `Search for a place to swap in${near}` : `A name or craving${near}, like “tacos”`;
-    $("suggest-panel").hidden = false;
-    $("suggest-open").hidden = true;
-    $("suggest-input").focus();
-    try {
-      await loadMapKit();
-      setStatus("");
-    } catch {
-      setStatus("Search isn’t available right now. You can still vote.");
-    }
-  });
+  $("suggest-open").addEventListener("click", openSuggest);
+  $("pick-change").addEventListener("click", openSuggest);
   $("suggest-close").addEventListener("click", closeSuggest);
   $("suggest-input").addEventListener("input", () => {
     clearTimeout(searchTimer);
@@ -1035,11 +1095,17 @@ function wireSuggest() {
 }
 
 function closeSuggest() {
+  panelOpen = false;
+  nearby = null;     // searched again next time it opens (once per open)
+  ++nearbySeq;
+  ++searchSeq;
   $("suggest-panel").hidden = true;
-  $("suggest-open").hidden = false;
   $("suggest-input").value = "";
   $("suggest-results").replaceChildren();
+  $("suggest-list-label").hidden = true;
   setStatus("");
+  if (pickMap) pickMap.removeAnnotations(pickMap.annotations);
+  if (session) updateSuggest();
 }
 
 function setStatus(text, isError = false) {
@@ -1096,7 +1162,7 @@ function milesBetween(a, b) {
 async function runSearch() {
   const query = $("suggest-input").value.trim();
   const seq = ++searchSeq;
-  if (query.length < 2) { $("suggest-results").replaceChildren(); setStatus(""); return; }
+  if (query.length < 2) { showNearby(); return; }
   const center = groupCenter();
   if (!center) { setStatus("Couldn’t tell where this group is eating.", true); return; }
 
@@ -1142,6 +1208,154 @@ async function runSearch() {
   renderResults(places, query);
 }
 
+// ---------------------------------------------------------------------------
+// Nearby: what's around the group area, nearest first, no typing needed.
+// One search per open of the panel (MapKit JS has a daily quota).
+
+let nearby = null;        // [{ p, miles }] for this open, or null
+let nearbySeq = 0;
+
+function restaurantFilter(mk) {
+  try {
+    const C = mk.PointOfInterestCategory;
+    return mk.PointOfInterestFilter.including([C.Restaurant, C.Cafe, C.Bakery, C.Brewery, C.Winery].filter(Boolean));
+  } catch { return null; }
+}
+
+async function loadNearby() {
+  const center = groupCenter();
+  if (!center) { setStatus("Search for a place by name or craving."); return; }
+  if (nearby) { if (!$("suggest-input").value.trim()) showNearby(); return; }
+  const seq = ++nearbySeq;
+  setStatus("Finding places nearby…");
+  let mk;
+  try { mk = await loadMapKit(); } catch { setStatus("Search isn’t available right now. You can still vote.", true); return; }
+  showPickMap(mk, center);
+  const coord = new mk.Coordinate(center.lat, center.lon);
+  const filter = restaurantFilter(mk);
+
+  // Points of interest around the area (about 2 miles); if this MapKit JS
+  // can't do that, a plain "restaurants" search in the same box.
+  const poi = () => new Promise((resolve) => {
+    if (typeof mk.PointsOfInterestSearch !== "function") return resolve(null);
+    try {
+      const options = { center: coord, radius: 3200 };
+      if (filter) options.pointOfInterestFilter = filter;
+      new mk.PointsOfInterestSearch(options).search((error, data) => resolve(error ? null : (data?.places || [])));
+    } catch { resolve(null); }
+  });
+  const text = () => new Promise((resolve) => {
+    try {
+      const d = 0.06;
+      const region = new mk.CoordinateRegion(coord, new mk.CoordinateSpan(d, d / Math.max(0.2, Math.cos(center.lat * Math.PI / 180))));
+      const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
+      if (filter) options.pointOfInterestFilter = filter;
+      new mk.Search(options).search("restaurants", (error, data) => resolve(error ? null : (data?.places || [])), { region });
+    } catch { resolve(null); }
+  });
+  let places = await poi();
+  if (!places || !places.length) places = await text();
+  if (seq !== nearbySeq || !panelOpen) return;
+  if (places === null) { setStatus("Couldn’t load places nearby. Search by name instead.", true); return; }
+  const seen = new Set();
+  nearby = places
+    .filter((p) => p.coordinate && p.name)
+    .filter((p) => {
+      const key = `${p.name.toLowerCase()}|${p.coordinate.latitude.toFixed(3)}|${p.coordinate.longitude.toFixed(3)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
+    .sort((a, b) => a.miles - b.miles)
+    .slice(0, 25);
+  if (!$("suggest-input").value.trim()) showNearby();
+}
+
+function showNearby() {
+  ++searchSeq;  // a search still in flight shouldn't replace the nearby list
+  if (!nearby) { $("suggest-results").replaceChildren(); $("suggest-list-label").hidden = true; setStatus(""); return; }
+  renderResults(nearby, null);
+}
+
+// A small map of the group area with a pin per place in the list. Tap a pin,
+// then Add (or Swap) in its bubble: same as tapping the row.
+let pickMap = null;
+function showPickMap(mk, center) {
+  const box = $("suggest-map");
+  box.hidden = false;
+  const coord = new mk.Coordinate(center.lat, center.lon);
+  const region = new mk.CoordinateRegion(coord, new mk.CoordinateSpan(0.03, 0.03));
+  if (!pickMap) {
+    pickMap = new mk.Map(box, {
+      region,
+      colorScheme: mk.Map.ColorSchemes.Dark,
+      isRotationEnabled: false,
+      showsCompass: mk.FeatureVisibility.Hidden,
+      showsMapTypeControl: false,
+      showsZoomControl: false,
+      showsPointsOfInterest: false,
+    });
+    pickMap.addEventListener("select", (event) => {
+      const id = event.annotation?.data?.optionID;
+      if (!id) return;
+      const row = [...$("suggest-results").children].find((r) => r.dataset.id === id);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        row.classList.add("flash");
+        setTimeout(() => row.classList.remove("flash"), 1200);
+      }
+    });
+  } else {
+    pickMap.region = region;
+  }
+}
+
+async function updatePickMap(rows) {
+  if (!pickMap) return;
+  let mk;
+  try { mk = await loadMapKit(); } catch { return; }
+  pickMap.removeAnnotations(pickMap.annotations);
+  const pins = [];
+  for (const { option, out, taken } of rows) {
+    if (out) continue;
+    const pin = new mk.MarkerAnnotation(new mk.Coordinate(option.latitude, option.longitude), {
+      color: taken ? "#5C5A66" : "#FFB23F",
+      glyphText: taken ? "✓" : "🍴",
+      title: option.name,
+      subtitle: taken ? (isSpin() ? "In the wheel" : "In the vote") : option.category,
+      data: { optionID: option.id },
+      displayPriority: taken ? 250 : 750,
+    });
+    if (!taken) {
+      pin.callout = {
+        calloutRightAccessoryForAnnotation: () => {
+          const add = document.createElement("button");
+          add.type = "button";
+          add.className = "pin-add";
+          add.textContent = myPick() ? "Swap" : "Add";
+          add.addEventListener("click", (e) => { e.stopPropagation(); addOption(option); });
+          return add;
+        },
+      };
+    }
+    pins.push(pin);
+  }
+  // The places already in the wheel, as grey checks, so you can see what's taken.
+  for (const o of session.options || []) {
+    if (!Number.isFinite(o.latitude) || !Number.isFinite(o.longitude) || rows.some((r) => sameOption(r.option, o))) continue;
+    pins.push(new mk.MarkerAnnotation(new mk.Coordinate(o.latitude, o.longitude), {
+      color: "#5C5A66", glyphText: "✓", title: o.name, subtitle: isSpin() ? "In the wheel" : "In the vote", displayPriority: 250,
+    }));
+  }
+  if (!pins.length) return;
+  pickMap.addAnnotations(pins);
+  try {
+    pickMap.showItems(pins.filter((p) => p.color !== "#5C5A66").slice(0, 12).concat(pins.length ? [] : []),
+      { animate: false, padding: new mk.Padding(36, 28, 24, 28) });
+  } catch { /* keep the area region */ }
+}
+
 async function renderResults(places, query) {
   const blocked = globalThis.crypto?.subtle ? groupBlocked() : new Set();
   const outIDs = new Set();
@@ -1151,22 +1365,31 @@ async function renderResults(places, query) {
       if (blocked.has(await blockedHash(id))) outIDs.add(id);
     }
   }
-  const list = $("suggest-results");
-  list.replaceChildren();
-  if (!places.length) {
-    setStatus(`No restaurants found for “${query}”. Try a broader word like “pizza.”`);
-    return;
-  }
-  setStatus("");
-  for (const { p, miles } of places) {
+  const isNearby = query === null;
+  const rows = places.map(({ p, miles }) => {
     const option = toOption(p);
     const out = outIDs.has(option.id);
-    const taken = isTaken(option) || out;
+    return { option, miles, out, taken: isTaken(option) };
+  }).filter((r) => !isNearby || (!r.out && !r.taken)).slice(0, isNearby ? 15 : 20);
+  const list = $("suggest-results");
+  list.replaceChildren();
+  $("suggest-list-label").textContent = isNearby ? "Nearby" : "Results";
+  $("suggest-list-label").hidden = !rows.length;
+  updatePickMap(rows);
+  if (!rows.length) {
+    setStatus(isNearby ? "Couldn’t find restaurants near the group area. Search by name above."
+      : `No restaurants found for “${query}”. Try a broader word like “pizza.”`);
+    return;
+  }
+  setStatus(isNearby ? "Tap one to add it, or search above." : "");
+  for (const { option, miles, out, taken: inIt } of rows) {
+    const taken = inIt || out;
     const button = document.createElement("button");
     button.type = "button";
     button.className = "result";
     button.disabled = taken || adding;
     button.dataset.taken = taken ? "1" : "0";
+    button.dataset.id = option.id;
 
     const [bg, ink] = tileColors(option.name);
     const tile = document.createElement("div");
@@ -1180,7 +1403,7 @@ async function renderResults(places, query) {
     name.textContent = option.name;
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = `${option.category} · ${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi${option.address ? " · " + option.address : ""}`;
+    sub.textContent = `${option.category} · ${miles < 0.1 ? "<0.1" : miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi${option.address ? " · " + option.address : ""}`;
     text.append(name, sub);
     const add = document.createElement("span");
     add.className = "add";
@@ -1278,7 +1501,9 @@ async function addOption(option) {
       tx.update(sessionRef, { options: [...options, option], [`picksBy.${uid}`]: option.id });
     });
     bumpStat("webPicks");
+    justAdded = option.id;
     closeSuggest();
+    $("pick-confirm").scrollIntoView({ behavior: "smooth", block: "center" });
   } catch (error) {
     const messages = {
       duplicate: isSpin() ? "That place is already in the wheel." : "That place is already in the vote.",
