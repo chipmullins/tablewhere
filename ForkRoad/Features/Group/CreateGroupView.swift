@@ -31,6 +31,13 @@ struct CreateGroupView: View {
     @State private var isLoadingWheel = true
     /// Vote, spin, and Surprise us: "Set a date & time" (I'll pick always has one).
     @State private var hasTime = false
+    /// Vote and Spin our picks: No fast food / No coffee & sweets for everyone (off by default).
+    @State private var groupFilters = GroupFilters()
+    private var usesGroupFilters: Bool { setup == .vote || setup == .spin }
+    /// Your own places that the filters you turned on don't allow.
+    private var picksBreakingFilters: [Place] {
+        usesGroupFilters ? selected.filter { !groupFilters.allows($0) } : []
+    }
     // "I'll pick" (and the optional time for the others)
     @State private var meetTime = PlanSetupRows.defaultMeetTime()
     @State private var note = ""
@@ -78,6 +85,7 @@ struct CreateGroupView: View {
                     )
                 case .vote, .spin, .plan:
                     placesSection
+                    if usesGroupFilters { groupFiltersSection }
                     if setup == .plan {
                         PlanSetupRows(meetTime: $meetTime, note: $note, asksRSVP: $asksRSVP,
                                       hasReplyBy: $hasReplyBy, replyBy: $replyBy)
@@ -195,6 +203,22 @@ struct CreateGroupView: View {
         .listRowBackground(Theme.surface)
     }
 
+    private var groupFiltersSection: some View {
+        Section {
+            GroupFiltersRow(filters: $groupFilters)
+        } footer: {
+            if let place = picksBreakingFilters.first {
+                Text("\(place.name) doesn’t fit these filters. Remove it or turn the filter off.")
+                    .foregroundStyle(Theme.danger)
+            } else {
+                Text(groupFilters.isActive
+                     ? "Friends can’t add places that break these. You can change them while it’s open."
+                     : "Off unless you turn them on.")
+            }
+        }
+        .listRowBackground(Theme.surface)
+    }
+
     private var placesHeader: String {
         switch setup {
         case .vote: return selected.isEmpty ? "Places" : "Places (\(selected.count) of \(maxOptions))"
@@ -227,6 +251,7 @@ struct CreateGroupView: View {
                 maxOptions: maxOptions,
                 isSingle: isSingle,
                 title: addTitle,
+                groupFilters: usesGroupFilters && groupFilters.isActive ? groupFilters : nil,
                 onAreaChange: { pickedArea = $0 },
                 onTap: { place in
                     toggle(place)
@@ -272,6 +297,7 @@ struct CreateGroupView: View {
     /// What's missing, or what you're about to start.
     private var statusLine: String {
         if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return "Pick a time that hasn’t passed" }
+        if !picksBreakingFilters.isEmpty { return "A place doesn’t fit your group filters" }
         switch setup {
         case .vote:
             if selected.count < 2 { return "Add at least 2 places" }
@@ -291,6 +317,7 @@ struct CreateGroupView: View {
 
     private var canCreate: Bool {
         if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return false }
+        if !picksBreakingFilters.isEmpty { return false }
         switch setup {
         case .vote: return selected.count >= 2
         case .spin: return selected.count >= 1
@@ -364,7 +391,9 @@ struct CreateGroupView: View {
                     note: isPlan ? note : nil,
                     asksRSVP: isPlan && asksRSVP,
                     rsvpBy: isPlan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil,
-                    surprise: setup == .surprise
+                    surprise: setup == .surprise,
+                    expectedCount: nil,
+                    groupFilters: usesGroupFilters ? groupFilters : nil
                 )
                 if session.mode == .plan {
                     // Share first; onCreated runs when the sheet closes.
@@ -395,6 +424,7 @@ private struct PickerSheetContent: View {
     let maxOptions: Int
     let isSingle: Bool
     let title: String
+    var groupFilters: GroupFilters?
     var onAreaChange: (PickerArea?) -> Void
     var onTap: (Place) -> Void
     var onDone: () -> Void
@@ -412,6 +442,7 @@ private struct PickerSheetContent: View {
                 startingFilters: startingFilters,
                 startingNearby: startingNearby,
                 rules: rules,
+                groupFilters: groupFilters,
                 search: search,
                 accessory: { .check(isOn: selected.contains($0)) },
                 isDisabled: { !isSingle && !selected.contains($0) && selected.count >= maxOptions },

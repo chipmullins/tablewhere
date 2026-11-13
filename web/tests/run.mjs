@@ -148,6 +148,68 @@ await test("No prefetch for Surprise us or decided plans", async () => {
   await context.close();
 });
 
+// ---------------------------------------------------------------------------
+// #1 Group filters
+
+const opt = (name, at, extra = {}) => ({ id: `${name.toLowerCase()}|${at.lat}|${at.lon}`, name, category: "Restaurant",
+  latitude: at.lat, longitude: at.lon, addedBy: "Chip", addedByID: "host", ...extra });
+
+await test("Group filters: hidden from Nearby, greyed in a name search, line under the title", async () => {
+  const places = { ...basePlaces, coffee: [P("Starbucks", near(0.003, 0.002), { pointOfInterestCategory: "Cafe" })],
+    mcdonalds: [P("McDonald's", near(0.004, 0))] };
+  const session = { groupFilters: { noFastFood: true, noCoffeeSweets: true } };
+  const { page, context, errors } = await openPlan(browser, base, { setup: setupScript({ places, session }), storage: named });
+  await page.waitForSelector("#filters-line:not([hidden])");
+  assert((await page.textContent("#filters-line")).includes("No fast food or coffee & sweets in this group"), "line");
+  await page.waitForFunction(() => window.__mk.calls.length >= 5);
+  await page.click("#suggest-open");
+  const names = await page.$$eval("#suggest-results .result .name", (els) => els.map((e) => e.textContent));
+  assert(names.join("|") === "Sora Ramen|Goodfellas Pizzeria", `nearby: ${names}`);
+  await page.fill("#suggest-input", "mcdonalds");
+  await page.press("#suggest-input", "Enter");
+  await page.waitForFunction(() => document.querySelector("#suggest-list-label").textContent === "Results");
+  const row = page.locator("#suggest-results .result").first();
+  assert(await row.isDisabled(), "greyed row can't be tapped");
+  assert((await row.locator(".sub").textContent()) === "Not allowed in this group (no fast food)", await row.locator(".sub").textContent());
+  assert(!errors.length, errors.join("; "));
+  await context.close();
+});
+
+await test("Group filters off by default: nothing hidden", async () => {
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ places: basePlaces }), storage: named });
+  await page.waitForFunction(() => window.__mk.calls.length >= 5);
+  await page.click("#suggest-open");
+  assert(await page.locator("#suggest-results .result").count() === 5, "all five");
+  assert(await page.isHidden("#filters-line"), "no line");
+  await context.close();
+});
+
+await test("Safety net: a place that breaks the filters is ruled out (vote and spin)", async () => {
+  const options = [opt("Sora Ramen", near(0.002, 0.001)), opt("Wendy's", near(0.003, 0), { addedBy: "Old app", addedByID: "old" })];
+  for (const mode of ["vote", "spin"]) {
+    const session = { mode, options, groupFilters: { noFastFood: true } };
+    const { page, context, errors } = await openPlan(browser, base, { setup: setupScript({ places: basePlaces, session }), storage: named });
+    await page.waitForSelector("#options .ruled-out");
+    const text = await page.textContent("#options .ruled-out");
+    assert(text.includes("RULED OUT") && text.includes("group’s filters"), `${mode}: ${text}`);
+    if (mode === "vote") assert(await page.locator("#options .ruled-out").isDisabled(), "can't vote for it");
+    assert(!errors.length, errors.join("; "));
+    await context.close();
+  }
+});
+
+await test("Organizer turns a filter on after the page loaded: the add is refused", async () => {
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ places: basePlaces }), storage: named });
+  await page.waitForFunction(() => window.__mk.calls.length >= 5);
+  await page.click("#suggest-open");
+  // Sneak the filter in without telling the page (as if the snapshot hadn't landed yet).
+  await page.evaluate(() => { window.__fake.docs.get("sessions/s1").groupFilters = { noFastFood: true }; });
+  await page.click("#suggest-results .result[data-id^=\"mcdonald\"]");
+  await page.waitForFunction(() => document.querySelector("#suggest-status").textContent.includes("isn’t allowed"));
+  assert((await page.evaluate(() => window.__fake.get("sessions/s1").options.length)) === 0, "not added");
+  await context.close();
+});
+
 export { browser, base, setupScript, basePlaces, named, P, near, LEX, HOUR };
 if (!process.env.MORE_TESTS) {
   const failed = summary();

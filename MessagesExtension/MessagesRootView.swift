@@ -74,6 +74,12 @@ struct NewVoteView: View {
 
     @State private var setup: SetupMode = .vote
     @State private var title = ""
+    /// Vote and Spin our picks: No fast food / No coffee & sweets for everyone (off by default).
+    @State private var groupFilters = GroupFilters()
+    private var usesGroupFilters: Bool { setup == .vote || setup == .spin }
+    private var picksBreakingFilters: [Place] {
+        usesGroupFilters ? selected.filter { !groupFilters.allows($0) } : []
+    }
     @State private var closesIn: Int? = nil
     @State private var sendTaps = 0
     // Surprise us (its own area, so switching modes doesn't mix them up)
@@ -161,6 +167,20 @@ struct NewVoteView: View {
                     )
                 case .vote, .spin, .plan:
                     placesSections
+                    if usesGroupFilters {
+                        Section {
+                            GroupFiltersRow(filters: $groupFilters)
+                        } footer: {
+                            if let place = picksBreakingFilters.first {
+                                Text("\(place.name) doesn’t fit these filters. Remove it or turn the filter off.")
+                                    .foregroundStyle(Theme.danger)
+                            } else {
+                                Text(groupFilters.isActive ? "Friends can’t add places that break these."
+                                                           : "Off unless you turn them on.")
+                            }
+                        }
+                        .listRowBackground(Theme.surface)
+                    }
                     if setup == .plan {
                         PlanSetupRows(meetTime: $meetTime, note: $note, asksRSVP: $asksRSVP,
                                       hasReplyBy: $hasReplyBy, replyBy: $replyBy)
@@ -248,6 +268,7 @@ struct NewVoteView: View {
         }
         .listRowBackground(Theme.surface)
         MessagePlacePicker(query: query, excludeFastFood: excludeFastFood,
+                           groupFilters: usesGroupFilters && groupFilters.isActive ? groupFilters : nil,
                            accessory: { .check(isOn: selected.contains($0)) },
                            isDisabled: { setup == .vote && !selected.contains($0) && selected.count >= maxOptions },
                            onAreaChange: { pickedArea = $0 },
@@ -295,6 +316,7 @@ struct NewVoteView: View {
 
     private var statusLine: String {
         if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return "Pick a time that hasn’t passed" }
+        if !picksBreakingFilters.isEmpty { return "A place doesn’t fit your group filters" }
         switch setup {
         case .vote:
             if selected.count < 2 { return "Add at least 2 places" }
@@ -314,6 +336,7 @@ struct NewVoteView: View {
 
     private var canSend: Bool {
         if setup != .plan && hasTime && meetTime.timeIntervalSinceNow <= 0 { return false }
+        if !picksBreakingFilters.isEmpty { return false }
         switch setup {
         case .vote: return selected.count >= 2
         case .spin: return selected.count >= 1
@@ -371,7 +394,8 @@ struct NewVoteView: View {
                     rsvpBy: isPlan && asksRSVP && hasReplyBy ? PlanSetupRows.clampedReplyBy(replyBy, meetTime: meetTime) : nil,
                     surprise: setup == .surprise,
                     // Everyone in this chat: "3 of 5 picks in" from the start.
-                    expectedCount: state.conversationSize
+                    expectedCount: state.conversationSize,
+                    groupFilters: usesGroupFilters ? groupFilters : nil
                 )
                 state.insertNewVote(session, includeWebLink: includeWebLink)
                 selected = []
@@ -465,6 +489,7 @@ struct MessageVoteView: View {
                             .font(Theme.body(14, .semibold))
                             .foregroundStyle(Theme.accentText)
                     }
+                    GroupFiltersLine(session: session)
 
                     if let winner = session.winner {
                         decidedSection(session, winner: winner)
@@ -622,6 +647,9 @@ struct MessageVoteView: View {
         if live.isOwner && session.countsPeople && session.acceptsChanges && session.expectedCount != nil {
             ExpectedCountCard(session: session, joined: live.members.count)
         }
+        if live.isOwner && session.countsPeople && session.acceptsChanges {
+            GroupFiltersCard(session: session)
+        }
         if session.mode == .spin && !session.isSurprise {
             SpinProgressLine(waiting: live.waitingOnPicks, memberCount: live.members.count,
                              picksIn: live.picksIn, headcount: live.headcount, notJoined: live.notJoinedYet)
@@ -639,7 +667,8 @@ struct MessageVoteView: View {
                           isEnabled: !isWorking && session.mode == .vote && open
                               && (!ruledOut.contains(option.id) || live.myVote == option.id),
                           showsVotes: session.mode == .vote,
-                          isRuledOut: ruledOut.contains(option.id)) {
+                          isRuledOut: ruledOut.contains(option.id),
+                          ruledOutReason: live.ruledOutReason(option.id)) {
                 vote(option, session: session)
             }
         }
@@ -959,6 +988,7 @@ struct MessageAddPlaceView: View {
                                    groupBlockedHashes: groupBlockedHashes,
                                    sessionID: session.id,
                                    groupArea: session.area,
+                                   groupFilters: session.groupFilters,
                                    accessory: { .add(isBusy: adding == $0.id) },
                                    isDisabled: { _ in adding != nil },
                                    onTap: add)
@@ -1003,6 +1033,8 @@ struct MessagePlacePicker: View {
     /// The group's area (set by its creator): start there instead of the
     /// app's last search area.
     var groupArea: GroupArea?
+    /// The organizer's group filters (hidden from the lists; greyed in a name search).
+    var groupFilters: GroupFilters? = nil
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
     var onAreaChange: (PickerArea?) -> Void = { _ in }
@@ -1035,6 +1067,7 @@ struct MessagePlacePicker: View {
             excludedIDs: excludedIDs,
             groupBlockedHashes: groupBlockedHashes,
             sessionID: sessionID,
+            groupFilters: groupFilters,
             accessory: accessory,
             isDisabled: isDisabled,
             onAreaChange: onAreaChange,

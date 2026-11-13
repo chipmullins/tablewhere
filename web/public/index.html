@@ -55,6 +55,7 @@
     .winner .label { font-size: 12px; font-weight: 800; letter-spacing: .1em; }
     .winner h2 { font: 800 32px/1.05 Outfit, sans-serif; margin: 8px 0; }
     .meet-line { margin: 2px 0 6px; font-weight: 700; color: var(--saffron); }
+    .filters-line { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--saffron); }
     .app-pitch { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface); font-size: 14px; }
     .app-pitch b { display: block; margin-bottom: 2px; }
     /* The spin reveal (same as the app's): names cycle and slow, then land. */
@@ -168,6 +169,7 @@
     <section id="vote-step" hidden>
       <h1 id="title"></h1>
       <p id="meet-line" class="meet-line" hidden></p>
+      <p id="filters-line" class="filters-line" hidden></p>
       <p class="muted" id="status"></p>
       <p class="muted" style="margin:4px 0 0;font-size:13px"><span id="you-are"></span> <button class="linkish" id="change-name" type="button">Not you? Change name</button></p>
       <div class="card pick-confirm" id="pick-confirm" role="status" hidden>

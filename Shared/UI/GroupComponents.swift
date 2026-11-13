@@ -63,6 +63,8 @@ struct VoteOptionRow: View {
     var showsVotes: Bool = true
     /// Someone in the group blacklisted it: shown, but it can't win.
     var isRuledOut: Bool = false
+    /// Why, when it isn't a blacklist ("Doesn’t fit the group’s filters").
+    var ruledOutReason: String? = nil
     let action: () -> Void
 
     @State private var taps = 0
@@ -108,7 +110,7 @@ struct VoteOptionRow: View {
                                     .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 5))
                             }
                         }
-                        Text(isRuledOut ? "Someone in the group blacklisted it, so it can’t win"
+                        Text(isRuledOut ? "\(ruledOutReason ?? "Someone in the group blacklisted it"), so it can’t win"
                              : voters.isEmpty ? "\(option.category) · added by \(option.addedBy)" : shortVoterList(voters))
                             .font(Theme.body(12))
                             .foregroundStyle(Theme.muted)
@@ -157,7 +159,7 @@ struct VoteOptionRow: View {
             if isMine { parts.append("your vote") }
         }
         if isRuledOut {
-            parts.append("ruled out, someone in the group blacklisted it")
+            parts.append("ruled out, \(ruledOutReason?.lowercased() ?? "someone in the group blacklisted it")")
         } else if showsVotes && !voters.isEmpty {
             parts.append("voted by \(voters.joined(separator: ", "))")
         } else {
@@ -571,7 +573,7 @@ struct VoteNotices: View {
                        systemImage: "timer")
             }
             if everythingRuledOut {
-                notice("Someone has every place here blacklisted, so they’re all back in.", systemImage: "arrow.uturn.backward")
+                notice("Every place here is ruled out (a blacklist or the group’s filters), so they’re all back in.", systemImage: "arrow.uturn.backward")
             }
             if myVoteIsRuledOut && session.acceptsChanges {
                 notice("Your vote is on a place someone ruled out, so it can’t win. Tap another place.",

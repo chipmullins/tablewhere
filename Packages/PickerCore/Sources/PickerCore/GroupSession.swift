@@ -87,6 +87,48 @@ public struct GroupArea: Codable, Hashable, Sendable {
     }
 }
 
+/// Filters the organizer turned on for everyone's picks (1.1). Off by
+/// default. Places that break them can't be added from 1.1 pickers, and any
+/// that get in anyway (older apps, a stale web page) count as ruled out.
+public struct GroupFilters: Codable, Hashable, Sendable {
+    public var noFastFood: Bool
+    public var noCoffeeSweets: Bool
+
+    public init(noFastFood: Bool = false, noCoffeeSweets: Bool = false) {
+        self.noFastFood = noFastFood
+        self.noCoffeeSweets = noCoffeeSweets
+    }
+
+    public var isActive: Bool { noFastFood || noCoffeeSweets }
+
+    /// Why this place isn't allowed ("no fast food"), or nil if it's fine.
+    public func rule(name: String, category: String) -> String? {
+        if noFastFood && (FastFood.isFastFood(name) || category == "Fast food") { return "no fast food" }
+        if noCoffeeSweets && CoffeeAndSweets.matches(name: name, category: category) { return "no coffee & sweets" }
+        return nil
+    }
+
+    public func allows(_ place: Place) -> Bool { rule(name: place.name, category: place.category) == nil }
+
+    /// "No fast food in this group", "No fast food or coffee & sweets in this group", or nil.
+    public var summary: String? {
+        switch (noFastFood, noCoffeeSweets) {
+        case (true, true): return "No fast food or coffee & sweets in this group"
+        case (true, false): return "No fast food in this group"
+        case (false, true): return "No coffee & sweets in this group"
+        default: return nil
+        }
+    }
+
+    // Missing keys decode as off (forward and backward compatible).
+    enum CodingKeys: String, CodingKey { case noFastFood, noCoffeeSweets }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        noFastFood = (try? c.decodeIfPresent(Bool.self, forKey: .noFastFood)) ?? false
+        noCoffeeSweets = (try? c.decodeIfPresent(Bool.self, forKey: .noCoffeeSweets)) ?? false
+    }
+}
+
 /// One group decision: "Friday dinner".
 public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     public var id: String
@@ -127,6 +169,8 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
     /// chat's size, or what the creator set ("How many are eating?"). Only the
     /// creator writes it (rules). Nil: unknown, so count people as they join.
     public var expectedCount: Int?
+    /// No fast food / No coffee & sweets, set by the creator (1.1). Nil: none.
+    public var groupFilters: GroupFilters?
 
     public init(id: String, title: String, joinCode: String, createdBy: String,
                 createdByName: String, createdAt: Date = Date(), closesAt: Date? = nil,
@@ -134,7 +178,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
                 winnerID: String? = nil, meetTime: Date? = nil, picksBy: [String: String]? = nil,
                 note: String? = nil, area: GroupArea? = nil,
                 asksRSVP: Bool? = nil, rsvpBy: Date? = nil, surprise: Bool? = nil,
-                expectedCount: Int? = nil) {
+                expectedCount: Int? = nil, groupFilters: GroupFilters? = nil) {
         self.id = id
         self.title = title
         self.joinCode = joinCode
@@ -154,6 +198,7 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
         self.rsvpBy = rsvpBy
         self.surprise = surprise
         self.expectedCount = expectedCount
+        self.groupFilters = groupFilters
     }
 
     /// What "How many are eating?" allows (the Firestore rules check the same).
@@ -251,8 +296,23 @@ public struct GroupSession: Codable, Hashable, Identifiable, Sendable {
 
     private func blockedOptionIDs(members: [GroupMember]) -> Set<String> {
         let blocked = Set(members.flatMap { $0.blockedHashes ?? [] })
-        guard !blocked.isEmpty else { return [] }
-        return Set(options.map(\.id).filter { blocked.contains(GroupBlacklist.hash(placeID: $0, sessionID: id)) })
+        var ids = filteredOutIDs
+        guard !blocked.isEmpty else { return ids }
+        ids.formUnion(options.map(\.id).filter { blocked.contains(GroupBlacklist.hash(placeID: $0, sessionID: id)) })
+        return ids
+    }
+
+    /// Places that break the group's filters (picked on an older app or a
+    /// stale web page). Ruled out like blacklisted places.
+    public var filteredOutIDs: Set<String> {
+        guard let groupFilters, groupFilters.isActive else { return [] }
+        return Set(options.filter { groupFilters.rule(name: $0.name, category: $0.category) != nil }.map(\.id))
+    }
+
+    /// The group's filters' reason this place can't be added ("no fast food"), or nil.
+    public func filterRule(for place: Place) -> String? {
+        guard mode != .plan, !isSurprise else { return nil }
+        return groupFilters?.rule(name: place.name, category: place.category)
     }
 
     /// The vote leader among places that can still win (nil if tied or no votes).

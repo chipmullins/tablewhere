@@ -12,6 +12,8 @@ enum GroupError: LocalizedError {
     case optionsFull
     case alreadyPicked
     case closed
+    /// The organizer's group filters don't allow it ("no fast food").
+    case notAllowed(String)
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +24,7 @@ enum GroupError: LocalizedError {
         case .optionsFull: return "This pick already has 12 places, the most it can hold."
         case .alreadyPicked: return "You’ve already added your pick. Everyone gets one."
         case .closed: return "This pick is locked in, so places can’t be added or changed."
+        case .notAllowed(let rule): return "That place isn’t allowed in this group (\(rule))."
         }
     }
 }
@@ -64,7 +67,8 @@ final class GroupService {
                        area: GroupArea? = nil,
                        meetTime: Date? = nil, note: String? = nil,
                        asksRSVP: Bool = false, rsvpBy: Date? = nil,
-                       surprise: Bool = false, expectedCount: Int? = nil) async throws -> GroupSession {
+                       surprise: Bool = false, expectedCount: Int? = nil,
+                       groupFilters: GroupFilters? = nil) async throws -> GroupSession {
         let uid = try await userID()
         let code = try await unusedJoinCode()
         let ref = db.collection("sessions").document()
@@ -95,7 +99,8 @@ final class GroupService {
             asksRSVP: mode == .plan && asksRSVP ? true : nil,
             rsvpBy: mode == .plan && asksRSVP ? rsvpBy : nil,
             surprise: mode == .spin && surprise ? true : nil,
-            expectedCount: Self.clampedExpected(expectedCount, mode: mode, surprise: surprise)
+            expectedCount: Self.clampedExpected(expectedCount, mode: mode, surprise: surprise),
+            groupFilters: Self.cleanFilters(groupFilters, mode: mode, surprise: surprise)
         )
         var data = try Firestore.Encoder().encode(session)
         if mode == .plan { data["announced"] = true }
@@ -112,6 +117,21 @@ final class GroupService {
         case .plan: UsageStats.record(.groupsPlan)
         }
         return session
+    }
+
+    /// Group filters only apply where friends add picks (Vote, Spin our
+    /// picks), and only when one is on.
+    nonisolated static func cleanFilters(_ filters: GroupFilters?, mode: GroupMode, surprise: Bool) -> GroupFilters? {
+        guard let filters, filters.isActive, mode == .vote || (mode == .spin && !surprise) else { return nil }
+        return filters
+    }
+
+    /// The organizer changes the group filters while it's open (creator only).
+    func setGroupFilters(sessionID: String, filters: GroupFilters) async throws {
+        let value: Any = filters.isActive
+            ? ["noFastFood": filters.noFastFood, "noCoffeeSweets": filters.noCoffeeSweets]
+            : FieldValue.delete()
+        try await sessionRef(sessionID).updateData(["groupFilters": value])
     }
 
     /// Only for plans that wait on everyone, within the allowed range.
@@ -284,11 +304,18 @@ final class GroupService {
         let data = try Firestore.Encoder().encode(option)
         let optionID = option.id
         let name = option.name, lat = option.latitude, lon = option.longitude
+        let category = option.category
         _ = try await db.runTransaction { transaction, errorPointer in
             do {
                 let snapshot = try transaction.getDocument(ref)
                 guard snapshot.exists, let fields = snapshot.data() else { throw GroupError.sessionNotFound }
                 guard fields["status"] as? String == GroupStatus.open.rawValue else { throw GroupError.closed }
+                // The organizer may have turned a filter on after the picker opened.
+                if let filters = fields["groupFilters"] as? [String: Any] {
+                    let rules = GroupFilters(noFastFood: filters["noFastFood"] as? Bool ?? false,
+                                             noCoffeeSweets: filters["noCoffeeSweets"] as? Bool ?? false)
+                    if let rule = rules.rule(name: name, category: category) { throw GroupError.notAllowed(rule) }
+                }
                 let existing = fields["options"] as? [[String: Any]] ?? []
                 let picks = fields["picksBy"] as? [String: String] ?? [:]
                 let isOwner = fields["createdBy"] as? String == uid

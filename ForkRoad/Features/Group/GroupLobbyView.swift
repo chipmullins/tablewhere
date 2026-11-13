@@ -268,6 +268,7 @@ struct GroupLobbyView: View {
                             .font(Theme.body(15, .semibold))
                             .foregroundStyle(Theme.accentText)
                     }
+                    GroupFiltersLine(session: session)
                 }
                 Spacer()
                 VStack(spacing: 2) {
@@ -351,6 +352,7 @@ struct GroupLobbyView: View {
         }
         if live.isOwner && session.countsPeople && session.acceptsChanges {
             ExpectedCountCard(session: session, joined: live.members.count)
+            GroupFiltersCard(session: session)
         }
 
         let tally = live.tally
@@ -385,7 +387,8 @@ struct GroupLobbyView: View {
                     isEnabled: session.mode == .vote && open && !isWorking
                         && (!ruledOut.contains(option.id) || live.myVote == option.id),
                     showsVotes: session.mode == .vote,
-                    isRuledOut: ruledOut.contains(option.id)
+                    isRuledOut: ruledOut.contains(option.id),
+                    ruledOutReason: live.ruledOutReason(option.id)
                 ) {
                     vote(for: option, in: session)
                 }
@@ -952,6 +955,7 @@ private struct AddOptionView: View {
                     excludedIDs: Set(session.options.map(\.id)),
                     groupBlockedHashes: groupBlockedHashes,
                     sessionID: session.id,
+                    groupFilters: session.groupFilters,
                     search: model.placeSearch,
                     accessory: { .add(isBusy: adding == $0.id) },
                     isDisabled: { _ in adding != nil },

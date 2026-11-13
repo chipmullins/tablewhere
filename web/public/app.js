@@ -70,6 +70,7 @@ function groupBlocked() {
   return new Set(members.flatMap((m) => Array.isArray(m.blockedHashes) ? m.blockedHashes : []));
 }
 let ruledOut = new Set();
+let filteredOut = new Set();   // the part of ruledOut that's the group's filters
 let everythingRuledOut = false;
 
 // A timed vote whose time is up (it stays "open" until the creator locks it in).
@@ -79,20 +80,25 @@ function isTimeUp() {
 }
 function acceptsChanges() { return session.status === "open" && !isTimeUp(); }
 async function refreshRuledOut() {
-  if (!globalThis.crypto?.subtle) return;  // only on https; the live page always is
-  const blocked = groupBlocked();
-  const next = new Set();
-  if (blocked.size && session) {
+  if (!session) return;
+  // Places that break the organizer's group filters (added on an older app or
+  // a page opened before the filter was turned on): ruled out, like the app.
+  const filtered = new Set((session.options || []).filter((o) => groupFilterRule(o)).map((o) => o.id));
+  const next = new Set(filtered);
+  const blocked = globalThis.crypto?.subtle ? groupBlocked() : new Set();  // hashing needs https; the live page always is
+  if (blocked.size) {
     for (const o of session.options || []) {
       if (blocked.has(await blockedHash(o.id))) next.add(o.id);
     }
   }
-  // If someone has every place blacklisted, they all count again.
+  // If every place is ruled out, they all count again.
   const all = next.size > 0 && next.size === (session.options || []).length;
   const effective = all ? new Set() : next;
   const changed = all !== everythingRuledOut || effective.size !== ruledOut.size
-    || [...effective].some((id) => !ruledOut.has(id));
+    || [...effective].some((id) => !ruledOut.has(id))
+    || filtered.size !== filteredOut.size || [...filtered].some((id) => !filteredOut.has(id));
   ruledOut = effective;
+  filteredOut = all ? new Set() : filtered;
   everythingRuledOut = all;
   if (changed) render();
 }
@@ -518,11 +524,12 @@ function renderVote() {
 
   $("title").textContent = session.title;
   showMeetLine();
+  showFiltersLine();
   $("status").textContent = statusText();
   const closed = !acceptsChanges();
   const notes = [];
   if (isTimeUp()) notes.push(`Time’s up! ${session.createdByName || "The organizer"} will lock it in.`);
-  if (everythingRuledOut) notes.push("Someone has every place here blacklisted, so they’re all back in.");
+  if (everythingRuledOut) notes.push("Every place here is ruled out (a blacklist or the group’s filters), so they’re all back in.");
   if (mine && ruledOut.has(mine) && !closed) notes.push("Your vote is on a place someone ruled out, so it can’t win. Tap another place.");
   if (!closed) notes.push("Tap a place to vote. Tap it again to take your vote back. The winner shows up right here, and ties are broken fairly.");
   $("vote-help").textContent = notes.join(" ");
@@ -560,7 +567,7 @@ function renderVote() {
     }
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = out ? "Someone in the group blacklisted it, so it can’t win"
+    sub.textContent = out ? (filteredOut.has(option.id) ? "Doesn’t fit the group’s filters, so it can’t win" : "Someone in the group blacklisted it, so it can’t win")
       : (t.voters[option.id] || []).join(", ") || `${option.category} · added by ${option.addedBy}`;
     text.append(nameEl, sub);
     const countEl = document.createElement("div");
@@ -599,6 +606,7 @@ function showMeetLine() {
 function renderSpin() {
   $("title").textContent = session.title;
   showMeetLine();
+  showFiltersLine();
   $("status").textContent = statusText();
   const me = (myName() || "").trim().toLowerCase();
   const creator = session.createdByName || "Whoever started it";
@@ -648,7 +656,7 @@ function renderSpin() {
     if (out) card.classList.add("ruled-out");
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = out ? `Added by ${option.addedBy} · someone in the group blacklisted it, so the spin skips it`
+    sub.textContent = out ? `Added by ${option.addedBy} · ${filteredOut.has(option.id) ? "doesn’t fit the group’s filters" : "someone in the group blacklisted it"}, so the spin skips it`
       : isSurprise() ? option.category : `${option.category} · added by ${option.addedBy}`;
     text.append(nameEl, sub);
     row.append(tile, text);
@@ -1645,9 +1653,30 @@ function sameOption(a, b) {
   return a.name.trim().toLowerCase() === b.name.trim().toLowerCase()
     && milesBetween({ lat: a.latitude, lon: a.longitude }, { lat: b.latitude, lon: b.longitude }) < 0.1;
 }
-/** Why the group's filters don't allow this place ("no fast food"), or null. */
-function groupFilterRule(option) {
+/** Why the group's filters don't allow this place ("no fast food"), or null.
+ * Same as GroupFilters.rule in the app (food-filters.js is generated from its lists). */
+function groupFilterRule(option, plan = session) {
+  const f = plan?.groupFilters;
+  if (!f || typeof f !== "object" || plan.mode === "plan" || (plan.mode === "spin" && plan.surprise === true)) return null;
+  if (f.noFastFood === true && (isFastFood(option.name) || option.category === "Fast food")) return "no fast food";
+  if (f.noCoffeeSweets === true && isCoffeeOrSweets(option.name, option.category || "")) return "no coffee & sweets";
   return null;
+}
+
+/** "No fast food in this group", or null. */
+function groupFiltersSummary() {
+  const f = session?.groupFilters;
+  if (!f || isSurprise() || isPlan() || !acceptsChanges()) return null;
+  if (f.noFastFood === true && f.noCoffeeSweets === true) return "No fast food or coffee & sweets in this group";
+  if (f.noFastFood === true) return "No fast food in this group";
+  if (f.noCoffeeSweets === true) return "No coffee & sweets in this group";
+  return null;
+}
+
+function showFiltersLine() {
+  const text = groupFiltersSummary();
+  $("filters-line").hidden = !text;
+  $("filters-line").textContent = text ? `⛔︎ ${text}` : "";
 }
 
 function isTaken(option) {
@@ -1668,6 +1697,9 @@ async function addOption(option) {
       const options = data.options || [];
       const closes = data.closesAt?.toDate ? data.closesAt.toDate() : null;
       if (data.status !== "open" || (closes && closes <= Date.now())) throw new Error("closed");
+      // The organizer may have turned a filter on after this page loaded.
+      const rule = groupFilterRule(option, data);
+      if (rule) throw Object.assign(new Error("notAllowed"), { rule });
       const oldPick = (data.picksBy || {})[uid];
       const others = options.filter((o) => !oldPick || o.id !== oldPick);
       if (others.some((o) => sameOption(o, option))) throw new Error("duplicate");
@@ -1694,6 +1726,7 @@ async function addOption(option) {
       closed: "Voting has closed, so places can’t be added.",
       ended: "This group plan has ended.",
       picked: "You’ve already added your pick. Everyone gets one.",
+      notAllowed: `That place isn’t allowed in this group (${error?.rule}).`,
     };
     setStatus(messages[error?.message] || "Couldn’t add it. Check your connection and try again.", true);
     // Let them pick something else (places already in the vote stay disabled).

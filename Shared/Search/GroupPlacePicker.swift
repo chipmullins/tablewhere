@@ -68,6 +68,9 @@ struct GroupPlacePicker: View {
     /// places anyone in the group blacklisted are hidden.
     var groupBlockedHashes: Set<String> = []
     var sessionID: String?
+    /// The organizer's group filters (No fast food / No coffee & sweets):
+    /// places that break them are hidden, and a name search shows them greyed.
+    var groupFilters: GroupFilters? = nil
     var search: PlaceSearching = MapKitPlaceSearch()
     let accessory: (Place) -> PlacePickerAccessory
     var isDisabled: (Place) -> Bool = { _ in false }
@@ -110,15 +113,23 @@ struct GroupPlacePicker: View {
 
     /// `chosen`: your saved lists or a name search, where a coffee shop is
     /// there on purpose (No coffee & sweets only trims nearby results).
-    private func available(_ places: [Place], chosen: Bool = false) -> [Place] {
+    /// `keepsFiltered`: a name search, where places the group filters don't
+    /// allow stay in the list (greyed) so you know why yours isn't there.
+    private func available(_ places: [Place], chosen: Bool = false, keepsFiltered: Bool = false) -> [Place] {
         var rules = self.rules
         if chosen { rules.excludeCoffeeAndSweets = false }
         return Randomizer.eligible(places, rules: rules).filter { place in
             if excludedIDs.contains(place.id) { return false }
+            if !keepsFiltered && filterRule(place) != nil { return false }
             if let sessionID, !groupBlockedHashes.isEmpty,
                groupBlockedHashes.contains(GroupBlacklist.hash(placeID: place.id, sessionID: sessionID)) { return false }
             return true
         }
+    }
+
+    /// Why the group's filters don't allow this place ("no fast food"), or nil.
+    private func filterRule(_ place: Place) -> String? {
+        groupFilters?.rule(name: place.name, category: place.category)
     }
 
     var body: some View {
@@ -128,12 +139,12 @@ struct GroupPlacePicker: View {
             Section {
                 if isSearching && results.isEmpty {
                     skeletonRows
-                } else if !isSearching && searchedQuery == trimmedQuery && available(results, chosen: true).isEmpty {
+                } else if !isSearching && searchedQuery == trimmedQuery && available(results, chosen: true, keepsFiltered: true).isEmpty {
                     statusRow("No restaurants found for “\(trimmedQuery)”. Try a broader word like “pizza.”")
                 }
-                ForEach(available(results, chosen: true)) { place in
+                ForEach(available(results, chosen: true, keepsFiltered: true)) { place in
                     Button { onTap(place) } label: { row(place) }
-                        .disabled(isDisabled(place))
+                        .disabled(isDisabled(place) || filterRule(place) != nil)
                 }
             } header: {
                 Text("Results")
@@ -201,9 +212,10 @@ struct GroupPlacePicker: View {
         } header: {
             Text("Filters")
         } footer: {
-            if !groupBlockedHashes.isEmpty {
-                Text("Places anyone in the group has blacklisted are hidden.")
-            }
+            let notes = [groupFilters?.summary.map { "\($0), so those places are hidden." },
+                         groupBlockedHashes.isEmpty ? nil : "Places anyone in the group has blacklisted are hidden."]
+                .compactMap { $0 }
+            if !notes.isEmpty { Text(notes.joined(separator: " ")) }
         }
 
         let near = available(nearby)
@@ -294,26 +306,31 @@ struct GroupPlacePicker: View {
 
     private func row(_ place: Place) -> some View {
         let kind = accessory(place)
+        let rule = filterRule(place)
         return HStack(spacing: 12) {
             MonogramTile(name: place.name, category: place.category, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.name).foregroundStyle(Theme.text)
-                Text("\(place.category) · \(place.distanceLabel)")
+                Text(rule.map { "Not allowed in this group (\($0))" } ?? "\(place.category) · \(place.distanceLabel)")
                     .font(Theme.body(12))
                     .foregroundStyle(Theme.muted)
             }
             Spacer()
-            switch kind {
-            case .check(let isOn):
-                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(Theme.body(22))
-                    .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
-                    .accessibilityHidden(true)
-            case .add(let isBusy):
-                if isBusy { ProgressView() }
-                else { Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText) }
+            // Not allowed in this group: no check or plus to tap.
+            if rule == nil {
+                switch kind {
+                case .check(let isOn):
+                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                        .font(Theme.body(22))
+                        .foregroundStyle(isOn ? Theme.accentText : Theme.muted.opacity(0.5))
+                        .accessibilityHidden(true)
+                case .add(let isBusy):
+                    if isBusy { ProgressView() }
+                    else { Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentText) }
+                }
             }
         }
+        .opacity(rule == nil ? 1 : 0.5)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected(place) ? .isSelected : [])
         // Per row, from its own state, so only the tapped row plays: a tick

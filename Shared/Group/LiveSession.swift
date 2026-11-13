@@ -37,6 +37,13 @@ final class LiveSession {
     /// Places someone in the group blacklisted (they can't win).
     var ruledOutIDs: Set<String> { session?.ruledOutIDs(members: members) ?? [] }
 
+    /// Why a ruled-out place can't win, when it's the group's filters (nil:
+    /// a blacklist, which never says whose).
+    func ruledOutReason(_ optionID: String) -> String? {
+        guard ruledOutIDs.contains(optionID), session?.filteredOutIDs.contains(optionID) == true else { return nil }
+        return "Doesn’t fit the group’s filters"
+    }
+
     /// Someone's blacklist covers every place, so they're all back in.
     var everythingRuledOut: Bool { session?.everythingRuledOut(members: members) ?? false }
 

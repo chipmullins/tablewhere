@@ -49,10 +49,21 @@ service cloud.firestore {
           || (data.expectedCount is int && data.expectedCount >= 2 && data.expectedCount <= 30);
       }
 
+      // Group filters (1.1): optional, only these two keys, both bools.
+      // Only the creator writes them (creating, or the creator's updates).
+      function validFilters(data) {
+        return !('groupFilters' in data) || data.groupFilters == null
+          || (data.groupFilters is map
+              && data.groupFilters.keys().hasOnly(['noFastFood', 'noCoffeeSweets'])
+              && data.groupFilters.get('noFastFood', false) is bool
+              && data.groupFilters.get('noCoffeeSweets', false) is bool);
+      }
+
       // You can only create a session as yourself.
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid
         && validExpected(request.resource.data)
+        && validFilters(request.resource.data)
         && (request.resource.data.status == 'open' || isNewPlan(request.resource.data))
         && request.resource.data.options.size() <= 12;
 
@@ -104,7 +115,8 @@ service cloud.firestore {
       // place and record it under their own ID in picksBy. A second add fails,
       // but they can swap their pick for another place.
       allow update: if signedIn() && (
-        (resource.data.createdBy == request.auth.uid && validExpected(request.resource.data))
+        (resource.data.createdBy == request.auth.uid && validExpected(request.resource.data)
+          && validFilters(request.resource.data))
         || addsMyOnePick()
         || changesMyPick()
       );
