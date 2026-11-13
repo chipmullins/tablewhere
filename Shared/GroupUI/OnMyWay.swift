@@ -16,8 +16,11 @@ enum OnMyWay {
 
     /// Live updates while driving. Set by the app at launch; nil in the
     /// iMessage app, which can't run in the background.
-    static var liveTracker: ((_ sessionID: String, _ destination: CLLocationCoordinate2D, _ meetTime: Date) -> Void)?
-    static var stopTracker: ((_ sessionID: String) -> Void)?
+    static var liveTracker: (@MainActor (_ sessionID: String, _ destination: CLLocationCoordinate2D, _ meetTime: Date) -> Void)?
+    static var stopTracker: (@MainActor (_ sessionID: String) -> Void)?
+    /// You arrived (tracker, "I'm here", or tapping On my way at the door):
+    /// the app takes the Lock Screen countdown down if set to "When I arrive".
+    static var onArrived: (@MainActor (_ sessionID: String) -> Void)?
 
     /// The last thing you shared per plan, so a live refresh keeps "late".
     private(set) static var shared: [String: (status: GroupETA.Status, lateMinutes: Int?, lateNote: String?)] = [:]
@@ -33,7 +36,8 @@ enum OnMyWay {
     @discardableResult
     static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date) async throws -> Date? {
         var eta: Date?
-        if await OneShotLocation.shared.requestPermission(), let here = await OneShotLocation.shared.current() {
+        let allowed = await OneShotLocation.shared.requestPermission()
+        if allowed, let here = await OneShotLocation.shared.current() {
             let distance = CLLocation(latitude: here.latitude, longitude: here.longitude)
                 .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))
             if distance <= arrivalMeters {
@@ -44,7 +48,8 @@ enum OnMyWay {
         }
         shared[sessionID] = (.onTheWay, nil, nil)
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: .onTheWay, leftAt: Date())
-        liveTracker?(sessionID, destination, meetTime)
+        // Live updates need location; without it you're "on the way" with no time.
+        if allowed { liveTracker?(sessionID, destination, meetTime) }
         return eta
     }
 
@@ -68,7 +73,11 @@ enum OnMyWay {
     /// You're there (by tapping "I'm here", or the live tracker noticing).
     static func arrived(sessionID: String) async throws {
         shared[sessionID] = (.arrived, nil, nil)
-        stopTracker?(sessionID)
+        // Share first: stopping the tracker cancels the task this may be running in.
+        defer {
+            stopTracker?(sessionID)
+            onArrived?(sessionID)
+        }
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: Date(), status: .arrived)
     }
 

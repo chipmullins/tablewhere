@@ -28,7 +28,8 @@ extension LeaveBy {
             guard snapshot.exists, let session = try? snapshot.data(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
                   let meet = session.meetTime,
-                  meet.timeIntervalSinceNow > -max(LiveActivities.linger, 60) else {
+                  // Not before "On my way" is done (meet + 30 min, running late).
+                  meet.timeIntervalSinceNow > -max(LiveActivities.linger, OnMyWayLive.stopAfterMeet) else {
                 cancel(sessionID: id)
                 continue
             }

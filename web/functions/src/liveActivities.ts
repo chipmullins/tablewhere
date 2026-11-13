@@ -260,6 +260,27 @@ export async function endAllNow(sessionRef: DocumentReference): Promise<void> {
   }));
 }
 
+/**
+ * The plan was ended (its doc deleted). Devices docs are private (the
+ * creator's app can't list them), so the server ends any countdowns and
+ * deletes them, plus any arrival times left behind.
+ */
+export async function planDeleted(sessionRef: DocumentReference): Promise<void> {
+  const devices = await sessionRef.collection("devices").get();
+  const now = Date.now();
+  await Promise.all(devices.docs.map(async (device) => {
+    const d = device.data();
+    const meet = activityMeet(d);
+    if (meet !== undefined && millis(d.laEndedFor) !== meet) {
+      // Mark it ended first, so the delete below doesn't send a second end push.
+      await device.ref.update({ laEndedFor: meet }).catch(() => {});
+      await endFor(sessionRef.id, device.ref, d, undefined, now, now);
+    }
+    await device.ref.delete().catch(() => {});
+  }));
+  await deleteArrivals(sessionRef);
+}
+
 /** The meet time moved: countdowns already up follow it. */
 export async function meetTimeChanged(sessionRef: DocumentReference, oldMeet: number, newMeet: number): Promise<void> {
   const devices = await sessionRef.collection("devices").get();

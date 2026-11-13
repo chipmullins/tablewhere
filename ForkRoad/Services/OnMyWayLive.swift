@@ -23,6 +23,7 @@ enum OnMyWayLive {
     private static var sessions: [String: CLBackgroundActivitySession] = [:]
     /// Which run owns a plan's entries (a stopped run can't clear a newer one).
     private static var runs: [String: UUID] = [:]
+    private static var deadlines: [String: Task<Void, Never>] = [:]
 
     static func install() {
         OnMyWay.liveTracker = { sessionID, destination, meetTime in
@@ -51,8 +52,8 @@ enum OnMyWayLive {
                     if Task.isCancelled || stopAt.timeIntervalSinceNow <= 0 { break }
                     guard let here = update.location, here.horizontalAccuracy >= 0, here.horizontalAccuracy < 200 else { continue }
                     if here.distance(from: place) <= OnMyWay.arrivalMeters {
+                        // Also takes the countdown down ("When I arrive"), via OnMyWay.onArrived.
                         try? await OnMyWay.arrived(sessionID: sessionID)
-                        await LiveActivities.arrived(sessionID: sessionID)
                         break
                     }
                     let moved = lastSentFrom.map { here.distance(from: $0) } ?? .greatestFiniteMagnitude
@@ -71,10 +72,20 @@ enum OnMyWayLive {
             }
             if runs[sessionID] == run { finish(sessionID) }
         }
+        // Updates stop while you're parked (and never come with location
+        // off), so the deadline can't wait for one: stop on time regardless.
+        deadlines[sessionID] = Task { @MainActor in
+            let wait = stopAt.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled, runs[sessionID] == run else { return }
+            stop(sessionID: sessionID)
+        }
     }
 
     static func stop(sessionID: String) {
         tasks[sessionID]?.cancel()
+        deadlines[sessionID]?.cancel()
+        deadlines[sessionID] = nil
         finish(sessionID)
     }
 

@@ -25,6 +25,9 @@ enum LiveActivities {
         LeaveBy.activityEnd = { sessionID in
             Task { await end(sessionID: sessionID) }
         }
+        OnMyWay.onArrived = { sessionID in
+            Task { await arrived(sessionID: sessionID) }
+        }
         LiveActivitySettings.activitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
         // Activities already up (started by the app or by a push): their tokens.
         for activity in Activity<GroupPlanAttributes>.activities { watchToken(of: activity) }

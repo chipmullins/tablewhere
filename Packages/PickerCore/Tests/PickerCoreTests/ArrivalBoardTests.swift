@@ -27,6 +27,13 @@ final class ArrivalBoardTests: XCTestCase {
                        "Alex arrived · You ~15 min late · Sam running late")
     }
 
+    func testOnlyYouLeft() {
+        let etas = [GroupETA(userID: "s", name: "Sam", eta: t0, status: .arrived)]
+        let members = [GroupMember(id: "s", name: "Sam"), GroupMember(id: "me", name: "Chip")]
+        XCTAssertEqual(ArrivalBoard.line(etas: etas, members: members, me: "me", time: time),
+                       "Sam arrived · you haven’t left")
+    }
+
     func testNobody() {
         XCTAssertNil(ArrivalBoard.line(etas: [], members: [], me: nil, time: time))
     }

@@ -950,7 +950,8 @@ function arrivalLine() {
   const shared = new Set(etas.map((e) => e.userID));
   const notYet = members.filter((m) => !shared.has(m.id)).map((m) => (m.id === uid ? "you" : firstName(m.name)));
   if (notYet.length) {
-    parts.push(notYet.length === 1 ? `${notYet[0]} hasn’t left`
+    parts.push(notYet.length === 1 && notYet[0] === "you" ? "you haven’t left"
+      : notYet.length === 1 ? `${notYet[0]} hasn’t left`
       : notYet.length <= 3 ? `${notYet.join(", ")} haven’t left` : `${notYet.length} haven’t left`);
   }
   return parts.join(" · ");

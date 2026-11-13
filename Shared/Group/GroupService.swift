@@ -595,7 +595,10 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         let ref = sessionRef(session.id)
-        for name in ["votes", "rsvps", "eta", "devices", "members"] {
+        // Your own devices doc; everyone else's are private (no listing),
+        // so the server ends their countdowns and deletes them (onSessionDeleted).
+        try? await ref.collection("devices").document(uid).delete()
+        for name in ["votes", "rsvps", "eta", "members"] {
             let docs = try await ref.collection(name).getDocuments().documents
             for doc in docs { try await doc.reference.delete() }
         }

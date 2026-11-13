@@ -539,7 +539,8 @@ public enum ArrivalBoard {
         let notYet = members.filter { !shared.contains($0.id) }
             .map { $0.id == me ? "you" : ($0.name.split(separator: " ").first.map(String.init) ?? $0.name) }
         if !notYet.isEmpty {
-            parts.append(notYet.count == 1 ? "\(notYet[0]) hasn’t left"
+            parts.append(notYet == ["you"] ? "you haven’t left"
+                         : notYet.count == 1 ? "\(notYet[0]) hasn’t left"
                          : notYet.count <= 3 ? "\(notYet.joined(separator: ", ")) haven’t left"
                          : "\(notYet.count) haven’t left")
         }

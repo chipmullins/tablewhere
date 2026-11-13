@@ -19,7 +19,7 @@ import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWrit
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { Timestamp } from "firebase-admin/firestore";
 import { APNS_KEY_ID, APNS_KEY_P8 } from "./apns";
-import { endAllNow, endFor, liveActivityTick, meetTimeChanged, updateAll } from "./liveActivities";
+import { endAllNow, endFor, liveActivityTick, meetTimeChanged, planDeleted, updateAll } from "./liveActivities";
 
 /** Functions that send Live Activity pushes need the APNs key. */
 const apnsSecrets = [APNS_KEY_P8, APNS_KEY_ID];
@@ -393,6 +393,18 @@ async function liveActivityChanges(ref: FirebaseFirestore.DocumentReference, bef
     logger.error("liveActivityChanges failed", { sessionId: ref.id, err: String(err) });
   }
 }
+
+/** The plan was ended: everyone's countdown goes now, and their private device docs too. */
+export const onSessionDeleted = onDocumentDeleted(
+  { document: "sessions/{sessionId}", secrets: apnsSecrets },
+  async (event) => {
+    try {
+      await planDeleted(db.collection("sessions").doc(event.params.sessionId));
+    } catch (err) {
+      logger.error("onSessionDeleted failed", { params: event.params, err: String(err) });
+    }
+  },
+);
 
 /** You left the plan (or it ended): your countdown goes now. */
 export const onDeviceDeleted = onDocumentDeleted(

@@ -116,7 +116,7 @@ struct OnboardingView: View {
         case .plans:
             stepPage(art: AnyView(TourPlanMock()), title: "Then make it a plan",
                      text: "Set a time and see who’s coming. Tablewhere tells you when to leave, puts a countdown on your Lock Screen, and lets the group know when you’re on your way.",
-                     primary: isLast ? ("Done", onFinish) : ("Next", next))
+                     primary: isLast ? ("Done", finish) : ("Next", next))
         case .permissions:
             permissionsPage
         }
