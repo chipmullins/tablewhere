@@ -1,4 +1,4 @@
-# Tablespin (project name ForkRoad) — XcodeGen project definition.
+# Tablewhere (project name ForkRoad) — XcodeGen project definition.
 # Generate the Xcode project with:  xcodegen generate
 # (Install once with:  brew install xcodegen)
 #
@@ -26,8 +26,8 @@ settingGroups:
   common:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
-    MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "40"
+    MARKETING_VERSION: "0.5.0"
+    CURRENT_PROJECT_VERSION: "41"
     CODE_SIGN_STYLE: Automatic
     # Set your Apple Developer team ID here (or pick the team in Xcode).
     DEVELOPMENT_TEAM: "4XK3F69URN"
@@ -82,7 +82,7 @@ targets:
     info:
       path: ForkRoad/Info.plist
       properties:
-        CFBundleDisplayName: Tablespin
+        CFBundleDisplayName: Tablewhere
         # Only standard HTTPS, which is exempt: skips the export question on upload.
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
@@ -102,8 +102,8 @@ targets:
           - DMSans-Medium.ttf
           - DMSans-SemiBold.ttf
           - DMSans-Bold.ttf
-        NSLocationWhenInUseUsageDescription: "Tablespin uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
-        NSCalendarsWriteOnlyAccessUsageDescription: "Tablespin adds your group’s plan to your calendar when you ask."
+        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to find restaurants near you and to work out when to leave for group plans. It stays on your phone."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Tablewhere adds your group’s plan to your calendar when you ask."
         # "Leave by" for group plans on the Lock Screen and Dynamic Island.
         NSSupportsLiveActivities: true
         AppIdentifierPrefix: $(AppIdentifierPrefix)
@@ -146,10 +146,10 @@ targets:
     info:
       path: MessagesExtension/Info.plist
       properties:
-        CFBundleDisplayName: Tablespin
+        CFBundleDisplayName: Tablewhere
         UIAppFonts: *appFonts
-        NSLocationWhenInUseUsageDescription: "Tablespin uses your location to work out when you should leave to meet your group. It stays on your phone."
-        NSCalendarsWriteOnlyAccessUsageDescription: "Tablespin adds your group’s plan to your calendar when you ask."
+        NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to work out when you should leave to meet your group. It stays on your phone."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Tablewhere adds your group’s plan to your calendar when you ask."
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController
@@ -185,7 +185,7 @@ targets:
     info:
       path: ForkRoadWidgets/Info.plist
       properties:
-        CFBundleDisplayName: Tablespin
+        CFBundleDisplayName: Tablewhere
         UIAppFonts: *appFonts
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

@@ -16,6 +16,6 @@ struct SpinControl: ControlWidget {
             }
         }
         .displayName("Spin")
-        .description("Opens Tablespin and spins for a place to eat.")
+        .description("Opens Tablewhere and spins for a place to eat.")
     }
 }

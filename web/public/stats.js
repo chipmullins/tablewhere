@@ -1,4 +1,4 @@
-// Tablespin stats page: https://forkroad-app.web.app/stats
+// Tablewhere stats page: https://forkroad-app.web.app/stats
 // Reads stats/{yyyy-mm-dd} (anonymous daily counts written by the app, the
 // iMessage app, and the vote page). Only admins can read them; an admin is a
 // Google account with a document at admins/{uid} (see firestore.rules).
@@ -158,7 +158,7 @@ function renderTiles() {
   const avg = rows.length ? sum("activeDevices") / rows.length : 0;
   const range = `last ${days} days`;
   $("tiles").replaceChildren(
-    tile("Active today", fmt(today.activeDevices || 0), "devices that opened Tablespin"),
+    tile("Active today", fmt(today.activeDevices || 0), "devices that opened Tablewhere"),
     tile("Daily active", avg < 10 ? avg.toFixed(1) : fmt(Math.round(avg)), `average, ${range}`),
     tile("New devices", fmt(sum("newDevices")), range),
     tile("Spins", fmt(sum("spins")), range),

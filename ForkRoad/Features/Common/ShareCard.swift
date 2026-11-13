@@ -63,9 +63,8 @@ struct ShareCard: View {
                         .scaledToFit()
                         .frame(width: 30, height: 30)
                         .clipShape(RoundedRectangle(cornerRadius: 30 * 0.225, style: .continuous))
-                    Text("tablespin")
-                        .font(Theme.display(18))
-                        .foregroundStyle(Color(hex: 0xF5F3EE))
+                    // Fixed colors: ImageRenderer may ignore the color scheme.
+                    Wordmark(size: 18, tableColor: Color(hex: 0xF5F3EE), whereColor: Theme.saffron)
                 }
 
                 Spacer(minLength: 0)
@@ -113,7 +112,7 @@ struct ShareCard: View {
                     .fill(Theme.saffron)
                     .frame(width: 36, height: 4)
                     .padding(.bottom, 12)
-                Text("tablespin · let the table decide")
+                Text("Tablewhere · let the table decide")
                     .font(Theme.body(13, .semibold))
                     .foregroundStyle(Color(hex: 0xA19FAA))
             }

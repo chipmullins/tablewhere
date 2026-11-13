@@ -44,15 +44,15 @@ enum GroupWording {
         let code = JoinCode.display(session.joinCode)
         switch session.mode {
         case .vote:
-            return "Help pick where we eat! Vote here, or join in Tablespin with code \(code)."
+            return "Help pick where we eat! Vote here, or join in Tablewhere with code \(code)."
         case .spin where session.isSurprise:
-            return "Letting the wheel pick where we eat! Watch here, or join in Tablespin with code \(code)."
+            return "Letting the wheel pick where we eat! Watch here, or join in Tablewhere with code \(code)."
         case .spin:
-            return "Add your pick for the group spin! Add it here, or join in Tablespin with code \(code)."
+            return "Add your pick for the group spin! Add it here, or join in Tablewhere with code \(code)."
         case .plan:
             return session.hasRSVP
-                ? "Here’s the plan! Let me know if you’re in here, or in Tablespin with code \(code)."
-                : "Here’s the plan! Details and directions here, or in Tablespin with code \(code)."
+                ? "Here’s the plan! Let me know if you’re in here, or in Tablewhere with code \(code)."
+                : "Here’s the plan! Details and directions here, or in Tablewhere with code \(code)."
         }
     }
 

@@ -1,5 +1,5 @@
 /**
- * Tablespin push notifications for group picks.
+ * Tablewhere push notifications for group picks.
  *
  * Firestore layout (see web/firestore.rules and Shared/Group/GroupService.swift):
  *   sessions/{sessionId}                 the session (title, createdBy, status, options, winnerID, meetTime, meetTimeLabel)
@@ -66,7 +66,7 @@ function optionName(session: DocumentData, optionID: unknown): string | undefine
 }
 
 function sessionTitle(session: DocumentData): string {
-  return str(session.title) ?? "Tablespin";
+  return str(session.title) ?? "Tablewhere";
 }
 
 /** Members with a push token, optionally limited to some uids or excluding some. */

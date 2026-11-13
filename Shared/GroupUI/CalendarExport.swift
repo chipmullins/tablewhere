@@ -10,7 +10,7 @@ enum CalendarExport {
     enum Failure: LocalizedError {
         case notAllowed
         var errorDescription: String? {
-            "Tablespin can’t add to your calendar. Turn it on in Settings → Privacy & Security → Calendars."
+            "Tablewhere can’t add to your calendar. Turn it on in Settings → Privacy & Security → Calendars."
         }
     }
 
@@ -26,7 +26,7 @@ enum CalendarExport {
         let place = EKStructuredLocation(title: winner.name)
         place.geoLocation = CLLocation(latitude: winner.latitude, longitude: winner.longitude)
         event.structuredLocation = place
-        var notes = ["Picked with Tablespin."]
+        var notes = ["Picked with Tablewhere."]
         if let note = session.trimmedNote { notes.insert("Note from \(session.createdByName): \(note)", at: 0) }
         event.notes = notes.joined(separator: "\n")
         event.calendar = store.defaultCalendarForNewEvents

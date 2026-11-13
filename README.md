@@ -1,8 +1,8 @@
-# Tablespin
+# Tablewhere
 
-Formerly ForkRoad. The public name is Tablespin; code, targets, bundle IDs, the iCloud container, the app group, Firebase (`forkroad-app`) and `forkroad://` links keep the ForkRoad name so existing installs and data keep working.
+Formerly ForkRoad, then briefly Tablespin (renamed Nov 2026 after another app took that name). The public name is Tablewhere; code, targets, bundle IDs, the iCloud container, the app group, Firebase (`forkroad-app`) and `forkroad://` links keep the ForkRoad name so existing installs and data keep working.
 
-**Let the table decide.** Tablespin helps you decide where to eat: browse what’s nearby, spin for a pick (or a home meal), and plan with friends in the app, iMessage, or on the web.
+**Let the table decide.** Tablewhere helps you decide where to eat: browse what’s nearby, spin for a pick (or a home meal), and plan with friends in the app, iMessage, or on the web.
 
 Built with SwiftUI, SwiftData + CloudKit, MapKit, and Firebase. iOS 17+. Type is Outfit (headings) and DM Sans (body), bundled under the SIL Open Font License (see `Licenses/`).
 

@@ -15,6 +15,9 @@ enum Theme {
     static let onSaffron = Color(hex: 0x1B1306)                      // text on saffron
     /// Saffron for text and icons on the background: darker in light mode so it stays readable.
     static let accentText = Color(light: 0x9A5B00, dark: 0xFFB23F)
+    /// The orange "where" in the Tablewhere wordmark: saffron on dark, a
+    /// deeper orange on light so it doesn't wash out.
+    static let brandOrange = Color(light: 0xEE8400, dark: 0xFFB23F)
     /// A faint saffron wash for highlighted cards.
     static let accentSoft = Color(light: 0xFFF1D9, dark: 0x1F1A10)
     /// Empty part of progress bars.

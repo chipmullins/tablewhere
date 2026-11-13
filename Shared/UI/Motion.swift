@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tablespin's motion vocabulary, so sheets, cards and results all move the
+/// Tablewhere's motion vocabulary, so sheets, cards and results all move the
 /// same way.
 enum Motion {
     /// Cards, results, rows appearing and changing.
@@ -37,6 +37,6 @@ struct PressableStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == PressableStyle {
-    /// Tablespin's default tappable look (see `PressableStyle`).
+    /// Tablewhere's default tappable look (see `PressableStyle`).
     static var pressable: PressableStyle { PressableStyle() }
 }

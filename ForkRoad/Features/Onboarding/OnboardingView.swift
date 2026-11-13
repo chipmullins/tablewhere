@@ -57,10 +57,13 @@ struct OnboardingView: View {
             primary: ("Get started", { page = 1 }),
             secondary: nil,
             footer: AnyView(
-                Text("Tablespin · Created by Chip Mullins")
-                    .font(Theme.body(12))
-                    .foregroundStyle(Theme.muted.opacity(0.7))
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 4) {
+                    Wordmark(size: 20)
+                    Text("Created by Chip Mullins")
+                        .font(Theme.body(12))
+                        .foregroundStyle(Theme.muted.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity)
             )
         )
     }
@@ -71,13 +74,13 @@ struct OnboardingView: View {
             title: locationDenied ? "No problem" : "Find food near you",
             text: locationDenied
                 ? "Location is off, so pick a city or neighborhood to search instead. You can turn location on later in Settings."
-                : "Tablespin uses your location only while you’re using the app, to find restaurants around you and work out when to leave for group plans. You can also pick any city instead.",
+                : "Tablewhere uses your location only while you’re using the app, to find restaurants around you and work out when to leave for group plans. You can also pick any city instead.",
             primary: locationDenied
                 ? ("Pick a city", { showCityPicker = true })
                 : (isAsking ? "One sec…" : "Use my location", askForLocation),
             secondary: locationDenied ? nil : ("Pick a city instead", { showCityPicker = true }),
             footer: AnyView(
-                Text("Tablespin counts anonymous daily totals (like spins) to get better. Turn it off anytime in Settings.")
+                Text("Tablewhere counts anonymous daily totals (like spins) to get better. Turn it off anytime in Settings.")
                     .font(Theme.body(12))
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.center)
@@ -252,6 +255,6 @@ struct ForkMark: View {
                                             style: .continuous))
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityLabel("Tablespin logo")
+        .accessibilityLabel("Tablewhere logo")
     }
 }

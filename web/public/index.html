@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B0B0F">
-  <title>Tablespin · Group plan</title>
+  <title>Tablewhere · Group plan</title>
   <!-- The link preview in Messages. Set once for every plan and every stage
        (a sent preview never updates), so it says nothing that can go stale. -->
-  <meta property="og:site_name" content="Tablespin">
-  <meta property="og:title" content="Tablespin · Group plan">
+  <meta property="og:site_name" content="Tablewhere">
+  <meta property="og:title" content="Tablewhere · Group plan">
   <meta property="og:description" content="See the plan, vote or add a pick, and get directions. No app needed.">
   <meta property="og:image" content="https://forkroad-app.web.app/preview-icon.png">
   <meta name="description" content="See the plan, vote or add a pick, and get directions. No app needed.">
@@ -23,7 +23,8 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--night); color: var(--text); font: 15px/1.45 'DM Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     main { max-width: 480px; margin: 0 auto; padding: 28px 16px 120px; }
-    .brand { display: flex; align-items: center; gap: 8px; color: var(--saffron); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text); font: 800 20px Outfit, sans-serif; letter-spacing: -0.02em; }
+    .brand .where { color: var(--saffron); }
     .brand svg { width: 26px; height: 26px; }
     h1 { font-family: Outfit, sans-serif; font-weight: 800; font-size: 32px; line-height: 1.05; letter-spacing: -0.02em; margin: 14px 0 6px; }
     .muted { color: var(--muted); }
@@ -120,7 +121,7 @@
   <main>
     <div class="brand">
       <svg viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="54" fill="#FFB23F"/><path d="M182.2 57.8 A88 88 0 1 1 57.8 57.8" fill="none" stroke="#14141A" stroke-width="16" stroke-linecap="round"/><path d="M72 43 L67.5 68 L47 47 Z" fill="#14141A"/><circle cx="120" cy="120" r="62" fill="#F6F1E7"/><path d="M84 142 C88 104 118 86 156 92 C152 130 122 150 84 142 Z" fill="#7CC24F"/><circle cx="142" cy="142" r="15" fill="#E5533D"/></svg>
-      Tablespin
+      <span>Table<span class="where">where</span></span>
     </div>
 
     <section id="loading"><p class="muted">Loading…</p></section>
@@ -180,7 +181,7 @@
       </div>
       <div class="app-pitch" id="app-pitch" hidden>
         <span aria-hidden="true" style="font-size:22px">🚗</span>
-        <div><b>Never be the one who’s late</b><span class="muted">The Tablespin app tells you when to leave, with live traffic, and puts a countdown on your Lock Screen.</span></div>
+        <div><b>Never be the one who’s late</b><span class="muted">The Tablewhere app tells you when to leave, with live traffic, and puts a countdown on your Lock Screen.</span></div>
       </div>
       <div class="card rsvp" id="rsvp" hidden>
         <div class="section-label" style="margin-top:0">Who’s coming</div>
@@ -211,10 +212,10 @@
     </section>
 
     <footer id="footer" hidden>
-      With the Tablespin app you get an alert when it’s decided or changes, plus a leave-by reminder and a Lock Screen countdown.<br>
+      With the Tablewhere app you get an alert when it’s decided or changes, plus a leave-by reminder and a Lock Screen countdown.<br>
       Have it? Join in the app with code <span class="code" id="code"></span>
     </footer>
-    <p class="muted" style="text-align:center;font-size:12px;margin-top:18px">Tablespin · Created by Chip Mullins</p>
+    <p class="muted" style="text-align:center;font-size:12px;margin-top:18px">Tablewhere · Created by Chip Mullins</p>
   </main>
 
   <script type="module" src="/app.js"></script>

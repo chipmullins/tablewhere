@@ -30,7 +30,7 @@ struct LocationPickerView: View {
                             row(icon: "location.fill",
                                 title: "Current location",
                                 subtitle: model.location.isDenied
-                                    ? "Location is off for Tablespin in Settings"
+                                    ? "Location is off for Tablewhere in Settings"
                                     : (model.location.placeName ?? "Use where you are now"),
                                 selected: model.isUsingCurrentLocation)
                         }

@@ -292,3 +292,18 @@ extension View {
         }
     }
 }
+
+
+/// The Tablewhere wordmark: "Table" in ink (cream on dark), "where" in orange.
+struct Wordmark: View {
+    var size: CGFloat = 18
+    var tableColor: Color = Theme.text
+    var whereColor: Color = Theme.brandOrange
+
+    var body: some View {
+        (Text("Table").foregroundColor(tableColor) + Text("where").foregroundColor(whereColor))
+            .font(Theme.display(size))
+            .tracking(-size * 0.02)
+            .accessibilityLabel("Tablewhere")
+    }
+}

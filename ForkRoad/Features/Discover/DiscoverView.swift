@@ -78,7 +78,7 @@ struct DiscoverView: View {
                 .font(Theme.display(22))
                 .foregroundStyle(Theme.text)
             Text(model.location.isDenied
-                 ? "Location is off for Tablespin. Pick a city or neighborhood, or turn location on in Settings."
+                 ? "Location is off for Tablewhere. Pick a city or neighborhood, or turn location on in Settings."
                  : "Use your location, or pick a city or neighborhood to find restaurants there.")
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.muted)
@@ -221,7 +221,7 @@ struct DiscoverView: View {
         if model.location.isDenied && model.isUsingCurrentLocation {
             StateCard(icon: "location.slash",
                       title: "Location is off",
-                      message: "Pick a city to search, or turn on location for Tablespin in iPhone Settings.",
+                      message: "Pick a city to search, or turn on location for Tablewhere in iPhone Settings.",
                       action: ("Pick a city", { showLocationPicker = true }))
         } else if model.errorMessage != nil && visiblePlaces.isEmpty {
             StateCard(icon: "wifi.slash",

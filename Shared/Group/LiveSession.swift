@@ -111,7 +111,7 @@ final class LiveSession {
                 }
                 // It's there but this version can't read it (a newer kind of plan).
                 self.errorMessage = !exists ? GroupError.sessionNotFound.localizedDescription
-                    : decoded == nil ? "This plan needs a newer version of Tablespin. Update the app to see it." : nil
+                    : decoded == nil ? "This plan needs a newer version of Tablewhere. Update the app to see it." : nil
                 self.isGone = !exists
                 self.session = decoded
                 self.isLoaded = true
