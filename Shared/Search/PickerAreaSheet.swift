@@ -196,21 +196,40 @@ private struct PickerAreaRow: View {
     }
 }
 
-/// Full-screen map: tap a spot, then "Search here".
+/// Full-screen map: tap a spot to see the restaurants around it (pins and
+/// the search circle), then "Search here".
 struct PickerMapView: View {
     let start: CLLocationCoordinate2D?
+    /// The picker's radius, so the preview matches what the list will show.
+    var radiusMiles: Double = 2
+    var search: PlaceSearching = MapKitPlaceSearch()
     let onPick: (PickerArea) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var camera: MapCameraPosition = .automatic
     @State private var pin: CLLocationCoordinate2D?
     @State private var isNaming = false
+    /// Restaurants around the tapped spot (the same search the list runs).
+    @State private var places: [Place] = []
+    @State private var isLoadingPlaces = false
+
+    private var radiusMeters: Double { radiusMiles * Place.metersPerMile }
+    /// Enough pins to see what's there without burying the map.
+    private static let maxPins = 40
 
     var body: some View {
         NavigationStack {
             MapReader { proxy in
                 Map(position: $camera) {
                     if let pin {
+                        MapCircle(center: pin, radius: radiusMeters)
+                            .foregroundStyle(Theme.saffron.opacity(0.10))
+                            .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
+                        ForEach(places.prefix(Self.maxPins)) { place in
+                            Marker(place.name, systemImage: "fork.knife",
+                                   coordinate: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude))
+                                .tint(Theme.trackFill)
+                        }
                         Marker("Search here", systemImage: "mappin", coordinate: pin)
                             .tint(Theme.saffron)
                     }
@@ -234,8 +253,8 @@ struct PickerMapView: View {
                 if pin != nil {
                     Button(action: confirm) {
                         HStack(spacing: 8) {
-                            if isNaming { ProgressView().tint(Theme.onSaffron) }
-                            Text("Search here")
+                            if isNaming || isLoadingPlaces { ProgressView().tint(Theme.onSaffron) }
+                            Text(searchHereTitle)
                         }
                         .font(Theme.body(16, .bold))
                         .foregroundStyle(Theme.onSaffron)
@@ -260,7 +279,28 @@ struct PickerMapView: View {
                                                         longitudinalMeters: 8_000))
                 }
             }
+            // A new spot: search around it (a quick second tap cancels the first search).
+            .task(id: pin.map { "\($0.latitude),\($0.longitude)" }) { await loadPlaces() }
         }
+    }
+
+    /// "Search here · 23 places" once the pins are in.
+    private var searchHereTitle: String {
+        guard pin != nil, !isLoadingPlaces, !places.isEmpty else { return "Search here" }
+        return "Search here · \(places.count) place\(places.count == 1 ? "" : "s")"
+    }
+
+    private func loadPlaces() async {
+        guard let spot = pin else { return }
+        // Wait for taps to settle (MapKit limits searches per minute).
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        isLoadingPlaces = true
+        defer { isLoadingPlaces = false }
+        let found = (try? await search.search(near: spot, radiusMeters: radiusMeters,
+                                              cuisines: [], diet: .none)) ?? []
+        guard !Task.isCancelled else { return }
+        withAnimation(.snappy) { places = found }
     }
 
     private func confirm() {
