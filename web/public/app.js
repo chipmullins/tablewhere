@@ -5,6 +5,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, runTransaction, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { isFastFood, isCoffeeOrSweets, isNotARestaurant, guessCuisine } from "./food-filters.js?v=43";
 
 const $ = (id) => document.getElementById(id);
 const sections = ["loading", "error", "name-step", "vote-step", "decided-step"];
@@ -371,6 +372,7 @@ function updateTabTitle() {
 function render() {
   if (!session) return;
   updateTabTitle();
+  schedulePrefetch();
   if (pressing) { renderWaiting = true; return; }
   $("code").textContent = formatCode(session.joinCode);
   $("footer").hidden = false;
@@ -1070,14 +1072,21 @@ async function openSuggest() {
   if (myPick()) $("suggest").scrollIntoView({ behavior: "smooth", block: "start" });
   // Phones: don't pop the keyboard over the map and list; the nearby list needs no typing.
   if (!matchMedia("(pointer: coarse)").matches) $("suggest-input").focus();
+  // Usually already found in the background (or cached): show it now.
+  prefetchNearby();
+  if (!nearby || (!nearby.done && !nearby.places.length)) showSkeleton();
+  showNearby();
+  let mk;
   try {
-    await loadMapKit();
-    setStatus("");
+    mk = await loadMapKit();
   } catch {
     setStatus("Search isn’t available right now. You can still vote.");
     return;
   }
-  loadNearby();
+  if (!panelOpen) return;
+  const center = groupCenter();
+  if (center) showPickMap(mk, center);
+  if (!$("suggest-input").value.trim()) showNearby();
 }
 
 function wireSuggest() {
@@ -1096,15 +1105,14 @@ function wireSuggest() {
 
 function closeSuggest() {
   panelOpen = false;
-  nearby = null;     // searched again next time it opens (once per open)
-  ++nearbySeq;
   ++searchSeq;
+  ++renderSeq;
   $("suggest-panel").hidden = true;
   $("suggest-input").value = "";
   $("suggest-results").replaceChildren();
   $("suggest-list-label").hidden = true;
   setStatus("");
-  if (pickMap) pickMap.removeAnnotations(pickMap.annotations);
+  clearPickMap();
   if (session) updateSuggest();
 }
 
@@ -1193,27 +1201,161 @@ async function runSearch() {
   if (seq !== searchSeq) return;  // a newer search took over
   if (batches.every((b) => b === null)) { setStatus("Couldn’t search right now. Try again in a moment.", true); return; }
 
-  const seen = new Set();
-  const places = batches.flatMap((b) => b || [])
-    .filter((p) => p.coordinate && p.name)
-    .filter((p) => {
-      const key = `${p.name.toLowerCase()}|${p.coordinate.latitude.toFixed(3)}|${p.coordinate.longitude.toFixed(3)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
-    .sort((a, b) => a.miles - b.miles)
+  const places = mergePlaces(batches.filter(Array.isArray).map((b) => b.map((p) => fromMapKit(p, null)).filter(Boolean)), center)
     .slice(0, 20);
   renderResults(places, query);
 }
 
 // ---------------------------------------------------------------------------
 // Nearby: what's around the group area, nearest first, no typing needed.
-// One search per open of the panel (MapKit JS has a daily quota).
+// Searched like the app (MapKitPlaceSearch): Apple's category lookup plus
+// "restaurant" and a few types it leaves out, all at once, merged (same name
+// within ~60 m is one place). Started in the background as soon as the page
+// shows a plan that takes picks, so the panel opens with the list ready, and
+// kept for 10 minutes per group area (like the app's SearchCache), so
+// reopening it or "Change my pick" is instant. 5 searches per area.
 
-let nearby = null;        // [{ p, miles }] for this open, or null
-let nearbySeq = 0;
+const NEARBY_RADIUS_M = 3219;   // 2 miles, the group picker's default
+const NEARBY_TTL_MS = 10 * 60 * 1000;
+// Same as MapKitPlaceSearch.typeQueries, trimmed to the ones that bring back
+// the most (MapKit JS has a daily quota). The label becomes the place's type
+// when Apple's category is just "restaurant".
+const NEARBY_TYPES = [["burgers", "Burgers"], ["pizza", "Pizza"], ["fast food", "Fast food"]];
+
+// { key, center, batches: [places[] | null | undefined], places: [...], done, failed }
+let nearby = null;
+
+function nearbyKey(center) {
+  const r = (x) => Math.round(x * 2000) / 2000;   // about 50 m, like SearchCache.key
+  return `forkroad.nearby.${r(center.lat)}|${r(center.lon)}`;
+}
+
+function readNearbyCache(key) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || "null");
+    if (!saved || !Array.isArray(saved.places) || Date.now() - saved.savedAt > NEARBY_TTL_MS) return null;
+    return saved.places;
+  } catch { return null; }
+}
+
+function writeNearbyCache(key, places) {
+  try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), places })); } catch { /* full or blocked */ }
+}
+
+/** Starts the Nearby search for this plan's area (once per area, or from the cache). */
+function prefetchNearby() {
+  if (!session || !mapkitToken || isSurprise() || !acceptsChanges()) return;
+  const center = groupCenter();
+  if (!center) return;
+  const key = nearbyKey(center);
+  if (nearby && nearby.key === key && !nearby.failed) return;
+  const cached = readNearbyCache(key);
+  if (cached) {
+    nearby = { key, center, batches: [], places: cached, done: true, failed: false };
+    onNearbyChange();
+    return;
+  }
+  const mine = { key, center, batches: [], places: [], done: false, failed: false };
+  nearby = mine;
+  onNearbyChange();
+  loadMapKit()
+    .then((mk) => runNearby(mk, mine))
+    .catch(() => {
+      mine.done = true;
+      mine.failed = true;
+      if (nearby === mine) onNearbyChange();
+    });
+}
+
+// Once per page, when the browser is idle (the plan shows first).
+let prefetchScheduled = false;
+function schedulePrefetch() {
+  if (prefetchScheduled || !mapkitToken) return;
+  if (!session || isSurprise() || !acceptsChanges()) return;
+  prefetchScheduled = true;
+  const go = () => { prefetchScheduled = false; prefetchNearby(); };
+  if ("requestIdleCallback" in window) requestIdleCallback(go, { timeout: 1500 });
+  else setTimeout(go, 300);
+}
+
+function runNearby(mk, mine) {
+  const { center } = mine;
+  const coord = new mk.Coordinate(center.lat, center.lon);
+  const filter = restaurantFilter(mk);
+  const degLat = (NEARBY_RADIUS_M * 2) / 111000;
+  const region = new mk.CoordinateRegion(coord,
+    new mk.CoordinateSpan(degLat, degLat / Math.max(0.2, Math.cos(center.lat * Math.PI / 180))));
+
+  // Apple's category lookup (places by category, not words).
+  const poi = () => new Promise((resolve) => {
+    if (typeof mk.PointsOfInterestSearch !== "function") return resolve(null);
+    try {
+      const options = { center: coord, radius: NEARBY_RADIUS_M };
+      if (filter) options.pointOfInterestFilter = filter;
+      new mk.PointsOfInterestSearch(options).search((error, data) => resolve(error ? null : (data?.places || [])));
+    } catch { resolve(null); }
+  });
+  const text = (query) => new Promise((resolve) => {
+    try {
+      const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
+      if (filter) options.pointOfInterestFilter = filter;
+      new mk.Search(options).search(query, (error, data) => resolve(error ? null : (data?.places || [])), { region });
+    } catch { resolve(null); }
+  });
+
+  // Job order (not finish order) decides a place's type, like the app.
+  const jobs = [
+    { run: () => text("restaurant"), label: null },
+    { run: poi, label: null },
+    ...NEARBY_TYPES.map(([query, label]) => ({ run: () => text(query), label })),
+  ];
+  mine.batches = jobs.map(() => undefined);   // undefined: still searching
+  const finished = jobs.map((job, index) => job.run().then((raw) => {
+    mine.batches[index] = raw === null ? null
+      : raw.map((p) => fromMapKit(p, job.label))
+        .filter((p) => p && !isNotARestaurant(p.name))
+        .filter((p) => milesBetween(center, { lat: p.latitude, lon: p.longitude }) * 1609.34 <= NEARBY_RADIUS_M);
+    mine.places = mergePlaces(mine.batches.filter(Array.isArray), center);
+    if (nearby === mine) onNearbyChange();
+  }));
+  Promise.all(finished).then(() => {
+    mine.done = true;
+    mine.failed = mine.batches.every((b) => b === null);
+    // Don't keep a partial list for 10 minutes (one search failed).
+    if (!mine.batches.includes(null)) writeNearbyCache(mine.key, mine.places);
+    if (nearby === mine) onNearbyChange();
+  });
+}
+
+/** A MapKit JS place as a plain object (kept in the cache). */
+function fromMapKit(p, label) {
+  if (!p || !p.name || !p.coordinate) return null;
+  const lat = p.coordinate.latitude, lon = p.coordinate.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const place = { name: p.name, latitude: lat, longitude: lon, category: categoryLabel(p, label) };
+  if (p.formattedAddress) place.address = p.formattedAddress;
+  if (p.telephone) place.phone = p.telephone;
+  const url = Array.isArray(p.urls) ? p.urls[0] : p.url;
+  if (typeof url === "string" && /^https?:\/\//i.test(url)) place.url = url;
+  return place;
+}
+
+/** MapKitPlaceSearch.merge: one entry per place, the most specific type, nearest first. */
+function mergePlaces(batches, center) {
+  const out = [];
+  for (const place of batches.flat()) {
+    const name = place.name.toLowerCase();
+    const match = out.find((o) => o.name.toLowerCase() === name
+      && milesBetween({ lat: o.latitude, lon: o.longitude }, { lat: place.latitude, lon: place.longitude }) * 1609.34 < 60);
+    if (match) {
+      if (match.category === "Restaurant" && place.category !== "Restaurant") match.category = place.category;
+    } else {
+      out.push({ ...place });
+    }
+  }
+  for (const p of out) p.miles = milesBetween(center, { lat: p.latitude, lon: p.longitude });
+  return out.sort((a, b) => a.miles - b.miles);
+}
 
 function restaurantFilter(mk) {
   try {
@@ -1222,70 +1364,67 @@ function restaurantFilter(mk) {
   } catch { return null; }
 }
 
-async function loadNearby() {
-  const center = groupCenter();
-  if (!center) { setStatus("Search for a place by name or craving."); return; }
-  if (nearby) { if (!$("suggest-input").value.trim()) showNearby(); return; }
-  const seq = ++nearbySeq;
-  setStatus("Finding places nearby…");
-  let mk;
-  try { mk = await loadMapKit(); } catch { setStatus("Search isn’t available right now. You can still vote.", true); return; }
-  showPickMap(mk, center);
-  const coord = new mk.Coordinate(center.lat, center.lon);
-  const filter = restaurantFilter(mk);
-
-  // Points of interest around the area (about 2 miles); if this MapKit JS
-  // can't do that, a plain "restaurants" search in the same box.
-  const poi = () => new Promise((resolve) => {
-    if (typeof mk.PointsOfInterestSearch !== "function") return resolve(null);
-    try {
-      const options = { center: coord, radius: 3200 };
-      if (filter) options.pointOfInterestFilter = filter;
-      new mk.PointsOfInterestSearch(options).search((error, data) => resolve(error ? null : (data?.places || [])));
-    } catch { resolve(null); }
-  });
-  const text = () => new Promise((resolve) => {
-    try {
-      const d = 0.06;
-      const region = new mk.CoordinateRegion(coord, new mk.CoordinateSpan(d, d / Math.max(0.2, Math.cos(center.lat * Math.PI / 180))));
-      const options = { region, includeAddresses: false, includeQueries: false, includePointsOfInterest: true };
-      if (filter) options.pointOfInterestFilter = filter;
-      new mk.Search(options).search("restaurants", (error, data) => resolve(error ? null : (data?.places || [])), { region });
-    } catch { resolve(null); }
-  });
-  let places = await poi();
-  if (!places || !places.length) places = await text();
-  if (seq !== nearbySeq || !panelOpen) return;
-  if (places === null) { setStatus("Couldn’t load places nearby. Search by name instead.", true); return; }
-  const seen = new Set();
-  nearby = places
-    .filter((p) => p.coordinate && p.name)
-    .filter((p) => {
-      const key = `${p.name.toLowerCase()}|${p.coordinate.latitude.toFixed(3)}|${p.coordinate.longitude.toFixed(3)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((p) => ({ p, miles: milesBetween(center, { lat: p.coordinate.latitude, lon: p.coordinate.longitude }) }))
-    .sort((a, b) => a.miles - b.miles)
-    .slice(0, 25);
-  if (!$("suggest-input").value.trim()) showNearby();
+/** New Nearby results (or done): redraw the list if it's showing. */
+function onNearbyChange() {
+  if (!panelOpen || $("suggest-input").value.trim().length >= 2) return;
+  if (pressingResults) { nearbyWaiting = true; return; }
+  showNearby();
 }
+
+// Rebuilding the list under a finger moves rows; wait until it lifts.
+let pressingResults = false;
+let nearbyWaiting = false;
+document.addEventListener("pointerdown", (e) => {
+  if (e.target.closest && e.target.closest("#suggest-results")) pressingResults = true;
+}, true);
+const endResultsPress = () => {
+  if (!pressingResults) return;
+  pressingResults = false;
+  if (nearbyWaiting) setTimeout(() => { nearbyWaiting = false; onNearbyChange(); }, 0);
+};
+document.addEventListener("pointerup", endResultsPress, true);
+document.addEventListener("pointercancel", endResultsPress, true);
 
 function showNearby() {
   ++searchSeq;  // a search still in flight shouldn't replace the nearby list
-  if (!nearby) { $("suggest-results").replaceChildren(); $("suggest-list-label").hidden = true; setStatus(""); return; }
-  renderResults(nearby, null);
+  if (!nearby) {
+    if (!groupCenter()) { $("suggest-results").replaceChildren(); setStatus("Search for a place by name or craving."); }
+    return;
+  }
+  if (nearby.done && nearby.failed && !nearby.places.length) {
+    $("suggest-results").replaceChildren();
+    $("suggest-list-label").hidden = true;
+    setStatus("Couldn’t load places nearby. Search by name instead.", true);
+    return;
+  }
+  renderResults(nearby.places, null, !nearby.done);
+}
+
+function showSkeleton(rows = 5) {
+  const list = $("suggest-results");
+  list.replaceChildren();
+  for (let i = 0; i < rows; i++) {
+    const row = document.createElement("div");
+    row.className = "result skeleton";
+    row.setAttribute("aria-hidden", "true");
+    row.innerHTML = `<div class="tile"></div><div class="lines"><span></span><span></span></div>`;
+    list.append(row);
+  }
+  $("suggest-list-label").textContent = "Nearby";
+  $("suggest-list-label").hidden = false;
 }
 
 // A small map of the group area with a pin per place in the list. Tap a pin,
-// then Add (or Swap) in its bubble: same as tapping the row.
+// then Add (or Swap) in its bubble: same as tapping the row. Pins are kept
+// and only added or removed as the list changes; the map fits them once.
 let pickMap = null;
+let pins = new Map();          // key → { pin, state }
+let fittedFor = null;          // the list the map last fit (once per open / search)
 function showPickMap(mk, center) {
   const box = $("suggest-map");
   box.hidden = false;
   const coord = new mk.Coordinate(center.lat, center.lon);
-  const region = new mk.CoordinateRegion(coord, new mk.CoordinateSpan(0.03, 0.03));
+  const region = new mk.CoordinateRegion(coord, new mk.CoordinateSpan(0.045, 0.045));
   if (!pickMap) {
     pickMap = new mk.Map(box, {
       region,
@@ -1306,87 +1445,114 @@ function showPickMap(mk, center) {
         setTimeout(() => row.classList.remove("flash"), 1200);
       }
     });
-  } else {
+  } else if (fittedFor === null) {
     pickMap.region = region;
   }
 }
 
-async function updatePickMap(rows) {
+function clearPickMap() {
+  if (pickMap) pickMap.removeAnnotations(pickMap.annotations);
+  pins = new Map();
+  fittedFor = null;
+}
+
+async function updatePickMap(rows, listId, final) {
   if (!pickMap) return;
   let mk;
   try { mk = await loadMapKit(); } catch { return; }
-  pickMap.removeAnnotations(pickMap.annotations);
-  const pins = [];
+  const wanted = new Map();
   for (const { option, out, taken } of rows) {
     if (out) continue;
+    wanted.set(option.id, { option, taken, state: taken ? "taken" : myPick() ? "swap" : "add" });
+  }
+  // The places already in the wheel, as grey checks, so you can see what's taken.
+  for (const o of session.options || []) {
+    if (!Number.isFinite(o.latitude) || !Number.isFinite(o.longitude) || rows.some((r) => sameOption(r.option, o))) continue;
+    wanted.set(`in|${o.id}`, { option: o, taken: true, state: "taken" });
+  }
+  const remove = [];
+  for (const [key, held] of pins) {
+    if (wanted.get(key)?.state !== held.state) { remove.push(held.pin); pins.delete(key); }
+  }
+  if (remove.length) pickMap.removeAnnotations(remove);
+  const add = [];
+  for (const [key, { option, taken, state }] of wanted) {
+    if (pins.has(key)) continue;
     const pin = new mk.MarkerAnnotation(new mk.Coordinate(option.latitude, option.longitude), {
       color: taken ? "#5C5A66" : "#FFB23F",
       glyphText: taken ? "✓" : "🍴",
       title: option.name,
       subtitle: taken ? (isSpin() ? "In the wheel" : "In the vote") : option.category,
-      data: { optionID: option.id },
+      data: taken ? {} : { optionID: option.id },
       displayPriority: taken ? 250 : 750,
     });
     if (!taken) {
       pin.callout = {
         calloutRightAccessoryForAnnotation: () => {
-          const add = document.createElement("button");
-          add.type = "button";
-          add.className = "pin-add";
-          add.textContent = myPick() ? "Swap" : "Add";
-          add.addEventListener("click", (e) => { e.stopPropagation(); addOption(option); });
-          return add;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "pin-add";
+          button.textContent = state === "swap" ? "Swap" : "Add";
+          button.addEventListener("click", (e) => { e.stopPropagation(); addOption(option); });
+          return button;
         },
       };
     }
-    pins.push(pin);
+    pins.set(key, { pin, state });
+    add.push(pin);
   }
-  // The places already in the wheel, as grey checks, so you can see what's taken.
-  for (const o of session.options || []) {
-    if (!Number.isFinite(o.latitude) || !Number.isFinite(o.longitude) || rows.some((r) => sameOption(r.option, o))) continue;
-    pins.push(new mk.MarkerAnnotation(new mk.Coordinate(o.latitude, o.longitude), {
-      color: "#5C5A66", glyphText: "✓", title: o.name, subtitle: isSpin() ? "In the wheel" : "In the vote", displayPriority: 250,
-    }));
+  if (add.length) pickMap.addAnnotations(add);
+  // Fit once per list, when it's complete, so the map doesn't jump as batches land.
+  if (final && fittedFor !== listId) {
+    fittedFor = listId;
+    const open = [...pins.values()].filter((h) => h.state !== "taken").map((h) => h.pin).slice(0, 12);
+    if (open.length) {
+      try { pickMap.showItems(open, { animate: false, padding: new mk.Padding(36, 28, 24, 28) }); } catch { /* keep the area */ }
+    }
   }
-  if (!pins.length) return;
-  pickMap.addAnnotations(pins);
-  try {
-    pickMap.showItems(pins.filter((p) => p.color !== "#5C5A66").slice(0, 12).concat(pins.length ? [] : []),
-      { animate: false, padding: new mk.Padding(36, 28, 24, 28) });
-  } catch { /* keep the area region */ }
 }
 
-async function renderResults(places, query) {
+let renderSeq = 0;
+/** `loading`: Nearby is still searching (more rows may come). */
+async function renderResults(places, query, loading = false) {
+  const seq = ++renderSeq;
   const blocked = globalThis.crypto?.subtle ? groupBlocked() : new Set();
   const outIDs = new Set();
   if (blocked.size) {
-    for (const { p } of places) {
+    for (const p of places) {
       const id = toOption(p).id;
       if (blocked.has(await blockedHash(id))) outIDs.add(id);
     }
   }
+  if (seq !== renderSeq) return;   // a newer list took over while hashing
   const isNearby = query === null;
-  const rows = places.map(({ p, miles }) => {
+  const rows = places.map((p) => {
     const option = toOption(p);
     const out = outIDs.has(option.id);
-    return { option, miles, out, taken: isTaken(option) };
-  }).filter((r) => !isNearby || (!r.out && !r.taken)).slice(0, isNearby ? 15 : 20);
+    const rule = groupFilterRule(option);
+    return { option, miles: p.miles, out, rule, taken: isTaken(option) };
+  }).filter((r) => !isNearby || (!r.out && !r.taken && !r.rule)).slice(0, isNearby ? 15 : 20);
   const list = $("suggest-results");
-  list.replaceChildren();
   $("suggest-list-label").textContent = isNearby ? "Nearby" : "Results";
+  if (isNearby && loading && !rows.length) {
+    showSkeleton();
+    setStatus("Finding places nearby…");
+    return;
+  }
+  list.replaceChildren();
   $("suggest-list-label").hidden = !rows.length;
-  updatePickMap(rows);
+  updatePickMap(rows.filter((r) => !r.rule), isNearby ? `nearby|${nearby?.key}` : `q|${query}|${seq}`, !loading);
   if (!rows.length) {
     setStatus(isNearby ? "Couldn’t find restaurants near the group area. Search by name above."
       : `No restaurants found for “${query}”. Try a broader word like “pizza.”`);
     return;
   }
-  setStatus(isNearby ? "Tap one to add it, or search above." : "");
-  for (const { option, miles, out, taken: inIt } of rows) {
-    const taken = inIt || out;
+  setStatus(isNearby ? (loading ? "Finding more places…" : "Tap one to add it, or search above.") : "");
+  for (const { option, miles, out, rule, taken: inIt } of rows) {
+    const taken = inIt || out || !!rule;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "result";
+    button.className = "result" + (rule ? " not-allowed" : "");
     button.disabled = taken || adding;
     button.dataset.taken = taken ? "1" : "0";
     button.dataset.id = option.id;
@@ -1403,28 +1569,40 @@ async function renderResults(places, query) {
     name.textContent = option.name;
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = `${option.category} · ${miles < 0.1 ? "<0.1" : miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi${option.address ? " · " + option.address : ""}`;
+    sub.textContent = rule ? `Not allowed in this group (${rule})`
+      : `${option.category} · ${miles < 0.1 ? "<0.1" : miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi${option.address ? " · " + option.address : ""}`;
     text.append(name, sub);
     const add = document.createElement("span");
     add.className = "add";
     const mine = myPick();
-    add.textContent = out ? "Ruled out"
+    add.textContent = rule ? "" : out ? "Ruled out"
       : taken ? (isSpin() ? "In the wheel" : "In the vote")
       : mine ? "Swap" : "Add";
     button.append(tile, text, add);
     button.addEventListener("click", () => addOption(option));
     list.append(button);
   }
+  if (isNearby && loading) {
+    // More are coming: a couple of skeleton rows at the bottom.
+    for (let i = 0; i < 2; i++) {
+      const row = document.createElement("div");
+      row.className = "result skeleton";
+      row.setAttribute("aria-hidden", "true");
+      row.innerHTML = `<div class="tile"></div><div class="lines"><span></span><span></span></div>`;
+      list.append(row);
+    }
+  }
 }
 
-function categoryLabel(place) {
+/** Apple's category, or (when it only says "restaurant") the type search that found it or the name. */
+function categoryLabel(place, label = null) {
   switch (place.pointOfInterestCategory) {
     case "Cafe": return "Café";
     case "Bakery": return "Bakery";
     case "Brewery": return "Brewery";
     case "Winery": return "Winery";
     case "FoodMarket": return "Market";
-    default: return "Restaurant";
+    default: return label || guessCuisine(place.name || "") || "Restaurant";
   }
 }
 
@@ -1441,22 +1619,22 @@ function makeID(name, lat, lon) {
   return `${name.toLowerCase()}|${swiftDouble(rLat)}|${swiftDouble(rLon)}`;
 }
 
+/** A plain place (see fromMapKit) as a vote/wheel option. */
 function toOption(place) {
-  const lat = place.coordinate.latitude, lon = place.coordinate.longitude;
+  const lat = place.latitude, lon = place.longitude;
   const option = {
     id: makeID(place.name, lat, lon),
     name: place.name,
-    category: categoryLabel(place),
+    category: place.category || "Restaurant",
     latitude: lat,
     longitude: lon,
     addedBy: myName() || "A friend",
     addedByID: uid,
   };
   // Optional fields are left out when missing, matching the app.
-  if (place.formattedAddress) option.address = place.formattedAddress;
-  if (place.telephone) option.phoneNumber = place.telephone;
-  const url = Array.isArray(place.urls) ? place.urls[0] : place.url;
-  if (typeof url === "string" && /^https?:\/\//i.test(url)) option.websiteURL = url;
+  if (place.address) option.address = place.address;
+  if (place.phone) option.phoneNumber = place.phone;
+  if (place.url) option.websiteURL = place.url;
   return option;
 }
 
@@ -1467,6 +1645,11 @@ function sameOption(a, b) {
   return a.name.trim().toLowerCase() === b.name.trim().toLowerCase()
     && milesBetween({ lat: a.latitude, lon: a.longitude }, { lat: b.latitude, lon: b.longitude }) < 0.1;
 }
+/** Why the group's filters don't allow this place ("no fast food"), or null. */
+function groupFilterRule(option) {
+  return null;
+}
+
 function isTaken(option) {
   return (session.options || []).some((o) => sameOption(o, option));
 }
