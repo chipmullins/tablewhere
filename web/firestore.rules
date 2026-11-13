@@ -193,14 +193,22 @@ service cloud.firestore {
         && request.resource.data.keys().size() == 1
         && request.resource.data.keys().hasOnly(statFields())
         && request.resource.data[request.resource.data.keys()[0]] == 1;
+      // Exactly one known count changes, and only by +1. (Rules sets have no
+      // toList(), so the old "bump the first affected key" check errored and
+      // denied every update: only each day's first count ever landed.)
       allow update: if signedIn() && isAboutToday(day)
         && request.resource.data.diff(resource.data).affectedKeys().size() == 1
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(statFields())
-        && bumpedByOne(request.resource.data.diff(resource.data).affectedKeys().toList()[0]);
+        && sameOrPlusOne('activeDevices') && sameOrPlusOne('newDevices') && sameOrPlusOne('spins')
+        && sameOrPlusOne('groupsVote') && sameOrPlusOne('groupsSpin') && sameOrPlusOne('groupsPlan')
+        && sameOrPlusOne('rsvps') && sameOrPlusOne('groupPicks') && sameOrPlusOne('customPlaces')
+        && sameOrPlusOne('webVisitors') && sameOrPlusOne('webVotes') && sameOrPlusOne('webPicks');
     }
 
-    function bumpedByOne(field) {
-      return request.resource.data[field] == resource.data.get(field, 0) + 1;
+    function sameOrPlusOne(field) {
+      let before = resource.data.get(field, 0);
+      let after = request.resource.data.get(field, 0);
+      return after == before || after == before + 1;
     }
 
     // Admins list: you can check whether you're one; nobody can write it from
