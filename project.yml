@@ -83,6 +83,10 @@ targets:
       path: ForkRoad/Info.plist
       properties:
         CFBundleDisplayName: Tablewhere
+        # Without these, XcodeGen writes a fixed "1.0" / "1" into Info.plist and
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION are ignored.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Only standard HTTPS, which is exempt: skips the export question on upload.
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
@@ -147,6 +151,10 @@ targets:
       path: MessagesExtension/Info.plist
       properties:
         CFBundleDisplayName: Tablewhere
+        # Without these, XcodeGen writes a fixed "1.0" / "1" into Info.plist and
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION are ignored.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts: *appFonts
         NSLocationWhenInUseUsageDescription: "Tablewhere uses your location to work out when you should leave to meet your group. It stays on your phone."
         NSCalendarsWriteOnlyAccessUsageDescription: "Tablewhere adds your group’s plan to your calendar when you ask."
@@ -186,6 +194,10 @@ targets:
       path: ForkRoadWidgets/Info.plist
       properties:
         CFBundleDisplayName: Tablewhere
+        # Without these, XcodeGen writes a fixed "1.0" / "1" into Info.plist and
+        # MARKETING_VERSION / CURRENT_PROJECT_VERSION are ignored.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts: *appFonts
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
