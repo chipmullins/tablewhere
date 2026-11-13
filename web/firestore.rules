@@ -165,6 +165,60 @@ service cloud.firestore {
         );
       }
 
+      // This phone's Lock Screen countdown settings and ActivityKit push
+      // tokens (1.1). Private: only you write and read yours; the server
+      // (admin SDK) reads them to start, update, and end the countdown, and
+      // keeps laStartedFor / laEndedFor here, which apps can't touch.
+      function validDevice() {
+        let d = request.resource.data;
+        let clientKeys = ['leadMinutes', 'removeWhen', 'apnsEnv', 'countdownOn', 'startToken',
+                          'updateToken', 'activityMeet', 'leaveAt', 'travelMinutes', 'planMeet', 'updatedAt'];
+        let changed = resource == null ? d.keys() : d.diff(resource.data).affectedKeys();
+        return changed.hasOnly(clientKeys)
+          && d.size() <= 20
+          && (!('leadMinutes' in d) || (d.leadMinutes is int && d.leadMinutes >= 60 && d.leadMinutes <= 480))
+          && (!('removeWhen' in d) || d.removeWhen in ['arrive', 'meet', 'after30', 'after60'])
+          && (!('apnsEnv' in d) || d.apnsEnv in ['sandbox', 'production'])
+          && (!('countdownOn' in d) || d.countdownOn is bool)
+          && (!('startToken' in d) || (d.startToken is string && d.startToken.size() <= 400))
+          && (!('updateToken' in d) || (d.updateToken is string && d.updateToken.size() <= 400))
+          && (!('travelMinutes' in d) || (d.travelMinutes is int && d.travelMinutes >= 0 && d.travelMinutes <= 1440));
+      }
+
+      match /devices/{userId} {
+        allow get: if signedIn() && request.auth.uid == userId;
+        allow list: if false;
+        allow create, update: if signedIn() && request.auth.uid == userId && validDevice();
+        allow delete: if signedIn() && (
+          request.auth.uid == userId || session(sessionId).createdBy == request.auth.uid
+        );
+      }
+
+      // "On my way" (1.1): your arrival time and status, never a location.
+      // Only you write yours; anyone in the plan can read them. Only for a
+      // decided plan. Deleted with the plan (and by the server after it).
+      function validETA(userId) {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['userID', 'name', 'eta', 'etaLabel', 'leftAt', 'status', 'lateMinutes', 'lateNote', 'updatedAt'])
+          && (!('etaLabel' in d) || d.etaLabel == null || (d.etaLabel is string && d.etaLabel.size() <= 24))
+          && d.userID == userId
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+          && d.status in ['onTheWay', 'late', 'arrived']
+          && (!('eta' in d) || d.eta == null || d.eta is timestamp)
+          && (!('leftAt' in d) || d.leftAt == null || d.leftAt is timestamp)
+          && (!('lateMinutes' in d) || d.lateMinutes == null || d.lateMinutes in [10, 15, 30])
+          && (!('lateNote' in d) || d.lateNote == null || d.lateNote in ['text']);
+      }
+
+      match /eta/{userId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == userId
+          && session(sessionId).status == 'decided' && validETA(userId);
+        allow delete: if signedIn() && (
+          request.auth.uid == userId || session(sessionId).createdBy == request.auth.uid
+        );
+      }
+
       // Members list: you can only add or edit yourself.
       match /members/{userId} {
         allow read: if signedIn();

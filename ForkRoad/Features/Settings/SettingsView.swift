@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var shareStats = UsageStats.isOn
     @State private var tipsReset = false
     @AppStorage("spinReveal") private var spinReveal = true
+    @State private var leadHours = LiveActivitySettings.leadHours
+    @State private var removal = LiveActivitySettings.removal
 
     private let radiusOptions: [Double] = [0.5, 1, 2, 3, 5, 10]
 
@@ -63,6 +65,25 @@ struct SettingsView: View {
                 } footer: {
                     Text("Spins play the same big reveal as group spins. Turn off for the quicker reel.")
                 }
+
+                Section {
+                    Picker("Lock Screen countdown starts", selection: $leadHours) {
+                        ForEach(LiveActivitySettings.leadRange, id: \.self) { hours in
+                            Text(hours == 1 ? "1 hour before" : "\(hours) hours before").tag(hours)
+                        }
+                    }
+                    Picker("Remove from Lock Screen", selection: $removal) {
+                        ForEach(LockScreenRemoval.allCases) { Text($0.title).tag($0) }
+                    }
+                } header: {
+                    Text("Group plans")
+                } footer: {
+                    Text(removal == .arrive
+                         ? "Counts down to when you should leave. “When I arrive” works when you share “On my way”; otherwise it goes 30 minutes after the meet time."
+                         : "Counts down to when you should leave, on your Lock Screen and in the Dynamic Island.")
+                }
+                .onChange(of: leadHours) { saveLockScreen() }
+                .onChange(of: removal) { saveLockScreen() }
 
                 Section("Appearance") {
                     Picker("Appearance", selection: $appearance) {
@@ -181,6 +202,13 @@ struct SettingsView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(version) (\(build))"
+    }
+
+    /// Saved here, then copied to your plans (the server starts and ends the countdown).
+    private func saveLockScreen() {
+        LiveActivitySettings.leadHours = leadHours
+        LiveActivitySettings.removal = removal
+        Task { await GroupService.shared.saveDeviceEverywhere() }
     }
 
     private func saveName() {

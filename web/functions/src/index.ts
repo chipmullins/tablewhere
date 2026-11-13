@@ -6,6 +6,8 @@
  *   sessions/{sessionId}/members/{uid}   { id, name, joinedAt, fcmToken? }
  *   sessions/{sessionId}/votes/{uid}     { voterID, voterName, optionID, votedAt }
  *   sessions/{sessionId}/rsvps/{uid}     { userID, name, going, guests, answeredAt }  ("I'll pick" plans)
+ *   sessions/{sessionId}/devices/{uid}   Lock Screen countdown settings + ActivityKit tokens (1.1, private)
+ *   sessions/{sessionId}/eta/{uid}       "On my way": { name, eta, etaLabel, status, lateMinutes, lateNote } (1.1)
  *
  * Every handler catches its own errors: a failed push is logged, never retried or thrown.
  */
@@ -13,9 +15,14 @@ import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore, type DocumentData, type DocumentSnapshot } from "firebase-admin/firestore";
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
-import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { Timestamp } from "firebase-admin/firestore";
+import { APNS_KEY_ID, APNS_KEY_P8 } from "./apns";
+import { endAllNow, endFor, liveActivityTick, meetTimeChanged, updateAll } from "./liveActivities";
+
+/** Functions that send Live Activity pushes need the APNs key. */
+const apnsSecrets = [APNS_KEY_P8, APNS_KEY_ID];
 
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
@@ -311,12 +318,13 @@ async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData,
 
 // MARK: - Session decided / meeting time → everyone but the creator
 
-export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async (event) => {
+export const onSessionUpdated = onDocumentUpdated({ document: "sessions/{sessionId}", secrets: apnsSecrets }, async (event) => {
   try {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after) return;
     const sessionId = event.params.sessionId;
+    await liveActivityChanges(event.data!.after.ref, before, after);
     const creator = str(after.createdBy);
     const except = creator ? [creator] : [];
 
@@ -365,6 +373,121 @@ export const onSessionUpdated = onDocumentUpdated("sessions/{sessionId}", async 
   }
 });
 
+/**
+ * Lock Screen countdowns follow the plan: reopened or moved to another place
+ * → they all go now (and start fresh when it's decided again); a new meet
+ * time → the ones already up follow it.
+ */
+async function liveActivityChanges(ref: FirebaseFirestore.DocumentReference, before: DocumentData, after: DocumentData) {
+  try {
+    if (before.status !== "decided") return;
+    if (after.status !== "decided" || (after.winnerID && before.winnerID !== after.winnerID)) {
+      await endAllNow(ref);
+      return;
+    }
+    const oldMeet = before.meetTime instanceof Timestamp ? before.meetTime.toMillis() : undefined;
+    const newMeet = after.meetTime instanceof Timestamp ? after.meetTime.toMillis() : undefined;
+    if (oldMeet !== undefined && newMeet !== undefined && oldMeet !== newMeet) await meetTimeChanged(ref, oldMeet, newMeet);
+    if (oldMeet !== undefined && newMeet === undefined) await endAllNow(ref);
+  } catch (err) {
+    logger.error("liveActivityChanges failed", { sessionId: ref.id, err: String(err) });
+  }
+}
+
+/** You left the plan (or it ended): your countdown goes now. */
+export const onDeviceDeleted = onDocumentDeleted(
+  { document: "sessions/{sessionId}/devices/{uid}", secrets: apnsSecrets },
+  async (event) => {
+    try {
+      const d = event.data?.data();
+      if (!d || typeof d.updateToken !== "string") return;
+      const started = d.laStartedFor ?? (d.activityMeet instanceof Timestamp ? d.activityMeet.toMillis() : undefined);
+      if (started === undefined || d.laEndedFor === started) return;
+      await endFor(event.params.sessionId, event.data!.ref, d, undefined, Date.now());
+    } catch (err) {
+      logger.error("onDeviceDeleted failed", { params: event.params, err: String(err) });
+    }
+  },
+);
+
+// MARK: - "On my way" (1.1): arrival times, never locations
+
+const ETA_PUSH_MIN_CHANGE_MS = 3 * 60 * 1000;
+
+function etaText(eta: DocumentData): string | undefined {
+  const label = str(eta.etaLabel);
+  if (label) return label;
+  const at = eta.eta instanceof Timestamp ? eta.eta.toMillis() : undefined;
+  if (at === undefined) return undefined;
+  const minutes = Math.max(1, Math.round((at - Date.now()) / 60000));
+  return `${minutes} min away`;
+}
+
+/**
+ * Someone tapped "I'm on my way", is running late, arrived, or their ETA
+ * moved. Everyone else hears (sound for on the way / late / arrived, quiet
+ * for a new ETA, one notification per person), and their Lock Screen
+ * countdowns show it. Arriving takes your own countdown down if you chose
+ * "When I arrive".
+ */
+export const onETAWritten = onDocumentWritten(
+  { document: "sessions/{sessionId}/eta/{uid}", secrets: apnsSecrets },
+  async (event) => {
+    try {
+      const { sessionId, uid } = event.params;
+      const before = event.data?.before.data();
+      const after = event.data?.after.data();
+      const sessionRef = db.collection("sessions").doc(sessionId);
+      const session = (await sessionRef.get()).data();
+      if (!session || session.status !== "decided") return;
+      const meet = session.meetTime instanceof Timestamp ? session.meetTime.toMillis() : undefined;
+
+      const statusChanged = !before || !after || before.status !== after.status;
+      if (after) {
+        const who = str(after.name) ?? "Someone";
+        const when = etaText(after);
+        let body: string | undefined;
+        let quiet = false;
+        if (after.status === "arrived") {
+          if (statusChanged) body = `${who} arrived`;
+        } else if (after.status === "late") {
+          const lateChanged = statusChanged || before?.lateMinutes !== after.lateMinutes || before?.lateNote !== after.lateNote;
+          if (lateChanged) {
+            body = after.lateNote === "text" ? `${who} is running late and will text you`
+              : typeof after.lateMinutes === "number" ? `${who} is running ~${after.lateMinutes} min late`
+              : `${who} is running late`;
+          }
+        } else if (statusChanged) {
+          body = `${who} is on the way` + (when ? ` · about ${when}` : "");
+        } else {
+          const oldAt = before?.eta instanceof Timestamp ? before.eta.toMillis() : 0;
+          const newAt = after.eta instanceof Timestamp ? after.eta.toMillis() : 0;
+          if (Math.abs(newAt - oldAt) >= ETA_PUSH_MIN_CHANGE_MS && when) {
+            body = `${who} · now about ${when}`;
+            quiet = true;
+          }
+        }
+        if (body) {
+          const to = await recipients(sessionId, { except: [uid] });
+          await send(sessionId, to, sessionTitle(session), body, { collapse: `eta-${uid}`, quiet });
+        }
+      }
+
+      if (meet !== undefined) {
+        await updateAll(sessionRef, meet, { quiet: !statusChanged, except: uid });
+        // Arrived, with "Remove from Lock Screen: When I arrive": your own countdown goes.
+        if (after?.status === "arrived" && statusChanged) {
+          const device = await sessionRef.collection("devices").doc(uid).get();
+          const d = device.data();
+          if (d && d.removeWhen === "arrive") await endFor(sessionId, device.ref, d, meet, Date.now());
+        }
+      }
+    } catch (err) {
+      logger.error("onETAWritten failed", { params: event.params, err: String(err) });
+    }
+  },
+);
+
 // MARK: - Timed votes: a last call for whoever hasn't voted
 
 /**
@@ -404,12 +527,22 @@ export const voteClosingSoon = onSchedule("every 1 minutes", async () => {
 const HOLD_LIMIT_MS = 10 * 60 * 1000;
 
 /**
+ * Every 5 minutes: Lock Screen countdowns (start / end, see liveActivities.ts),
+ * then held results.
+ *
  * A result the creator held (iMessage: "Send to the group") but never sent.
  * After 10 minutes, share it: setting `announced` fires the usual
  * "It's decided!" push to everyone (onSessionUpdated), and the creator is
  * told why. The iMessage bubble can only be updated by the creator's tap.
  */
-export const releaseHeldResults = onSchedule("every 5 minutes", async () => {
+export const releaseHeldResults = onSchedule({ schedule: "every 5 minutes", secrets: apnsSecrets }, async () => {
+  // Also runs the Lock Screen countdowns (1.1), so there are still three
+  // scheduled jobs (Cloud Scheduler charges per job past three).
+  try {
+    await liveActivityTick();
+  } catch (err) {
+    logger.error("liveActivityTick failed", { err: String(err) });
+  }
   try {
     const cutoff = Timestamp.fromMillis(Date.now() - HOLD_LIMIT_MS);
     const dayAgo = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);

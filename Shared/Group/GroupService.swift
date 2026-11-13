@@ -36,6 +36,9 @@ enum GroupError: LocalizedError {
 ///   sessions/{id}/members/{uid}   who's in
 ///   sessions/{id}/votes/{uid}     one vote per person
 ///   sessions/{id}/rsvps/{uid}     one RSVP per person ("I'll pick" plans)
+///   sessions/{id}/devices/{uid}   this phone's Lock Screen settings and push
+///                                 tokens (only you and the server read it; 1.1)
+///   sessions/{id}/eta/{uid}       "On my way": arrival time and status (1.1)
 ///
 /// Everyone signs in anonymously, so there are no accounts or passwords.
 @MainActor
@@ -212,6 +215,55 @@ final class GroupService {
         // Merge, so joining again never wipes a saved push token.
         try await sessionRef(sessionID).collection("members").document(uid).setData(data, merge: true)
         SharedCache.rememberSession(sessionID)
+        await saveDevice(sessionID: sessionID)
+    }
+
+    // MARK: This phone's Lock Screen settings (1.1)
+
+    /// Copies the Live Activity settings and push-to-start token to this
+    /// plan, so the server can start the countdown at the right time.
+    /// Private: only you (and the server) can read sessions/{id}/devices/{uid}.
+    func saveDevice(sessionID: String) async {
+        guard let uid = try? await userID() else { return }
+        var data: [String: Any] = [
+            "leadMinutes": LiveActivitySettings.leadHours * 60,
+            "removeWhen": LiveActivitySettings.removal.rawValue,
+            "apnsEnv": LiveActivitySettings.apnsEnvironment,
+            "countdownOn": LiveActivitySettings.countdownOn,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        if LiveActivitySettings.serverStartsIt, let token = LiveActivitySettings.startToken {
+            data["startToken"] = token
+        } else {
+            data["startToken"] = FieldValue.delete()
+        }
+        try? await sessionRef(sessionID).collection("devices").document(uid).setData(data, merge: true)
+    }
+
+    /// After a settings change or a new push-to-start token: every recent plan.
+    func saveDeviceEverywhere() async {
+        for id in SharedCache.recentSessionIDs() { await saveDevice(sessionID: id) }
+    }
+
+    /// The running activity's own push token (for updates and the end push),
+    /// and which meet time it's for, so the server doesn't start a second one.
+    func saveActivityToken(sessionID: String, token: String?, meetTime: Date) async {
+        guard let uid = try? await userID() else { return }
+        var data: [String: Any] = ["activityMeet": Timestamp(date: meetTime), "updatedAt": FieldValue.serverTimestamp()]
+        if let token { data["updateToken"] = token }
+        try? await sessionRef(sessionID).collection("devices").document(uid).setData(data, merge: true)
+    }
+
+    /// This phone's leave-by time, so a countdown the server starts shows it.
+    /// (A time, not a location. Only you and the server can read it.)
+    func saveLeavePlan(sessionID: String, leaveAt: Date, travelMinutes: Int, meetTime: Date) async {
+        guard let uid = try? await userID() else { return }
+        try? await sessionRef(sessionID).collection("devices").document(uid).setData([
+            "leaveAt": Timestamp(date: leaveAt),
+            "travelMinutes": travelMinutes,
+            "planMeet": Timestamp(date: meetTime),
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
     }
 
     /// Groups this device has joined since launch (so `joinIfNeeded` checks once).
@@ -513,7 +565,7 @@ final class GroupService {
         let uid = try await userID()
         guard session.isOwned(by: uid) else { throw GroupError.notOwner }
         let ref = sessionRef(session.id)
-        for name in ["votes", "rsvps", "members"] {
+        for name in ["votes", "rsvps", "eta", "devices", "members"] {
             let docs = try await ref.collection(name).getDocuments().documents
             for doc in docs { try await doc.reference.delete() }
         }
@@ -528,6 +580,9 @@ final class GroupService {
         let ref = sessionRef(sessionID)
         try? await ref.collection("votes").document(uid).delete()
         try? await ref.collection("rsvps").document(uid).delete()
+        try? await ref.collection("eta").document(uid).delete()
+        // The server ends your Lock Screen countdown when this goes.
+        try? await ref.collection("devices").document(uid).delete()
         try await ref.collection("members").document(uid).delete()
         // Voting again after leaving has to join again.
         joinedSessions.remove(sessionID)

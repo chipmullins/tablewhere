@@ -42,7 +42,7 @@ struct GroupPlanLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(GroupPlanText.detail(context.attributes, state, phase))
+                    Text(state.arrivalsLine() ?? GroupPlanText.detail(context.attributes, state, phase))
                         .font(Theme.body(13, .medium))
                         .foregroundStyle(Color.white.opacity(0.7))
                         .lineLimit(1)
@@ -95,6 +95,14 @@ private struct GroupPlanLockScreenView: View {
                     .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                // Friends' "On my way" times (arrival times only, never locations).
+                if let line = state.arrivalsLine() {
+                    Label(line, systemImage: "car.fill")
+                        .font(Theme.body(12, .semibold))
+                        .foregroundStyle(Theme.accentText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 2) {
@@ -158,10 +166,12 @@ enum GroupPlanText {
         date.formatted(date: .omitted, time: .shortened)
     }
 
-    /// "Leave by 6:42 PM" / "Time to go" / "Meet time".
+    /// "Leave by 6:42 PM" / "Time to go" / "Meet time" ("Meet at 7:00 PM"
+    /// when the drive time isn't known yet).
     static func headline(_ state: GroupPlanAttributes.ContentState,
                          _ phase: GroupPlanAttributes.ContentState.Phase) -> String {
         switch phase {
+        case .countdown where !state.knowsDrive: return "Meet at \(time(state.meetTime))"
         case .countdown: return "Leave by \(time(state.leaveAt))"
         case .timeToGo: return "Time to go"
         case .arrived: return "Meet time"
@@ -173,6 +183,7 @@ enum GroupPlanText {
                        _ phase: GroupPlanAttributes.ContentState.Phase) -> String {
         switch phase {
         case .countdown, .timeToGo:
+            guard state.knowsDrive else { return "Open Tablewhere for your leave-by time" }
             return "Meet at \(time(state.meetTime)) · \(state.travelMinutes) min drive"
         case .arrived:
             return "Enjoy \(attributes.place)!"

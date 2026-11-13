@@ -19,11 +19,15 @@ enum LeaveBy {
 
     static let categoryID = "LEAVE_BY"
     static let directionsAction = "LEAVE_BY_DIRECTIONS"
+    /// "I'm on my way" (1.1): opens the app and shares your arrival time.
+    /// Opens it (foreground) because live arrival updates can only start there.
+    static let onMyWayAction = "LEAVE_BY_ON_MY_WAY"
 
     /// Notification buttons. Registered with VisitFollowUp's category at launch.
     static var category: UNNotificationCategory {
+        let onMyWay = UNNotificationAction(identifier: onMyWayAction, title: "I’m on my way", options: [.foreground])
         let go = UNNotificationAction(identifier: directionsAction, title: "Directions", options: [.foreground])
-        return UNNotificationCategory(identifier: categoryID, actions: [go], intentIdentifiers: [], options: [])
+        return UNNotificationCategory(identifier: categoryID, actions: [onMyWay, go], intentIdentifiers: [], options: [])
     }
 
     /// The "Remind me when it's time to leave" switch (on by default).
@@ -95,10 +99,15 @@ enum LeaveBy {
     private static func requestID(_ sessionID: String) -> String { "leaveby.\(sessionID)" }
     private static func headsUpID(_ sessionID: String) -> String { "headsup.\(sessionID)" }
 
-    /// The heads-up goes out this long before the meet time. Tapping it opens
-    /// the plan, which starts the Lock Screen countdown (an app can only start
-    /// a Live Activity while it's open).
-    static let headsUpBeforeMeet: TimeInterval = 90 * 60
+    /// The heads-up goes out this long before the meet time ("Lock Screen
+    /// countdown starts", 1–8 hours). Tapping it opens the plan, which starts
+    /// the countdown. Only on phones where the server can't start it
+    /// (iOS 17.0–17.1, or no push-to-start token yet).
+    static var headsUpBeforeMeet: TimeInterval { LiveActivitySettings.lead }
+
+    /// The leave-by last saved for each plan, so a refresh that changes
+    /// nothing doesn't write again.
+    private static var savedPlans: [String: TimeInterval] = [:]
 
     /// Schedules (or replaces) the "Time to head out" reminder for a group.
     /// `mayAsk`: whether this may show the notification permission prompt.
@@ -112,6 +121,12 @@ enum LeaveBy {
         // Before the reminder checks: the Live Activity also covers "Time to go"
         // after leave-by passes, and checks the reminder switch itself.
         activityUpdate?(plan, sessionID, winner, title)
+        // So a countdown the server starts shows your leave-by time.
+        if savedPlans[sessionID] != plan.leaveAt.timeIntervalSinceReferenceDate {
+            savedPlans[sessionID] = plan.leaveAt.timeIntervalSinceReferenceDate
+            await GroupService.shared.saveLeavePlan(sessionID: sessionID, leaveAt: plan.leaveAt,
+                                                    travelMinutes: plan.driveMinutes, meetTime: plan.meetTime)
+        }
         guard remindersOn, plan.leaveAt.timeIntervalSinceNow > 60 else { return }
 
         // "Provisional" (quiet) permission from "How was it?" would deliver
@@ -135,8 +150,10 @@ enum LeaveBy {
         let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
         try? await center.add(UNNotificationRequest(identifier: requestID(sessionID), content: content, trigger: trigger))
 
-        // The heads-up, 90 minutes out. Skipped when it's already that close,
-        // or when leave-by comes first or right after (that reminder covers it).
+        // The heads-up, at the chosen lead time. Skipped when the server
+        // starts the countdown itself, when it's already that close, or when
+        // leave-by comes first or right after (that reminder covers it).
+        guard !LiveActivitySettings.serverStartsIt else { return }
         let headsUpAt = plan.meetTime.addingTimeInterval(-headsUpBeforeMeet)
         guard headsUpAt.timeIntervalSinceNow > 60,
               plan.leaveAt.timeIntervalSince(headsUpAt) > 15 * 60 else { return }

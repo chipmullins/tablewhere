@@ -68,6 +68,8 @@ struct LeaveByCard: View {
         .task(id: "\(winner.id)|\(meetTime.timeIntervalSince1970)|\(refreshCount)") { await refresh() }
         .onChange(of: remind) {
             LeaveBy.remindersOn = remind
+            // The server starts the Lock Screen countdown too: tell it.
+            Task { await GroupService.shared.saveDeviceEverywhere() }
             Task {
                 if let plan { await LeaveBy.schedule(plan, sessionID: sessionID, winner: winner, title: title) }
             }

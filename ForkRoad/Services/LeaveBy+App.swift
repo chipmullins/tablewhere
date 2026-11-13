@@ -28,12 +28,12 @@ extension LeaveBy {
             guard snapshot.exists, let session = try? snapshot.data(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
                   let meet = session.meetTime,
-                  meet.timeIntervalSinceNow > -GroupPlanAttributes.lingerAfterMeet else {
+                  meet.timeIntervalSinceNow > -max(LiveActivities.linger, 60) else {
                 cancel(sessionID: id)
                 continue
             }
             // Just past the meet time: nothing left to remind about, but the
-            // Live Activity stays on the Lock Screen until meet + 30 min.
+            // Live Activity stays on the Lock Screen for the chosen time.
             guard meet.timeIntervalSinceNow > 0 else {
                 await LiveActivities.finish(sessionID: id)
                 continue

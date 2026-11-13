@@ -3,20 +3,50 @@ import ActivityKit
 import PickerCore
 
 /// Starts, updates, and ends the group plan Live Activity (drawn by the widget
-/// extension; see GroupPlanAttributes). App-only: Live Activities can only be
-/// requested by the app, so LeaveBy reaches this through its `activityUpdate`
-/// and `activityEnd` hooks, which `install()` sets at launch.
+/// extension; see GroupPlanAttributes). App-only: LeaveBy reaches this
+/// through its `activityUpdate` and `activityEnd` hooks, which `install()`
+/// sets at launch.
+///
+/// 1.1: the server starts it too (push-to-start, iOS 17.2+) at the chosen
+/// lead time, updates it (friends' "On my way" times), and ends it on time,
+/// even if the app never opens (web/functions/src/liveActivities.ts). This
+/// file hands the server the tokens it needs: the device's push-to-start
+/// token, and each running activity's own push token.
 @MainActor
 enum LiveActivities {
     typealias State = GroupPlanAttributes.ContentState
 
-    /// Connects LeaveBy's schedule/cancel to Live Activities. Call once at launch.
+    /// Connects LeaveBy's schedule/cancel to Live Activities, and starts
+    /// watching for push tokens. Call once at launch.
     static func install() {
         LeaveBy.activityUpdate = { plan, sessionID, winner, title in
             Task { await show(plan, sessionID: sessionID, winner: winner, title: title) }
         }
         LeaveBy.activityEnd = { sessionID in
             Task { await end(sessionID: sessionID) }
+        }
+        LiveActivitySettings.activitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
+        // Activities already up (started by the app or by a push): their tokens.
+        for activity in Activity<GroupPlanAttributes>.activities { watchToken(of: activity) }
+        Task {
+            for await activity in Activity<GroupPlanAttributes>.activityUpdates { watchToken(of: activity) }
+        }
+        Task {
+            for await enabled in ActivityAuthorizationInfo().activityEnablementUpdates {
+                guard LiveActivitySettings.activitiesEnabled != enabled else { continue }
+                LiveActivitySettings.activitiesEnabled = enabled
+                await GroupService.shared.saveDeviceEverywhere()
+            }
+        }
+        if #available(iOS 17.2, *) {
+            Task {
+                for await data in Activity<GroupPlanAttributes>.pushToStartTokenUpdates {
+                    let hex = hexString(data)
+                    guard LiveActivitySettings.startToken != hex else { continue }
+                    LiveActivitySettings.startToken = hex
+                    await GroupService.shared.saveDeviceEverywhere()
+                }
+            }
         }
         Task { await tidyUp() }
     }
@@ -26,20 +56,22 @@ enum LiveActivities {
     /// Starts the activity for a group, or updates it with a new plan.
     /// Ends it instead when the reminder switch is off or the plan is over.
     static func show(_ plan: LeaveBy.Plan, sessionID: String, winner: GroupOption, title: String?) async {
-        let endAt = plan.meetTime.addingTimeInterval(GroupPlanAttributes.lingerAfterMeet)
+        let endAt = plan.meetTime.addingTimeInterval(linger)
         guard LeaveBy.remindersOn, endAt.timeIntervalSinceNow > 0 else {
             await end(sessionID: sessionID)
             return
         }
         guard plan.meetTime.timeIntervalSinceNow > 0 else {
-            // Already past the meet time: leave it up until meet + 30 min.
+            // Already past the meet time: leave it up until the chosen time.
             await finish(sessionID: sessionID)
             return
         }
 
-        let state = State(meetTime: plan.meetTime, leaveAt: plan.leaveAt, travelMinutes: plan.driveMinutes)
-        let content = ActivityContent(state: state, staleDate: state.staleDate(), relevanceScore: 100)
         var current = running(sessionID)
+        // Keep friends' arrival times the server put there.
+        let state = State(meetTime: plan.meetTime, leaveAt: plan.leaveAt, travelMinutes: plan.driveMinutes,
+                          arrivals: current.first?.content.state.arrivals)
+        let content = ActivityContent(state: state, staleDate: state.staleDate(), relevanceScore: 100)
 
         // A different place (re-decided group): start over so the name is right.
         if let first = current.first, first.attributes.place != winner.name {
@@ -48,22 +80,39 @@ enum LiveActivities {
         }
 
         if let activity = current.first {
-            // Extras from a race between two refreshes.
+            // Extras from a race between two refreshes (or the app and a push).
             for extra in current.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
             if activity.content.state != state { await activity.update(content) }
         } else {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-            // Only close to the time (see `shouldStart`). Opening the app then,
-            // or tapping the heads-up / leave-by reminder, starts it.
+            // Only within the chosen lead time (see `shouldStart`). Earlier,
+            // the server starts it on time (or the heads-up reminder asks you to open the app).
             guard Self.shouldStart(plan) else { return }
             let name = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let attributes = GroupPlanAttributes(sessionID: sessionID,
                                                  title: name.isEmpty ? "Group plan" : name,
                                                  place: winner.name)
             // Fails when the app isn't in the foreground; the next refresh tries again.
-            _ = try? Activity<GroupPlanAttributes>.request(attributes: attributes, content: content, pushType: nil)
+            // With a push token, so the server can update and end it.
+            if let activity = try? Activity<GroupPlanAttributes>.request(attributes: attributes, content: content,
+                                                                         pushType: .token) {
+                watchToken(of: activity)
+                // Tells the server this phone has it, so it doesn't start a second one.
+                await GroupService.shared.saveActivityToken(sessionID: sessionID, token: nil, meetTime: plan.meetTime)
+            }
         }
         scheduleTimers(sessionID: sessionID, state: state)
+    }
+
+    /// Friends' "On my way" times, while the app is open (pushes do this otherwise).
+    static func updateArrivals(sessionID: String, _ arrivals: [GroupPlanAttributes.Arrival]) async {
+        for activity in running(sessionID) {
+            let old = activity.content.state
+            guard (old.arrivals ?? []) != arrivals else { continue }
+            let state = State(meetTime: old.meetTime, leaveAt: old.leaveAt, travelMinutes: old.travelMinutes,
+                              arrivals: arrivals.isEmpty ? nil : arrivals)
+            await activity.update(ActivityContent(state: state, staleDate: state.staleDate()))
+        }
     }
 
     // MARK: Ending
@@ -77,14 +126,24 @@ enum LiveActivities {
         }
     }
 
+    /// "On my way" saw you arrive: with "Remove from Lock Screen: When I
+    /// arrive", it goes now.
+    static func arrived(sessionID: String) async {
+        guard LiveActivitySettings.removal == .arrive else { return }
+        await end(sessionID: sessionID)
+    }
+
+    /// How long it stays after the meet time ("Remove from Lock Screen").
+    static var linger: TimeInterval { LiveActivitySettings.removal.linger }
+
     /// At the meet time: ends the activity but leaves it on the Lock Screen
-    /// until meet + 30 min, when the system removes it (even if the app isn't running).
+    /// for the chosen time, when the system removes it (even if the app isn't running).
     static func finish(sessionID: String) async {
         timers[sessionID]?.cancel()
         timers[sessionID] = nil
         for activity in running(sessionID) {
             let state = activity.content.state
-            let endAt = state.meetTime.addingTimeInterval(GroupPlanAttributes.lingerAfterMeet)
+            let endAt = state.meetTime.addingTimeInterval(linger)
             guard endAt.timeIntervalSinceNow > 0 else {
                 await activity.end(nil, dismissalPolicy: .immediate)
                 continue
@@ -97,7 +156,7 @@ enum LiveActivities {
     static func tidyUp() async {
         for activity in Activity<GroupPlanAttributes>.activities {
             let state = activity.content.state
-            if state.meetTime.addingTimeInterval(GroupPlanAttributes.lingerAfterMeet).timeIntervalSinceNow <= 0 {
+            if state.meetTime.addingTimeInterval(linger).timeIntervalSinceNow <= 0 {
                 await activity.end(nil, dismissalPolicy: .immediate)
             } else if state.meetTime.timeIntervalSinceNow <= 0 {
                 await finish(sessionID: activity.attributes.sessionID)
@@ -114,29 +173,50 @@ enum LiveActivities {
         }
     }
 
-    /// A Live Activity starts 90 minutes before the meet time, or 15 minutes
-    /// before leave-by for a long drive, whichever comes first. Earlier, it
-    /// just sat on the Lock Screen for hours (and iOS caps them at ~8 hours).
-    static let startBeforeMeet: TimeInterval = 90 * 60
+    /// Starts at the chosen lead time before the meet time ("Lock Screen
+    /// countdown starts", default 2 hours), or 15 minutes before leave-by
+    /// for a longer drive, whichever comes first. iOS caps them at ~8 hours.
     static let startBeforeLeave: TimeInterval = 15 * 60
 
     static func shouldStart(_ plan: LeaveBy.Plan) -> Bool {
-        plan.meetTime.timeIntervalSinceNow <= startBeforeMeet
+        plan.meetTime.timeIntervalSinceNow <= LiveActivitySettings.lead
             || plan.leaveAt.timeIntervalSinceNow <= startBeforeLeave
+    }
+
+    /// Activities whose push token we're already watching.
+    private static var watched: Set<String> = []
+
+    /// Saves each activity's push token to its plan (it can change; iOS
+    /// sends a new one), so the server can update and end it.
+    private static func watchToken(of activity: Activity<GroupPlanAttributes>) {
+        guard watched.insert(activity.id).inserted else { return }
+        Task { @MainActor in
+            for await data in activity.pushTokenUpdates {
+                await GroupService.shared.saveActivityToken(sessionID: activity.attributes.sessionID,
+                                                            token: hexString(data),
+                                                            meetTime: activity.content.state.meetTime)
+            }
+        }
+    }
+
+    private static func hexString(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
     }
 
     private static var timers: [String: Task<Void, Never>] = [:]
 
     /// While the app is running: redraw at leave-by (moving the stale date on
     /// to the meet time), then finish at the meet time. When the app isn't
-    /// running the stale date does the first, and the next launch the second.
+    /// running the stale date does the first, and the server's end push the second.
     private static func scheduleTimers(sessionID: String, state: State) {
         timers[sessionID]?.cancel()
         timers[sessionID] = Task { @MainActor in
             if state.leaveAt.timeIntervalSinceNow > 0 {
                 guard await sleep(until: state.leaveAt) else { return }
-                for activity in running(sessionID) where activity.content.state == state {
-                    await activity.update(ActivityContent(state: state, staleDate: state.staleDate()))
+                for activity in running(sessionID) where activity.content.state.meetTime.timeIntervalSinceReferenceDate
+                    == state.meetTime.timeIntervalSinceReferenceDate {
+                    let now = activity.content.state
+                    await activity.update(ActivityContent(state: now, staleDate: now.staleDate()))
                 }
             }
             guard await sleep(until: state.meetTime) else { return }
