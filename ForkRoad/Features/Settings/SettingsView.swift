@@ -110,7 +110,7 @@ struct SettingsView: View {
                         confirmClear = true
                     }
                     .disabled(clearedHistory)
-                    Button("Show the welcome screens again") {
+                    Button("Take the tour") {
                         // Shown once this sheet has fully closed, so the two don't collide.
                         replayWelcome = true
                         dismiss()

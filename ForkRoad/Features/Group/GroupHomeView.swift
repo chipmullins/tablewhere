@@ -14,6 +14,9 @@ struct GroupHomeView: View {
     @State private var isJoining = false
     @State private var errorMessage: String?
     @State private var recentIDs = SharedCache.recentSessionIDs()
+    /// One-time "New in 1.1" card for people who had the app before the tour.
+    @AppStorage(TourPage.seenNewKey) private var seenNew = false
+    @State private var showTour = false
 
     private enum PendingAction { case create, join }
 
@@ -37,6 +40,10 @@ struct GroupHomeView: View {
                         .foregroundStyle(Theme.text)
                 }
                 .padding(.top, 8)
+
+                if FirebaseSetup.isConfigured && !seenNew {
+                    newInThisVersion
+                }
 
                 if !FirebaseSetup.isConfigured {
                     setupNotice
@@ -83,6 +90,44 @@ struct GroupHomeView: View {
             .presentationBackground(Theme.night)
         }
         .onAppear { recentIDs = SharedCache.recentSessionIDs() }
+        .fullScreenCover(isPresented: $showTour) {
+            OnboardingView(pages: TourPage.groups) { showTour = false }
+                .environment(model)
+        }
+    }
+
+    /// "New in 1.1": opens the tour's group pages. Shown once.
+    private var newInThisVersion: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(Theme.body(18, .semibold))
+                .foregroundStyle(Theme.accentText)
+                .frame(width: 40, height: 40)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NEW IN 1.1").font(Theme.body(11, .heavy)).tracking(0.8).foregroundStyle(Theme.accentText)
+                Text("Group plans got better").font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
+                Text("Group filters, “On my way” with arrival times, and a Lock Screen countdown you control.")
+                    .font(Theme.body(13))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Take a look") { showTour = true; seenNew = true }
+                    .font(Theme.body(14, .bold))
+                    .foregroundStyle(Theme.accentText)
+                    .frame(minHeight: 36)
+            }
+            Spacer(minLength: 0)
+            Button { withAnimation(.snappy) { seenNew = true } } label: {
+                Image(systemName: "xmark")
+                    .font(Theme.body(13, .bold))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(14)
+        .card()
     }
 
     // MARK: Sections
