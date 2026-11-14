@@ -498,7 +498,10 @@ struct GroupLobbyView: View {
                     let arrivals = live.etas.filter { $0.userID != me }.map {
                         GroupPlanAttributes.Arrival(name: $0.name, eta: $0.eta, status: $0.status.rawValue)
                     }
-                    Task { await LiveActivities.updateArrivals(sessionID: session.id, arrivals) }
+                    let mine = live.myETA?.status.rawValue
+                    let expected = live.expectedAtTable
+                    Task { await LiveActivities.updateArrivals(sessionID: session.id, arrivals,
+                                                               myStatus: mine, expected: expected) }
                 }
         }
         noteSection(session)

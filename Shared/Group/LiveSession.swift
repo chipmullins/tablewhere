@@ -110,6 +110,13 @@ final class LiveSession {
         return etas.first { $0.userID == uid }
     }
 
+    /// Who's expected at the table: everyone in the plan except people who
+    /// said they can't make it (same rule as the server's "Everyone's here").
+    var expectedAtTable: Int {
+        let declined = Set(rsvps.filter { !$0.going }.map(\.userID))
+        return members.filter { !declined.contains($0.id) }.count
+    }
+
     /// "Sam ~7:05 · Alex ~7:12 · Jo hasn't left", or nil before anyone shares.
     var arrivalLine: String? {
         guard !etas.isEmpty else { return nil }

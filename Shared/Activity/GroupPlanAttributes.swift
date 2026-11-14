@@ -22,6 +22,13 @@ struct GroupPlanAttributes: ActivityAttributes {
         let travelMinutes: Int
         /// Friends' "On my way" arrival times (1.1). Nil from older builds.
         var arrivals: [Arrival]? = nil
+        /// Your own "On my way" status ("onTheWay", "late", "arrived"; nil:
+        /// not shared yet). Decides which buttons the Lock Screen shows.
+        var myStatus: String? = nil
+        /// How many people are expected, you included ("2/4 here").
+        var expected: Int? = nil
+        /// Everyone's here: the countdown's last state, before it goes.
+        var allHere: Bool? = nil
     }
 
     /// One friend's arrival time, shared with "On my way" (never a location).
@@ -87,6 +94,27 @@ extension GroupPlanAttributes.ContentState {
         let more = arrivals.count - parts.count
         return parts.joined(separator: " · ") + (more > 0 ? " +\(more)" : "")
     }
+
+    /// People who've arrived, you included.
+    var hereCount: Int {
+        (arrivals ?? []).filter { $0.status == "arrived" }.count + (myStatus == "arrived" ? 1 : 0)
+    }
+
+    /// "2/4" once someone's there and the group size is known.
+    var hereLabel: String? {
+        guard hereCount > 0, let expected, expected > 1 else { return nil }
+        return "\(min(hereCount, expected))/\(expected)"
+    }
+
+    /// The next friend to arrive (on the way or late, with a time).
+    var nextArrival: GroupPlanAttributes.Arrival? {
+        (arrivals ?? []).filter { $0.status != "arrived" && $0.eta != nil }
+            .min { ($0.eta?.timeIntervalSinceReferenceDate ?? 0) < ($1.eta?.timeIntervalSinceReferenceDate ?? 0) }
+    }
+
+    var isAllHere: Bool { allHere == true }
+    /// You haven't tapped "On my way" yet.
+    var hasNotLeft: Bool { myStatus == nil }
 
     func phase(isStale: Bool, now: Date = Date()) -> Phase {
         if meetTime.timeIntervalSince(now) <= 0 { return .arrived }

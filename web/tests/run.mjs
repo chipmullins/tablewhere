@@ -279,6 +279,17 @@ await test("On my way without a name asks for it first, then shares", async () =
   await context.close();
 });
 
+await test("On my way: everyone's here", async () => {
+  const extra = { "sessions/s1/eta/host": { userID: "host", name: "Chip", status: "arrived", eta: { __ts: Date.now() } } };
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ session: decidedSeed(10), extra }), storage: named });
+  await page.waitForSelector("#omw:not([hidden])");
+  await page.click("#omw-go").catch(() => {});
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user"));
+  await page.click("#omw-here");
+  await page.waitForFunction(() => document.querySelector("#omw-line").textContent.startsWith("Everyone’s here (2)"));
+  await context.close();
+});
+
 export { browser, base, setupScript, basePlaces, named, P, near, LEX, HOUR };
 if (!process.env.MORE_TESTS) {
   const failed = summary();

@@ -130,6 +130,9 @@ targets:
       groups: [common]
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chipmullins.forkroad
+        # The app-only half of shared files (the Live Activity buttons'
+        # intent runs here; see Shared/Activity/GroupPlanIntents.swift).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TABLEWHERE_APP"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 

@@ -19,7 +19,8 @@ import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWrit
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { Timestamp } from "firebase-admin/firestore";
 import { APNS_KEY_ID, APNS_KEY_P8 } from "./apns";
-import { endAllNow, endFor, liveActivityTick, meetTimeChanged, planDeleted, updateAll } from "./liveActivities";
+import { arrivals, endAllNow, endFor, everyoneHere, expectedPeople, liveActivityTick, meetTimeChanged, planDeleted,
+  updateAll } from "./liveActivities";
 
 /** Functions that send Live Activity pushes need the APNs key. */
 const apnsSecrets = [APNS_KEY_P8, APNS_KEY_ID];
@@ -485,6 +486,24 @@ export const onETAWritten = onDocumentWritten(
         }
       }
 
+      // Everyone's here (2+ people expected, all arrived): one "Enjoy!" push
+      // to everyone, and the countdowns end with "All 4 here ✓". Once per plan.
+      if (after?.status === "arrived" && statusChanged && await isEveryoneHere(sessionRef)) {
+        const claimed = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(sessionRef);
+          if (!snap.exists || snap.get("everyoneHereAt")) return false;
+          tx.update(sessionRef, { everyoneHereAt: Timestamp.now() });
+          return true;
+        });
+        if (claimed) {
+          const place = winnerName(session);
+          const to = await recipients(sessionId, { except: [] });
+          await send(sessionId, to, sessionTitle(session), `Everyone’s here. Enjoy ${place}!`, { collapse: "everyone-here" });
+          if (meet !== undefined) await everyoneHere(sessionRef, meet, await expectedPeople(sessionRef));
+          return;
+        }
+      }
+
       if (meet !== undefined) {
         await updateAll(sessionRef, meet, { quiet: !statusChanged, except: uid });
         // Arrived, with "Remove from Lock Screen: When I arrive": your own countdown goes.
@@ -499,6 +518,22 @@ export const onETAWritten = onDocumentWritten(
     }
   },
 );
+
+async function isEveryoneHere(sessionRef: FirebaseFirestore.DocumentReference): Promise<boolean> {
+  const [expected, all] = await Promise.all([expectedPeople(sessionRef), arrivals(sessionRef)]);
+  if (expected.length < 2) return false;
+  const here = new Set(all.filter((a) => a.status === "arrived").map((a) => a.uid));
+  return expected.every((id) => here.has(id));
+}
+
+function winnerName(session: DocumentData): string {
+  const options: unknown = session.options;
+  if (Array.isArray(options)) {
+    const match = options.find((o) => o && o.id === session.winnerID);
+    if (match && typeof match.name === "string" && match.name.trim()) return match.name.trim();
+  }
+  return "your table";
+}
 
 // MARK: - Timed votes: a last call for whoever hasn't voted
 

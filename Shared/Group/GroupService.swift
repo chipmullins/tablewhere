@@ -402,6 +402,11 @@ final class GroupService {
 
     // MARK: On my way (1.1)
 
+    /// The plan, read once (the Lock Screen buttons run without a lobby open).
+    func fetchSession(_ sessionID: String) async throws -> GroupSession {
+        try await sessionRef(sessionID).getDocument().data(as: GroupSession.self)
+    }
+
     /// Shares your arrival time (never your location) with the plan.
     /// Replaces your earlier one. Joins the group too.
     func shareETA(sessionID: String, eta: Date?, status: GroupETA.Status,

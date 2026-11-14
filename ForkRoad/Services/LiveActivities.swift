@@ -71,9 +71,13 @@ enum LiveActivities {
         }
 
         var current = running(sessionID)
-        // Keep friends' arrival times the server put there.
-        let state = State(meetTime: plan.meetTime, leaveAt: plan.leaveAt, travelMinutes: plan.driveMinutes,
-                          arrivals: current.first?.content.state.arrivals)
+        // Keep friends' arrival times (and yours) the server put there.
+        let old = current.first?.content.state
+        var state = State(meetTime: plan.meetTime, leaveAt: plan.leaveAt, travelMinutes: plan.driveMinutes,
+                          arrivals: old?.arrivals)
+        state.myStatus = old?.myStatus
+        state.expected = old?.expected
+        state.allHere = old?.allHere
         let content = ActivityContent(state: state, staleDate: state.staleDate(), relevanceScore: 100)
 
         // A different place (re-decided group): start over so the name is right.
@@ -107,13 +111,45 @@ enum LiveActivities {
         scheduleTimers(sessionID: sessionID, state: state)
     }
 
-    /// Friends' "On my way" times, while the app is open (pushes do this otherwise).
-    static func updateArrivals(sessionID: String, _ arrivals: [GroupPlanAttributes.Arrival]) async {
+    /// Friends' "On my way" times, your own status, and how many are
+    /// coming, while the app is open (pushes do this otherwise). When
+    /// everyone's there, it shows "All 4 here" for a minute, then goes.
+    static func updateArrivals(sessionID: String, _ arrivals: [GroupPlanAttributes.Arrival],
+                               myStatus: String?, expected: Int?) async {
+        await mutate(sessionID) { state in
+            state.arrivals = arrivals.isEmpty ? nil : arrivals
+            state.myStatus = myStatus
+            state.expected = expected
+        }
+        await endIfAllHere(sessionID)
+    }
+
+    /// A Lock Screen button was tapped: show the new buttons right away.
+    static func setMyStatus(sessionID: String, _ status: String) async {
+        await mutate(sessionID) { $0.myStatus = status }
+        await endIfAllHere(sessionID)
+    }
+
+    /// Everyone's at the table: "All 4 here ✓", then off the Lock Screen in a minute.
+    static let allHereLinger: TimeInterval = 60
+
+    private static func endIfAllHere(_ sessionID: String) async {
         for activity in running(sessionID) {
-            let old = activity.content.state
-            guard (old.arrivals ?? []) != arrivals else { continue }
-            let state = State(meetTime: old.meetTime, leaveAt: old.leaveAt, travelMinutes: old.travelMinutes,
-                              arrivals: arrivals.isEmpty ? nil : arrivals)
+            var state = activity.content.state
+            guard let expected = state.expected, expected > 1, state.hereCount >= expected else { continue }
+            state.allHere = true
+            timers[sessionID]?.cancel()
+            timers[sessionID] = nil
+            let goAt = Date().addingTimeInterval(allHereLinger)
+            await activity.end(ActivityContent(state: state, staleDate: goAt), dismissalPolicy: .after(goAt))
+        }
+    }
+
+    private static func mutate(_ sessionID: String, _ change: (inout State) -> Void) async {
+        for activity in running(sessionID) {
+            var state = activity.content.state
+            change(&state)
+            guard state != activity.content.state else { continue }
             await activity.update(ActivityContent(state: state, staleDate: state.staleDate()))
         }
     }

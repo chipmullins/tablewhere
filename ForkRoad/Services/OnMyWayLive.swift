@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import CoreLocation
 import PickerCore
 
@@ -38,6 +39,9 @@ enum OnMyWayLive {
     /// "I'm on my way" button, which opens the app): a background session
     /// can't start in the background.
     static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date) {
+        // From the Lock Screen buttons the app runs in the background, where
+        // a background session can't start: that tap shares a one-time time.
+        guard UIApplication.shared.applicationState != .background else { return }
         stop(sessionID: sessionID)
         let run = UUID()
         runs[sessionID] = run

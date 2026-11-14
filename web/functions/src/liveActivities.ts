@@ -75,8 +75,22 @@ export async function arrivals(sessionRef: DocumentReference): Promise<Arrival[]
   }).sort((a, b) => a.leftMs - b.leftMs).map(({ uid, name, etaMs, status }) => ({ uid, name, etaMs, status }));
 }
 
+/** The table: who's expected (everyone in the plan except people who RSVP'd no). */
+export async function expectedPeople(sessionRef: DocumentReference): Promise<string[]> {
+  const [members, rsvps] = await Promise.all([sessionRef.collection("members").get(), sessionRef.collection("rsvps").get()]);
+  const declined = new Set(rsvps.docs.filter((d) => d.get("going") === false).map((d) => d.id));
+  return members.docs.map((d) => d.id).filter((id) => !declined.has(id));
+}
+
+export interface TableState {
+  /// This phone's own "On my way" status.
+  myStatus?: string;
+  expected?: number;
+  allHere?: boolean;
+}
+
 /** GroupPlanAttributes.ContentState for this phone. */
-export function contentState(meet: number, device: DocumentData, others: Arrival[]): Record<string, unknown> {
+export function contentState(meet: number, device: DocumentData, others: Arrival[], table: TableState = {}): Record<string, unknown> {
   // This phone's own leave-by, if it worked one out for this meet time.
   const planMeet = millis(device.planMeet);
   const leaveAt = planMeet === meet ? millis(device.leaveAt) : undefined;
@@ -93,7 +107,15 @@ export function contentState(meet: number, device: DocumentData, others: Arrival
       status: a.status,
     }));
   }
+  if (table.myStatus) state.myStatus = table.myStatus;
+  if (table.expected !== undefined && table.expected > 0) state.expected = table.expected;
+  if (table.allHere) state.allHere = true;
   return state;
+}
+
+/** For one phone: its own status, and the table's size. */
+function tableFor(uid: string, all: Arrival[], expected: string[]): TableState {
+  return { myStatus: all.find((a) => a.uid === uid)?.status, expected: expected.length };
 }
 
 /** When the system should redraw (UNIX seconds): leave-by, then the meet time. */
@@ -132,7 +154,7 @@ async function claim(ref: DocumentReference, field: "laStartedFor" | "laEndedFor
 // MARK: - Start / update / end one phone
 
 async function start(sessionDoc: QueryDocumentSnapshot, session: DocumentData, meet: number,
-  device: QueryDocumentSnapshot, others: Arrival[], now: number): Promise<void> {
+  device: QueryDocumentSnapshot, others: Arrival[], now: number, table: TableState = {}): Promise<void> {
   const d = device.data();
   const token = d.startToken as string;
   if (!(await claim(device.ref, "laStartedFor", meet))) return;
@@ -143,7 +165,7 @@ async function start(sessionDoc: QueryDocumentSnapshot, session: DocumentData, m
     aps: {
       timestamp: Math.floor(now / 1000),
       event: "start",
-      "content-state": contentState(meet, d, others),
+      "content-state": contentState(meet, d, others, table),
       "attributes-type": "GroupPlanAttributes",
       attributes: { sessionID: sessionDoc.id, title, place },
       "stale-date": staleDate(meet, d, now),
@@ -159,7 +181,8 @@ async function start(sessionDoc: QueryDocumentSnapshot, session: DocumentData, m
 
 /** Ends this phone's countdown: gone at `dismissAt` (ms; now = right away). */
 export async function endFor(sessionId: string, deviceRef: DocumentReference, d: DocumentData,
-  meet: number | undefined, dismissAt: number, now = Date.now()): Promise<void> {
+  meet: number | undefined, dismissAt: number, now = Date.now(),
+  finalState?: Record<string, unknown>): Promise<void> {
   const token = typeof d.updateToken === "string" ? d.updateToken : undefined;
   if (meet !== undefined && !(await claim(deviceRef, "laEndedFor", meet).catch(() => false))) return;
   if (!token) return;  // Without its token, the app's own timers and the stale date take it down.
@@ -168,7 +191,8 @@ export async function endFor(sessionId: string, deviceRef: DocumentReference, d:
       timestamp: Math.floor(now / 1000),
       event: "end",
       "dismissal-date": Math.floor(Math.max(now, dismissAt) / 1000),
-      ...(meet !== undefined ? { "content-state": contentState(meet, d, []) } : {}),
+      ...(finalState ? { "content-state": finalState }
+        : meet !== undefined ? { "content-state": contentState(meet, d, []) } : {}),
     },
   });
   if (result.dead) await forgetToken(deviceRef, "updateToken", token);
@@ -177,7 +201,8 @@ export async function endFor(sessionId: string, deviceRef: DocumentReference, d:
 
 /** Sends the new state (friends' arrival times, a new meet time) to everyone with a countdown. */
 export async function updateAll(sessionRef: DocumentReference, meet: number, opts: { quiet: boolean; except?: string }): Promise<void> {
-  const [devices, all] = await Promise.all([sessionRef.collection("devices").get(), arrivals(sessionRef)]);
+  const [devices, all, expected] = await Promise.all([
+    sessionRef.collection("devices").get(), arrivals(sessionRef), expectedPeople(sessionRef)]);
   const now = Date.now();
   await Promise.all(devices.docs.map(async (device) => {
     const d = device.data();
@@ -188,7 +213,7 @@ export async function updateAll(sessionRef: DocumentReference, meet: number, opt
       aps: {
         timestamp: Math.floor(now / 1000),
         event: "update",
-        "content-state": contentState(meet, d, others),
+        "content-state": contentState(meet, d, others, tableFor(device.id, all, expected)),
         "stale-date": staleDate(meet, d, now),
       },
     }, { priority: opts.quiet ? 5 : 10 });
@@ -214,7 +239,7 @@ export async function liveActivityTick(): Promise<void> {
       if (session.status !== "decided" || session.announced === false || !session.winnerID) continue;
       const devices = await sessionDoc.ref.collection("devices").get();
       if (devices.empty) continue;
-      const all = await arrivals(sessionDoc.ref);
+      const [all, expected] = await Promise.all([arrivals(sessionDoc.ref), expectedPeople(sessionDoc.ref)]);
       for (const device of devices.docs) {
         const d = device.data();
         const others = all.filter((a) => a.uid !== device.id);
@@ -229,7 +254,7 @@ export async function liveActivityTick(): Promise<void> {
         if (now >= meet || now < meet - leadMs(d)) continue;
         // Still in the group (left, or removed when it ended).
         if (!(await sessionDoc.ref.collection("members").doc(device.id).get()).exists) continue;
-        await start(sessionDoc, session, meet, device, others, now);
+        await start(sessionDoc, session, meet, device, others, now, tableFor(device.id, all, expected));
       }
     } catch (err) {
       logger.error("liveActivityTick: plan failed", { sessionId: sessionDoc.id, err: String(err) });
@@ -279,6 +304,21 @@ export async function planDeleted(sessionRef: DocumentReference): Promise<void> 
     await device.ref.delete().catch(() => {});
   }));
   await deleteArrivals(sessionRef);
+}
+
+/** Everyone's here: each countdown shows "All 4 here ✓" for a minute, then goes. */
+export const ALL_HERE_LINGER_MS = 60 * 1000;
+
+export async function everyoneHere(sessionRef: DocumentReference, meet: number, expected: string[]): Promise<void> {
+  const [devices, all] = await Promise.all([sessionRef.collection("devices").get(), arrivals(sessionRef)]);
+  const now = Date.now();
+  await Promise.all(devices.docs.map(async (device) => {
+    const d = device.data();
+    if (!hasActivityFor(d, meet) || millis(d.laEndedFor) === meet) return;
+    const others = all.filter((a) => a.uid !== device.id);
+    const final = contentState(meet, d, others, { ...tableFor(device.id, all, expected), allHere: true });
+    await endFor(sessionRef.id, device.ref, d, meet, now + ALL_HERE_LINGER_MS, now, final);
+  }));
 }
 
 /** The meet time moved: countdowns already up follow it. */

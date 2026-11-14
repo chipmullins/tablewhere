@@ -939,8 +939,13 @@ function etaShort(e, isMe) {
   return at ? `${who} ~${shortTime(at)}` : `${who} on the way`;
 }
 
-/** "Sam ~7:05 · Alex ~7:12 · Jo hasn't left" (ArrivalBoard in the app). */
+/** "Sam ~7:05 · Alex ~7:12 · Jo hasn't left" (ArrivalBoard in the app), or
+ * "Everyone’s here" once all expected people (not RSVP'd no) have arrived. */
 function arrivalLine() {
+  const declined = new Set(rsvps.filter((r) => r.going === false).map((r) => r.userID));
+  const expected = members.filter((m) => !declined.has(m.id));
+  const here = new Set(etas.filter((e) => e.status === "arrived").map((e) => e.userID));
+  if (expected.length >= 2 && expected.every((m) => here.has(m.id))) return `Everyone’s here (${expected.length}). Enjoy!`;
   const sorted = [...etas].sort((a, b) => {
     if ((a.status === "arrived") !== (b.status === "arrived")) return a.status === "arrived" ? -1 : 1;
     const ta = toDate(a.eta)?.getTime() ?? Infinity, tb = toDate(b.eta)?.getTime() ?? Infinity;
