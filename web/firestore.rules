@@ -188,7 +188,9 @@ service cloud.firestore {
       match /devices/{userId} {
         allow get: if signedIn() && request.auth.uid == userId;
         allow list: if false;
-        allow create, update: if signedIn() && request.auth.uid == userId && validDevice();
+        // Only for a plan that still exists (no orphan docs from old plans).
+        allow create, update: if signedIn() && request.auth.uid == userId && validDevice()
+          && exists(/databases/$(database)/documents/sessions/$(sessionId));
         allow delete: if signedIn() && (
           request.auth.uid == userId || session(sessionId).createdBy == request.auth.uid
         );

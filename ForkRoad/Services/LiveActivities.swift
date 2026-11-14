@@ -65,7 +65,7 @@ enum LiveActivities {
             return
         }
         // Everyone's already at the table: the countdown is done for this plan.
-        guard !LiveActivitySettings.isAllHere(sessionID) else { return }
+        guard !LiveActivitySettings.isAllHere(sessionID, meetTime: plan.meetTime) else { return }
         guard plan.meetTime.timeIntervalSinceNow > 0 else {
             // Already past the meet time: leave it up until the chosen time.
             await finish(sessionID: sessionID)
@@ -145,7 +145,7 @@ enum LiveActivities {
             change(&state)
             if let expected = state.expected, expected > 1, state.hereCount >= expected {
                 state.allHere = true
-                LiveActivitySettings.markAllHere(sessionID)
+                LiveActivitySettings.markAllHere(sessionID, meetTime: state.meetTime)
                 timers[sessionID]?.cancel()
                 timers[sessionID] = nil
                 let goAt = Date().addingTimeInterval(allHereLinger)
@@ -173,7 +173,9 @@ enum LiveActivities {
     static func arrived(sessionID: String) async {
         guard LiveActivitySettings.removal == .arrive else { return }
         // "All 4 here ✓" is showing its last minute: let it.
-        guard !LiveActivitySettings.isAllHere(sessionID) else { return }
+        guard !Activity<GroupPlanAttributes>.activities.contains(where: {
+            $0.attributes.sessionID == sessionID && $0.content.state.isAllHere
+        }) else { return }
         await end(sessionID: sessionID)
     }
 

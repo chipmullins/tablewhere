@@ -140,6 +140,20 @@ await test("Name search still works and clearing it brings Nearby back", async (
   await context.close();
 });
 
+await test("Failed Nearby isn't retried on every update", async () => {
+  const places = { restaurant: "error", __poi: "error", burgers: "error", pizza: "error", "fast food": "error" };
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ places }), storage: named });
+  await page.waitForFunction(() => window.__mk.calls.length >= 5);
+  for (let i = 0; i < 3; i++) {
+    await page.evaluate((n) => { const s = window.__fake.get("sessions/s1"); s.title = "Dinner " + n; window.__fake.set("sessions/s1", s); }, i);
+    await page.waitForTimeout(150);
+  }
+  assert(await page.evaluate(() => window.__mk.calls.length) === 5, "no retry storm");
+  await page.click("#suggest-open");
+  await page.waitForFunction(() => document.querySelector("#suggest-status").textContent.includes("Couldn’t load places nearby"));
+  await context.close();
+});
+
 await test("No prefetch for Surprise us or decided plans", async () => {
   const { page, context } = await openPlan(browser, base, { setup: setupScript({ places: basePlaces, session: { surprise: true, options: [{ id: "a|1.0|1.0", name: "A", category: "Restaurant", latitude: 1, longitude: 1, addedBy: "Chip" }] } }), storage: named });
   await page.waitForSelector("#vote-step:not([hidden])");

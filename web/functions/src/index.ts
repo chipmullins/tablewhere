@@ -384,11 +384,16 @@ async function liveActivityChanges(ref: FirebaseFirestore.DocumentReference, bef
     if (before.status !== "decided") return;
     if (after.status !== "decided" || (after.winnerID && before.winnerID !== after.winnerID)) {
       await endAllNow(ref);
+      // A new place (or decided again later) is a new night: "Everyone's here" can happen again.
+      if (after.everyoneHereAt) await ref.update({ everyoneHereAt: FieldValue.delete() });
       return;
     }
     const oldMeet = before.meetTime instanceof Timestamp ? before.meetTime.toMillis() : undefined;
     const newMeet = after.meetTime instanceof Timestamp ? after.meetTime.toMillis() : undefined;
-    if (oldMeet !== undefined && newMeet !== undefined && oldMeet !== newMeet) await meetTimeChanged(ref, oldMeet, newMeet);
+    if (oldMeet !== undefined && newMeet !== undefined && oldMeet !== newMeet) {
+      await meetTimeChanged(ref, oldMeet, newMeet);
+      if (after.everyoneHereAt) await ref.update({ everyoneHereAt: FieldValue.delete() });
+    }
     if (oldMeet !== undefined && newMeet === undefined) await endAllNow(ref);
   } catch (err) {
     logger.error("liveActivityChanges failed", { sessionId: ref.id, err: String(err) });
@@ -456,7 +461,10 @@ export const onETAWritten = onDocumentWritten(
       const meet = session.meetTime instanceof Timestamp ? session.meetTime.toMillis() : undefined;
 
       const statusChanged = !before || !after || before.status !== after.status;
-      if (after) {
+      // The last one in: "Everyone's here" replaces "Sam arrived".
+      const allHereNow = after?.status === "arrived" && statusChanged && !session.everyoneHereAt
+        && await isEveryoneHere(sessionRef);
+      if (after && !allHereNow) {
         const who = str(after.name) ?? "Someone";
         const when = etaText(after);
         let body: string | undefined;
@@ -488,7 +496,7 @@ export const onETAWritten = onDocumentWritten(
 
       // Everyone's here (2+ people expected, all arrived): one "Enjoy!" push
       // to everyone, and the countdowns end with "All 4 here ✓". Once per plan.
-      if (after?.status === "arrived" && statusChanged && await isEveryoneHere(sessionRef)) {
+      if (allHereNow) {
         const claimed = await db.runTransaction(async (tx) => {
           const snap = await tx.get(sessionRef);
           if (!snap.exists || snap.get("everyoneHereAt")) return false;

@@ -77,17 +77,23 @@ enum LiveActivitySettings {
     /// the old heads-up notification isn't needed.
     static var serverStartsIt: Bool { startToken != nil && activitiesEnabled }
 
-    /// Plans where everyone has arrived: their countdown is finished and
-    /// shouldn't come back on the next refresh. Keeps the last 20.
-    static func isAllHere(_ sessionID: String) -> Bool {
-        (store.stringArray(forKey: "la.allHere") ?? []).contains(sessionID)
+    /// Plans where everyone has arrived (for that meet time): the countdown
+    /// is finished and shouldn't come back on the next refresh. A new meet
+    /// time is a new night. Keeps the last 20.
+    static func isAllHere(_ sessionID: String, meetTime: Date) -> Bool {
+        (store.stringArray(forKey: "la.allHere") ?? []).contains(allHereKey(sessionID, meetTime))
     }
 
-    static func markAllHere(_ sessionID: String) {
+    static func markAllHere(_ sessionID: String, meetTime: Date) {
         var ids = store.stringArray(forKey: "la.allHere") ?? []
-        guard !ids.contains(sessionID) else { return }
-        ids.append(sessionID)
+        let key = allHereKey(sessionID, meetTime)
+        guard !ids.contains(key) else { return }
+        ids.append(key)
         store.set(Array(ids.suffix(20)), forKey: "la.allHere")
+    }
+
+    private static func allHereKey(_ sessionID: String, _ meetTime: Date) -> String {
+        "\(sessionID)|\(Int(meetTime.timeIntervalSince1970))"
     }
 
     /// Which APNs servers this build's tokens belong to. TestFlight and App

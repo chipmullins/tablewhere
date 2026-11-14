@@ -1442,7 +1442,9 @@ function prefetchNearby() {
   const center = groupCenter();
   if (!center) return;
   const key = nearbyKey(center);
-  if (nearby && nearby.key === key && !nearby.failed) return;
+  // A failed search is retried, but at most once a minute (render() runs on
+  // every snapshot, and MapKit JS has a daily quota).
+  if (nearby && nearby.key === key && (!nearby.failed || Date.now() - (nearby.failedAt || 0) < 60000)) return;
   const cached = readNearbyCache(key);
   if (cached) {
     nearby = { key, center, batches: [], places: cached, done: true, failed: false };
@@ -1457,6 +1459,7 @@ function prefetchNearby() {
     .catch(() => {
       mine.done = true;
       mine.failed = true;
+      mine.failedAt = Date.now();
       if (nearby === mine) onNearbyChange();
     });
 }
@@ -1515,6 +1518,7 @@ function runNearby(mk, mine) {
   Promise.all(finished).then(() => {
     mine.done = true;
     mine.failed = mine.batches.every((b) => b === null);
+    if (mine.failed) mine.failedAt = Date.now();
     // Don't keep a partial list for 10 minutes (one search failed).
     if (!mine.batches.includes(null)) writeNearbyCache(mine.key, mine.places);
     if (nearby === mine) onNearbyChange();

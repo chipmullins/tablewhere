@@ -171,11 +171,17 @@ async function start(sessionDoc: QueryDocumentSnapshot, session: DocumentData, m
       "stale-date": staleDate(meet, d, now),
       "relevance-score": 100,
       // Quiet: shows the countdown with a banner, no sound.
-      alert: { title: place, body: label ? `Meet ${label}. Your countdown is on the Lock Screen.` : "Your countdown is on the Lock Screen." },
+      alert: { title: place, body: label ? `${label} · Your countdown is on the Lock Screen` : "Your countdown is on the Lock Screen" },
     },
   });
   if (result.dead) await forgetToken(device.ref, "startToken", token);
-  if (!result.ok) await device.ref.update({ laStartedFor: FieldValue.delete() }).catch(() => {});
+  if (!result.ok && !result.dead) {
+    // Try again next run, but not forever (a setup problem would retry every 5 minutes).
+    const fails = millis(d.laStartFailsFor) === meet && typeof d.laStartFails === "number" ? d.laStartFails + 1 : 1;
+    await device.ref.update(fails >= 3
+      ? { laStartFails: fails, laStartFailsFor: meet }
+      : { laStartedFor: FieldValue.delete(), laStartFails: fails, laStartFailsFor: meet }).catch(() => {});
+  }
   logger.info("Live Activity start", { sessionId: sessionDoc.id, uid: device.id, ok: result.ok });
 }
 
