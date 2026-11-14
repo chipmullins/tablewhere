@@ -39,12 +39,13 @@ struct GroupFiltersRow: View {
         .disabled(!isEnabled)
         .sensoryFeedback(Haptic.tick, trigger: filters)
         .accessibilityLabel("Group filters")
-        .accessibilityValue(Self.valueLabel(filters))
+        .accessibilityValue(filters.noFastFood && filters.noCoffeeSweets
+                            ? "No fast food, no coffee and sweets" : Self.valueLabel(filters))
     }
 
     static func valueLabel(_ filters: GroupFilters) -> String {
         switch (filters.noFastFood, filters.noCoffeeSweets) {
-        case (true, true): return "No fast food, coffee"
+        case (true, true): return "Both on"
         case (true, false): return "No fast food"
         case (false, true): return "No coffee & sweets"
         default: return "Off"

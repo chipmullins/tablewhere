@@ -256,11 +256,11 @@ final class GroupService {
 
     /// This phone's leave-by time, so a countdown the server starts shows it.
     /// (A time, not a location. Only you and the server can read it.)
-    func saveLeavePlan(sessionID: String, leaveAt: Date, travelMinutes: Int, meetTime: Date) async {
-        guard let uid = try? await userID() else { return }
-        try? await sessionRef(sessionID).collection("devices").document(uid).setData([
+    func saveLeavePlan(sessionID: String, leaveAt: Date, travelMinutes: Int, meetTime: Date) async throws {
+        let uid = try await userID()
+        try await sessionRef(sessionID).collection("devices").document(uid).setData([
             "leaveAt": Timestamp(date: leaveAt),
-            "travelMinutes": travelMinutes,
+            "travelMinutes": min(max(travelMinutes, 0), 1440),
             "planMeet": Timestamp(date: meetTime),
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
@@ -413,20 +413,21 @@ final class GroupService {
                   lateMinutes: Int? = nil, lateNote: String? = nil, leftAt: Date? = nil) async throws {
         let uid = try await userID()
         try await joinIfNeeded(sessionID: sessionID)
+        // Merged, so `leftAt` (when you left) survives refreshes and "late";
+        // fields that no longer apply are removed. Name kept well under the
+        // rules' 40 (they count differently from Swift for emoji).
         var data: [String: Any] = [
             "userID": uid,
-            "name": String(Self.name(in: sessionID, fallback: Identity.displayName ?? "Someone").prefix(40)),
+            "name": String(Self.name(in: sessionID, fallback: Identity.displayName ?? "Someone").prefix(30)),
             "status": status.rawValue,
-            "updatedAt": FieldValue.serverTimestamp()
+            "updatedAt": FieldValue.serverTimestamp(),
+            "eta": eta.map { Timestamp(date: $0) as Any } ?? FieldValue.delete(),
+            "etaLabel": eta.map { $0.formatted(date: .omitted, time: .shortened) as Any } ?? FieldValue.delete(),
+            "lateMinutes": lateMinutes.map { $0 as Any } ?? FieldValue.delete(),
+            "lateNote": lateNote.map { $0 as Any } ?? FieldValue.delete()
         ]
-        if let eta {
-            data["eta"] = Timestamp(date: eta)
-            data["etaLabel"] = eta.formatted(date: .omitted, time: .shortened)
-        }
         if let leftAt { data["leftAt"] = Timestamp(date: leftAt) }
-        if let lateMinutes { data["lateMinutes"] = lateMinutes }
-        if let lateNote { data["lateNote"] = lateNote }
-        try await sessionRef(sessionID).collection("eta").document(uid).setData(data)
+        try await sessionRef(sessionID).collection("eta").document(uid).setData(data, merge: true)
     }
 
     /// Stops sharing ("Stop sharing", or the plan changed).

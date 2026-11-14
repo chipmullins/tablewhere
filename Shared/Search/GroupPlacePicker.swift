@@ -201,7 +201,7 @@ struct GroupPlacePicker: View {
                                     current: pickedArea) { pickedArea = $0 }
                 }
                 .fullScreenCover(isPresented: $showAreaMap) {
-                    PickerMapView(start: searchCenter, radiusMiles: current.radiusMiles, search: search) { pickedArea = $0 }
+                    PickerMapView(start: searchCenter, radiusMiles: current.radiusMiles) { pickedArea = $0 }
                 }
             RadiusSlider(miles: filtersBinding.radiusMiles)
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))

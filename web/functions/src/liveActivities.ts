@@ -269,7 +269,7 @@ export async function liveActivityTick(): Promise<void> {
   }
 }
 
-async function deleteArrivals(sessionRef: DocumentReference): Promise<void> {
+export async function deleteArrivals(sessionRef: DocumentReference): Promise<void> {
   const snap = await sessionRef.collection("eta").get();
   await Promise.all(snap.docs.map((d) => d.ref.delete()));
 }

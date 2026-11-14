@@ -10,6 +10,8 @@ final class OneShotLocation: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var fixWaiters: [CheckedContinuation<CLLocationCoordinate2D?, Never>] = []
     private var permissionWaiters: [CheckedContinuation<Bool, Never>] = []
+    /// Counts location requests, so an old request's timeout can't end a newer one early.
+    private var fixRound = 0
 
     override init() {
         super.init()
@@ -26,10 +28,13 @@ final class OneShotLocation: NSObject, CLLocationManagerDelegate {
         guard isAllowed else { return nil }
         return await withCheckedContinuation { continuation in
             fixWaiters.append(continuation)
-            if fixWaiters.count == 1 { manager.requestLocation() }
+            guard fixWaiters.count == 1 else { return }
+            fixRound += 1
+            let round = fixRound
+            manager.requestLocation()
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(8))
-                self.finishFix(nil)
+                if self.fixRound == round { self.finishFix(nil) }
             }
         }
     }
@@ -46,6 +51,8 @@ final class OneShotLocation: NSObject, CLLocationManagerDelegate {
     }
 
     private func finishFix(_ coordinate: CLLocationCoordinate2D?) {
+        guard !fixWaiters.isEmpty else { return }
+        fixRound += 1
         let waiters = fixWaiters
         fixWaiters = []
         waiters.forEach { $0.resume(returning: coordinate) }

@@ -202,16 +202,24 @@ struct PickerMapView: View {
     let start: CLLocationCoordinate2D?
     /// The picker's radius, so the preview matches what the list will show.
     var radiusMiles: Double = 2
-    var search: PlaceSearching = MapKitPlaceSearch()
     let onPick: (PickerArea) -> Void
+
+    /// A restaurant pin in the preview.
+    struct Pin: Identifiable {
+        let id: Int
+        let name: String
+        let coordinate: CLLocationCoordinate2D
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var camera: MapCameraPosition = .automatic
     @State private var pin: CLLocationCoordinate2D?
     @State private var isNaming = false
-    /// Restaurants around the tapped spot (the same search the list runs).
-    @State private var places: [Place] = []
+    /// Restaurants around the tapped spot: a preview (one MapKit lookup per
+    /// spot; the full search runs after "Search here").
+    @State private var places: [Pin] = []
     @State private var isLoadingPlaces = false
+    @State private var loadRun = UUID()
 
     private var radiusMeters: Double { radiusMiles * Place.metersPerMile }
     /// Enough pins to see what's there without burying the map.
@@ -225,9 +233,8 @@ struct PickerMapView: View {
                         MapCircle(center: pin, radius: radiusMeters)
                             .foregroundStyle(Theme.saffron.opacity(0.10))
                             .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
-                        ForEach(places.prefix(Self.maxPins)) { place in
-                            Marker(place.name, systemImage: "fork.knife",
-                                   coordinate: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude))
+                        ForEach(places) { place in
+                            Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
                                 .tint(Theme.trackFill)
                         }
                         Marker("Search here", systemImage: "mappin", coordinate: pin)
@@ -254,7 +261,7 @@ struct PickerMapView: View {
                     Button(action: confirm) {
                         HStack(spacing: 8) {
                             if isNaming || isLoadingPlaces { ProgressView().tint(Theme.onSaffron) }
-                            Text(searchHereTitle)
+                            Text("Search here")
                         }
                         .font(Theme.body(16, .bold))
                         .foregroundStyle(Theme.onSaffron)
@@ -284,23 +291,34 @@ struct PickerMapView: View {
         }
     }
 
-    /// "Search here · 23 places" once the pins are in.
-    private var searchHereTitle: String {
-        guard pin != nil, !isLoadingPlaces, !places.isEmpty else { return "Search here" }
-        return "Search here · \(places.count) place\(places.count == 1 ? "" : "s")"
-    }
-
+    /// One category lookup for the tapped spot (not the list's full multi-
+    /// query search: MapKit allows ~50 searches a minute, and the real list
+    /// after "Search here" needs them). Waits for taps to settle.
     private func loadPlaces() async {
         guard let spot = pin else { return }
-        // Wait for taps to settle (MapKit limits searches per minute).
-        try? await Task.sleep(for: .milliseconds(300))
+        try? await Task.sleep(for: .milliseconds(600))
         guard !Task.isCancelled else { return }
+        // Claimed after the wait, so a tap cancelled while waiting never owns the spinner.
+        let run = UUID()
+        loadRun = run
         isLoadingPlaces = true
-        defer { isLoadingPlaces = false }
-        let found = (try? await search.search(near: spot, radiusMeters: radiusMeters,
-                                              cuisines: [], diet: .none)) ?? []
-        guard !Task.isCancelled else { return }
-        withAnimation(.snappy) { places = found }
+        // A newer tap's search owns the spinner.
+        defer { if loadRun == run { isLoadingPlaces = false } }
+        let request = MKLocalPointsOfInterestRequest(center: spot, radius: min(radiusMeters, 16_000))
+        request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant, .cafe, .bakery, .brewery, .winery])
+        let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
+        guard !Task.isCancelled, loadRun == run else { return }
+        let here = CLLocation(latitude: spot.latitude, longitude: spot.longitude)
+        let pins = items.enumerated().compactMap { index, item -> (Pin, CLLocationDistance)? in
+            let c = item.placemark.coordinate
+            let d = here.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+            guard d <= radiusMeters, !NotARestaurant.matches(item.name ?? "") else { return nil }
+            return (Pin(id: index, name: item.name ?? "Restaurant", coordinate: c), d)
+        }
+        .sorted { $0.1 < $1.1 }
+        .prefix(Self.maxPins)
+        .map { $0.0 }
+        withAnimation(.snappy) { places = Array(pins) }
     }
 
     private func confirm() {

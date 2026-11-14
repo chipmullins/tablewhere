@@ -4,19 +4,25 @@ import CoreLocation
 import PickerCore
 
 /// "On my way", step 2 (1.1): after you tap it, keeps your arrival time
-/// fresh every few minutes while you drive, and notices when you get there
-/// (within 100 m), then stops. Uses iOS 17's CLBackgroundActivitySession,
-/// which works with While Using permission (no "Always"): iOS shows the blue
-/// location pill while it runs. Only your arrival time leaves the phone.
+/// fresh while you drive, and notices when you get there (within 100 m),
+/// then stops. Uses iOS 17's CLBackgroundActivitySession, which works with
+/// While Using permission (no "Always"): iOS shows the blue location pill
+/// while it runs. Only your arrival time leaves the phone.
+///
+/// Writes only when the arrival time moves by 2+ minutes (each write
+/// notifies the group's phones). Survives iOS ending the app mid-drive: the
+/// run is saved and picked up again at relaunch.
 ///
 /// Stops on arrival, at the meet time + 30 minutes, when you tap Stop
 /// sharing, or when the plan ends or changes (LeaveBy.cancel).
 @MainActor
 enum OnMyWayLive {
-    /// Refresh the shared time at most this often...
+    /// Look for a new arrival time at most this often...
     static let refreshEvery: TimeInterval = 3 * 60
     /// ...or sooner after moving this far.
-    static let refreshAfterMeters: CLLocationDistance = 1500
+    static let refreshAfterMeters: CLLocationDistance = 5000
+    /// ...and share it only if it moved this much.
+    static let minETAChange: TimeInterval = 2 * 60
     /// Keep going this long past the meet time (running late).
     static let stopAfterMeet: TimeInterval = 30 * 60
 
@@ -26,33 +32,56 @@ enum OnMyWayLive {
     private static var runs: [String: UUID] = [:]
     private static var deadlines: [String: Task<Void, Never>] = [:]
 
+    /// Saved runs, to pick up after iOS ends the app: id → [lat, lon, meet].
+    private static let savedKey = "onMyWay.liveRuns"
+
     static func install() {
         OnMyWay.liveTracker = { sessionID, destination, meetTime in
             start(sessionID: sessionID, destination: destination, meetTime: meetTime)
         }
         OnMyWay.stopTracker = { stop(sessionID: $0) }
+        // iOS relaunches the app (often in the background) after ending it
+        // mid-run: start the saved runs again.
+        let saved = UserDefaults.standard.dictionary(forKey: savedKey) as? [String: [Double]] ?? [:]
+        for (id, run) in saved where run.count == 3 {
+            let meet = Date(timeIntervalSince1970: run[2])
+            if meet.addingTimeInterval(stopAfterMeet).timeIntervalSinceNow > 0 {
+                start(sessionID: id, destination: CLLocationCoordinate2D(latitude: run[0], longitude: run[1]),
+                      meetTime: meet, resuming: true)
+            } else {
+                forget(id)
+            }
+        }
     }
 
     static var isTracking: Bool { !tasks.isEmpty }
 
     /// Starts from the foreground (a tap in the app, or the reminder's
     /// "I'm on my way" button, which opens the app): a background session
-    /// can't start in the background.
-    static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date) {
+    /// can't start in the background, but one that was running can be
+    /// picked up again there (`resuming`).
+    static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date, resuming: Bool = false) {
         // From the Lock Screen buttons the app runs in the background, where
-        // a background session can't start: that tap shares a one-time time.
-        guard UIApplication.shared.applicationState != .background else { return }
+        // a new session can't start: that tap shares a one-time time.
+        guard resuming || UIApplication.shared.applicationState != .background else { return }
         stop(sessionID: sessionID)
         let run = UUID()
         runs[sessionID] = run
         sessions[sessionID] = CLBackgroundActivitySession()
+        var saved = UserDefaults.standard.dictionary(forKey: savedKey) as? [String: [Double]] ?? [:]
+        saved[sessionID] = [destination.latitude, destination.longitude, meetTime.timeIntervalSince1970]
+        UserDefaults.standard.set(saved, forKey: savedKey)
+
         let place = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
         let stopAt = meetTime.addingTimeInterval(stopAfterMeet)
         tasks[sessionID] = Task { @MainActor in
-            var lastSent = Date()
-            var lastSentFrom: CLLocation?
+            var lastChecked = Date()
+            var lastCheckedFrom: CLLocation?
+            var lastShared: Date? = OnMyWay.lastSharedETA[sessionID]
             do {
-                for try await update in CLLocationUpdate.liveUpdates(.automotiveNavigation) {
+                // Default accuracy: enough for a drive time and the 100 m
+                // arrival check, far easier on the battery than navigation GPS.
+                for try await update in CLLocationUpdate.liveUpdates(.default) {
                     if Task.isCancelled || stopAt.timeIntervalSinceNow <= 0 { break }
                     guard let here = update.location, here.horizontalAccuracy >= 0, here.horizontalAccuracy < 200 else { continue }
                     if here.distance(from: place) <= OnMyWay.arrivalMeters {
@@ -60,16 +89,16 @@ enum OnMyWayLive {
                         try? await OnMyWay.arrived(sessionID: sessionID)
                         break
                     }
-                    let moved = lastSentFrom.map { here.distance(from: $0) } ?? .greatestFiniteMagnitude
-                    guard Date().timeIntervalSince(lastSent) >= refreshEvery
-                            || (lastSentFrom != nil && moved >= refreshAfterMeters) else {
-                        if lastSentFrom == nil { lastSentFrom = here }
-                        continue
-                    }
-                    lastSent = Date()
-                    lastSentFrom = here
-                    let eta = await OnMyWay.arrival(from: here.coordinate, to: destination)
-                    if !Task.isCancelled { await OnMyWay.refresh(sessionID: sessionID, eta: eta) }
+                    guard let from = lastCheckedFrom else { lastCheckedFrom = here; continue }
+                    guard Date().timeIntervalSince(lastChecked) >= refreshEvery
+                            || here.distance(from: from) >= refreshAfterMeters else { continue }
+                    lastChecked = Date()
+                    lastCheckedFrom = here
+                    guard let eta = await OnMyWay.arrival(from: here.coordinate, to: destination),
+                          !Task.isCancelled else { continue }
+                    if let lastShared, abs(eta.timeIntervalSince(lastShared)) < minETAChange { continue }
+                    lastShared = eta
+                    await OnMyWay.refresh(sessionID: sessionID, eta: eta)
                 }
             } catch {
                 // Location turned off mid-drive: the last time you shared stays.
@@ -98,5 +127,12 @@ enum OnMyWayLive {
         tasks[sessionID] = nil
         sessions[sessionID]?.invalidate()
         sessions[sessionID] = nil
+        forget(sessionID)
+    }
+
+    private static func forget(_ sessionID: String) {
+        var saved = UserDefaults.standard.dictionary(forKey: savedKey) as? [String: [Double]] ?? [:]
+        guard saved.removeValue(forKey: sessionID) != nil else { return }
+        UserDefaults.standard.set(saved, forKey: savedKey)
     }
 }

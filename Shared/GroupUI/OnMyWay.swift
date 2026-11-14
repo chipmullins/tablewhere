@@ -22,8 +22,27 @@ enum OnMyWay {
     /// the app takes the Lock Screen countdown down if set to "When I arrive".
     static var onArrived: (@MainActor (_ sessionID: String) -> Void)?
 
-    /// The last thing you shared per plan, so a live refresh keeps "late".
-    private(set) static var shared: [String: (status: GroupETA.Status, lateMinutes: Int?, lateNote: String?)] = [:]
+    /// What you last shared per plan, so a live refresh keeps "late" (saved,
+    /// so it survives iOS ending the app mid-drive).
+    struct Shared: Codable {
+        var status: GroupETA.Status
+        var lateMinutes: Int?
+        var lateNote: String?
+        var eta: Date?
+    }
+
+    private static let sharedKey = "onMyWay.shared"
+
+    private(set) static var shared: [String: Shared] = {
+        guard let data = UserDefaults.standard.data(forKey: sharedKey),
+              let saved = try? JSONDecoder().decode([String: Shared].self, from: data) else { return [:] }
+        return saved
+    }() {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(shared), forKey: sharedKey) }
+    }
+
+    /// The arrival time you last shared for a plan.
+    static var lastSharedETA: [String: Date] { shared.compactMapValues(\.eta) }
 
     /// The card shows from a few hours before the meet time until a bit after.
     static func isRelevant(meetTime: Date, now: Date = Date()) -> Bool {
@@ -33,40 +52,49 @@ enum OnMyWay {
 
     /// One tap: your drive time from here, shared. Returns the arrival time
     /// (nil when location is off or there's no route; you're still "on the way").
+    ///
+    /// `askForLocation` false (the Lock Screen buttons, which run in the
+    /// background where no prompt can show and no fix comes): skips location
+    /// and uses `fallbackTravelMinutes` (your known drive time) instead.
     @discardableResult
-    /// `askForLocation` false: don't prompt (the Lock Screen buttons run in
-    /// the background, where a prompt never shows and the call would hang).
     static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date,
-                      askForLocation: Bool = true) async throws -> Date? {
+                      askForLocation: Bool = true, fallbackTravelMinutes: Int = 0) async throws -> Date? {
         var eta: Date?
-        let allowed: Bool
+        var allowed = false
         if askForLocation {
             allowed = await OneShotLocation.shared.requestPermission()
-        } else {
-            let status = CLLocationManager().authorizationStatus
-            allowed = status == .authorizedWhenInUse || status == .authorizedAlways
-        }
-        if allowed, let here = await OneShotLocation.shared.current() {
-            let distance = CLLocation(latitude: here.latitude, longitude: here.longitude)
-                .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))
-            if distance <= arrivalMeters {
-                try await arrived(sessionID: sessionID)
-                return Date()
+            if allowed, let here = await OneShotLocation.shared.current() {
+                let distance = CLLocation(latitude: here.latitude, longitude: here.longitude)
+                    .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))
+                if distance <= arrivalMeters {
+                    try await arrived(sessionID: sessionID)
+                    return Date()
+                }
+                eta = await arrival(from: here, to: destination)
             }
-            eta = await arrival(from: here, to: destination)
         }
-        shared[sessionID] = (.onTheWay, nil, nil)
+        if eta == nil, fallbackTravelMinutes > 0 {
+            eta = Date().addingTimeInterval(TimeInterval(fallbackTravelMinutes * 60))
+        }
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: .onTheWay, leftAt: Date())
-        // Live updates need location; without it you're "on the way" with no time.
+        shared[sessionID] = Shared(status: .onTheWay, eta: eta)
+        // Live updates need location; without it you're "on the way" with one time.
         if allowed { liveTracker?(sessionID, destination, meetTime) }
         return eta
     }
 
     /// A fresh time while driving (from the live tracker). Keeps "late".
     static func refresh(sessionID: String, eta: Date?) async {
-        let current = shared[sessionID] ?? (.onTheWay, nil, nil)
-        try? await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: current.status,
-                                                lateMinutes: current.lateMinutes, lateNote: current.lateNote)
+        var current = shared[sessionID] ?? Shared(status: .onTheWay)
+        guard current.status != .arrived else { return }
+        do {
+            try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: current.status,
+                                                    lateMinutes: current.lateMinutes, lateNote: current.lateNote)
+            current.eta = eta
+            shared[sessionID] = current
+        } catch {
+            // Offline for a moment: the next refresh tries again.
+        }
     }
 
     /// "Running late": +10 / +15 / +30 minutes past the meet time, or nil
@@ -74,27 +102,34 @@ enum OnMyWay {
     static func runningLate(sessionID: String, minutes: Int?, meetTime: Date) async throws {
         let eta = minutes.map { meetTime.addingTimeInterval(TimeInterval($0 * 60)) }
         let note = minutes == nil ? "text" : nil
-        shared[sessionID] = (.late, minutes, note)
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: .late,
                                                 lateMinutes: minutes, lateNote: note)
+        shared[sessionID] = Shared(status: .late, lateMinutes: minutes, lateNote: note, eta: eta)
     }
 
     /// You're there (by tapping "I'm here", or the live tracker noticing).
     static func arrived(sessionID: String) async throws {
-        shared[sessionID] = (.arrived, nil, nil)
         // Share first: stopping the tracker cancels the task this may be running in.
         defer {
             stopTracker?(sessionID)
             onArrived?(sessionID)
         }
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: Date(), status: .arrived)
+        shared[sessionID] = Shared(status: .arrived, eta: Date())
     }
 
-    /// "Stop sharing", or the plan ended or changed.
+    /// "Stop sharing".
     static func stop(sessionID: String) async {
         shared[sessionID] = nil
         stopTracker?(sessionID)
         await GroupService.shared.removeETA(sessionID: sessionID)
+    }
+
+    /// The plan ended or changed (reopened, new place): forget it here (the
+    /// server deletes the shared times).
+    static func reset(sessionID: String) {
+        stopTracker?(sessionID)
+        if shared[sessionID] != nil { shared[sessionID] = nil }
     }
 
     /// When you'd get there driving from `from`, leaving now (with traffic).

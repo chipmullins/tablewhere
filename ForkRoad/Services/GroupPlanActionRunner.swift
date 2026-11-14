@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import PickerCore
+import ActivityKit
 
 /// What the Lock Screen countdown's buttons do (GroupPlanActionIntent, a
 /// LiveActivityIntent: iOS runs it here in the app, often in the background,
@@ -30,20 +31,27 @@ enum GroupPlanActionRunner {
             await LiveActivities.setMyStatus(sessionID: sessionID, previous)
             return
         }
-        switch action {
-        case .onMyWay:
-            // No location prompt from the Lock Screen (none can show while the
-            // app is in the background): without permission it shares no time.
-            _ = try? await OnMyWay.start(sessionID: sessionID,
-                                         destination: CLLocationCoordinate2D(latitude: winner.latitude,
-                                                                             longitude: winner.longitude),
-                                         meetTime: meet, askForLocation: false)
-        case .late10:
-            try? await OnMyWay.runningLate(sessionID: sessionID, minutes: 10, meetTime: meet)
-        case .late15:
-            try? await OnMyWay.runningLate(sessionID: sessionID, minutes: 15, meetTime: meet)
-        case .arrived:
-            try? await OnMyWay.arrived(sessionID: sessionID)
+        // Without a location fix in the background, your known drive time stands in.
+        let travel = Activity<GroupPlanAttributes>.activities
+            .first { $0.attributes.sessionID == sessionID }?.content.state.travelMinutes ?? 0
+        do {
+            switch action {
+            case .onMyWay:
+                // No location prompt or fix from the Lock Screen (the app is in the background).
+                try await OnMyWay.start(sessionID: sessionID,
+                                        destination: CLLocationCoordinate2D(latitude: winner.latitude,
+                                                                            longitude: winner.longitude),
+                                        meetTime: meet, askForLocation: false, fallbackTravelMinutes: travel)
+            case .late10:
+                try await OnMyWay.runningLate(sessionID: sessionID, minutes: 10, meetTime: meet)
+            case .late15:
+                try await OnMyWay.runningLate(sessionID: sessionID, minutes: 15, meetTime: meet)
+            case .arrived:
+                try await OnMyWay.arrived(sessionID: sessionID)
+            }
+        } catch {
+            // Not shared: put the buttons back so it's clear nothing went out.
+            await LiveActivities.setMyStatus(sessionID: sessionID, previous)
         }
     }
 }

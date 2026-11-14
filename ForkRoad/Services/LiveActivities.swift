@@ -32,7 +32,20 @@ enum LiveActivities {
         // Activities already up (started by the app or by a push): their tokens.
         for activity in Activity<GroupPlanAttributes>.activities { watchToken(of: activity) }
         Task {
-            for await activity in Activity<GroupPlanAttributes>.activityUpdates { watchToken(of: activity) }
+            for await activity in Activity<GroupPlanAttributes>.activityUpdates {
+                // A push-started one and the app's own can race into two:
+                // keep the one already up, and point the server back at it.
+                let others = running(activity.attributes.sessionID).filter { $0.id != activity.id }
+                if let kept = others.first {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                    if let token = tokens[kept.id] {
+                        await GroupService.shared.saveActivityToken(sessionID: kept.attributes.sessionID, token: token,
+                                                                    meetTime: kept.content.state.meetTime)
+                    }
+                    continue
+                }
+                watchToken(of: activity)
+            }
         }
         Task {
             for await enabled in ActivityAuthorizationInfo().activityEnablementUpdates {
@@ -182,11 +195,16 @@ enum LiveActivities {
     /// How long it stays after the meet time ("Remove from Lock Screen").
     static var linger: TimeInterval { LiveActivitySettings.removal.linger }
 
-    /// At the meet time: ends the activity but leaves it on the Lock Screen
-    /// for the chosen time, when the system removes it (even if the app isn't running).
+    /// Past the meet time: the countdown stays ACTIVE until the chosen
+    /// removal time, so its buttons (Late +10, I'm here) and friends'
+    /// arrivals keep working while people are still getting there. It only
+    /// ends early once you've arrived or everyone's here. The server's end
+    /// push takes it down on time when the app isn't running; this timer
+    /// does when it is.
     static func finish(sessionID: String) async {
         timers[sessionID]?.cancel()
         timers[sessionID] = nil
+        var endAtForTimer: Date?
         for activity in running(sessionID) {
             let state = activity.content.state
             let endAt = state.meetTime.addingTimeInterval(linger)
@@ -194,7 +212,18 @@ enum LiveActivities {
                 await activity.end(nil, dismissalPolicy: .immediate)
                 continue
             }
-            await activity.end(ActivityContent(state: state, staleDate: endAt), dismissalPolicy: .after(endAt))
+            if state.myStatus == "arrived" || state.isAllHere {
+                await activity.end(ActivityContent(state: state, staleDate: endAt), dismissalPolicy: .after(endAt))
+            } else {
+                await activity.update(ActivityContent(state: state, staleDate: endAt))
+                endAtForTimer = endAt
+            }
+        }
+        if let endAt = endAtForTimer {
+            timers[sessionID] = Task { @MainActor in
+                guard await sleep(until: endAt) else { return }
+                await end(sessionID: sessionID)
+            }
         }
     }
 
@@ -229,8 +258,9 @@ enum LiveActivities {
             || plan.leaveAt.timeIntervalSinceNow <= startBeforeLeave
     }
 
-    /// Activities whose push token we're already watching.
+    /// Activities whose push token we're already watching, and their latest tokens.
     private static var watched: Set<String> = []
+    private static var tokens: [String: String] = [:]
 
     /// Saves each activity's push token to its plan (it can change; iOS
     /// sends a new one), so the server can update and end it.
@@ -238,8 +268,10 @@ enum LiveActivities {
         guard watched.insert(activity.id).inserted else { return }
         Task { @MainActor in
             for await data in activity.pushTokenUpdates {
+                let hex = hexString(data)
+                tokens[activity.id] = hex
                 await GroupService.shared.saveActivityToken(sessionID: activity.attributes.sessionID,
-                                                            token: hexString(data),
+                                                            token: hex,
                                                             meetTime: activity.content.state.meetTime)
             }
         }

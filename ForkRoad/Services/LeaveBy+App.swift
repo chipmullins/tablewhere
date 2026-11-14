@@ -25,7 +25,13 @@ extension LeaveBy {
         for id in SharedCache.recentSessionIDs().prefix(5) {
             // Offline? Leave existing reminders alone rather than cancelling them.
             guard let snapshot = try? await GroupService.shared.sessionRef(id).getDocument() else { continue }
-            guard snapshot.exists, let session = try? snapshot.data(as: GroupSession.self),
+            // Ended by its creator: stop checking it (and copying settings to it).
+            if !snapshot.exists {
+                cancel(sessionID: id)
+                SharedCache.forgetSession(id)
+                continue
+            }
+            guard let session = try? snapshot.data(as: GroupSession.self),
                   session.status == .decided, let winner = session.winner,
                   let meet = session.meetTime,
                   // Not before "On my way" is done (meet + 30 min, running late).

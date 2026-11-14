@@ -19,7 +19,7 @@ import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWrit
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { Timestamp } from "firebase-admin/firestore";
 import { APNS_KEY_ID, APNS_KEY_P8 } from "./apns";
-import { arrivals, endAllNow, endFor, everyoneHere, expectedPeople, liveActivityTick, meetTimeChanged, planDeleted,
+import { arrivals, deleteArrivals, endAllNow, endFor, everyoneHere, expectedPeople, liveActivityTick, meetTimeChanged, planDeleted,
   updateAll } from "./liveActivities";
 
 /** Functions that send Live Activity pushes need the APNs key. */
@@ -384,6 +384,10 @@ async function liveActivityChanges(ref: FirebaseFirestore.DocumentReference, bef
     if (before.status !== "decided") return;
     if (after.status !== "decided" || (after.winnerID && before.winnerID !== after.winnerID)) {
       await endAllNow(ref);
+      // Old "On my way" times don't carry over to a reopened plan or a new place.
+      // (The deletes trigger onETAWritten, which sends nothing: no push for a
+      // removed time, and every countdown was just ended.)
+      await deleteArrivals(ref);
       // A new place (or decided again later) is a new night: "Everyone's here" can happen again.
       if (after.everyoneHereAt) await ref.update({ everyoneHereAt: FieldValue.delete() });
       return;

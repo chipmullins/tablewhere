@@ -494,6 +494,7 @@ struct GroupLobbyView: View {
                         line: live.arrivalLine, mine: live.myETA, updatesLive: true)
                 // Friends' times on your Lock Screen countdown while the app is open.
                 .onChange(of: live.etas, initial: true) { syncCountdown(session.id) }
+                .onChange(of: live.etasLoaded) { syncCountdown(session.id) }
                 .onChange(of: live.expectedAtTable) { syncCountdown(session.id) }
         }
         noteSection(session)
@@ -920,6 +921,8 @@ extension GroupLobbyView {
     /// Friends' times, your status, and the table size on your Lock Screen
     /// countdown while the plan is open.
     func syncCountdown(_ sessionID: String) {
+        // Before the first snapshot, "no times" would wipe the Lock Screen's.
+        guard live.etasLoaded else { return }
         let me = GroupService.shared.currentUserID
         let arrivals = live.etas.filter { $0.userID != me }.map {
             GroupPlanAttributes.Arrival(name: $0.name, eta: $0.eta, status: $0.status.rawValue)

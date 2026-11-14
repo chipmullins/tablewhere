@@ -122,10 +122,12 @@ enum LeaveBy {
         // after leave-by passes, and checks the reminder switch itself.
         activityUpdate?(plan, sessionID, winner, title)
         // So a countdown the server starts shows your leave-by time.
-        if savedPlans[sessionID] != plan.leaveAt.timeIntervalSinceReferenceDate {
+        if savedPlans[sessionID] != plan.leaveAt.timeIntervalSinceReferenceDate,
+           (try? await GroupService.shared.saveLeavePlan(sessionID: sessionID, leaveAt: plan.leaveAt,
+                                                         travelMinutes: plan.driveMinutes,
+                                                         meetTime: plan.meetTime)) != nil {
+            // Only once it's saved, so a failed write is tried again next refresh.
             savedPlans[sessionID] = plan.leaveAt.timeIntervalSinceReferenceDate
-            await GroupService.shared.saveLeavePlan(sessionID: sessionID, leaveAt: plan.leaveAt,
-                                                    travelMinutes: plan.driveMinutes, meetTime: plan.meetTime)
         }
         guard remindersOn, plan.leaveAt.timeIntervalSinceNow > 60 else { return }
 
@@ -175,8 +177,8 @@ enum LeaveBy {
     static func cancel(sessionID: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [requestID(sessionID), headsUpID(sessionID)])
         activityEnd?(sessionID)
-        // No plan anymore: stop "On my way" updates too.
-        OnMyWay.stopTracker?(sessionID)
+        // No plan anymore (or a changed one): stop "On my way" and forget it.
+        OnMyWay.reset(sessionID: sessionID)
     }
 
     // MARK: Live Activity

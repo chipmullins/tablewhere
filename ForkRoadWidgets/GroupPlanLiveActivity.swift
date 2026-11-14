@@ -184,6 +184,17 @@ private struct GroupPlanButtons: View {
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Self.spoken(action, title))
+    }
+
+    /// "+10" alone means little to VoiceOver.
+    private static func spoken(_ action: GroupPlanAction, _ title: String) -> String {
+        switch action {
+        case .late10: return "Running 10 minutes late"
+        case .late15: return "Running 15 minutes late"
+        case .onMyWay: return "I’m on my way"
+        case .arrived: return "I’m here"
+        }
     }
 }
 
