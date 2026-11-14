@@ -77,6 +77,19 @@ enum LiveActivitySettings {
     /// the old heads-up notification isn't needed.
     static var serverStartsIt: Bool { startToken != nil && activitiesEnabled }
 
+    /// Plans where everyone has arrived: their countdown is finished and
+    /// shouldn't come back on the next refresh. Keeps the last 20.
+    static func isAllHere(_ sessionID: String) -> Bool {
+        (store.stringArray(forKey: "la.allHere") ?? []).contains(sessionID)
+    }
+
+    static func markAllHere(_ sessionID: String) {
+        var ids = store.stringArray(forKey: "la.allHere") ?? []
+        guard !ids.contains(sessionID) else { return }
+        ids.append(sessionID)
+        store.set(Array(ids.suffix(20)), forKey: "la.allHere")
+    }
+
     /// Which APNs servers this build's tokens belong to. TestFlight and App
     /// Store builds are Release, which use production.
     static var apnsEnvironment: String {

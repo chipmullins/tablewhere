@@ -34,9 +34,18 @@ enum OnMyWay {
     /// One tap: your drive time from here, shared. Returns the arrival time
     /// (nil when location is off or there's no route; you're still "on the way").
     @discardableResult
-    static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date) async throws -> Date? {
+    /// `askForLocation` false: don't prompt (the Lock Screen buttons run in
+    /// the background, where a prompt never shows and the call would hang).
+    static func start(sessionID: String, destination: CLLocationCoordinate2D, meetTime: Date,
+                      askForLocation: Bool = true) async throws -> Date? {
         var eta: Date?
-        let allowed = await OneShotLocation.shared.requestPermission()
+        let allowed: Bool
+        if askForLocation {
+            allowed = await OneShotLocation.shared.requestPermission()
+        } else {
+            let status = CLLocationManager().authorizationStatus
+            allowed = status == .authorizedWhenInUse || status == .authorizedAlways
+        }
         if allowed, let here = await OneShotLocation.shared.current() {
             let distance = CLLocation(latitude: here.latitude, longitude: here.longitude)
                 .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))

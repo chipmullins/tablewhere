@@ -251,6 +251,7 @@ export async function liveActivityTick(): Promise<void> {
           continue;
         }
         if (d.countdownOn === false || typeof d.startToken !== "string" || millis(d.laEndedFor) === meet) continue;
+        if (session.everyoneHereAt) continue;   // Everyone's already at the table.
         if (now >= meet || now < meet - leadMs(d)) continue;
         // Still in the group (left, or removed when it ended).
         if (!(await sessionDoc.ref.collection("members").doc(device.id).get()).exists) continue;

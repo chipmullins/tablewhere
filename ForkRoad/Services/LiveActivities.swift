@@ -64,6 +64,8 @@ enum LiveActivities {
             await end(sessionID: sessionID)
             return
         }
+        // Everyone's already at the table: the countdown is done for this plan.
+        guard !LiveActivitySettings.isAllHere(sessionID) else { return }
         guard plan.meetTime.timeIntervalSinceNow > 0 else {
             // Already past the meet time: leave it up until the chosen time.
             await finish(sessionID: sessionID)
@@ -121,34 +123,35 @@ enum LiveActivities {
             state.myStatus = myStatus
             state.expected = expected
         }
-        await endIfAllHere(sessionID)
     }
 
     /// A Lock Screen button was tapped: show the new buttons right away.
-    static func setMyStatus(sessionID: String, _ status: String) async {
+    /// Returns the status it replaced, to put back if sharing fails.
+    @discardableResult
+    static func setMyStatus(sessionID: String, _ status: String?) async -> String? {
+        let old = running(sessionID).first?.content.state.myStatus
         await mutate(sessionID) { $0.myStatus = status }
-        await endIfAllHere(sessionID)
+        return old
     }
 
     /// Everyone's at the table: "All 4 here ✓", then off the Lock Screen in a minute.
     static let allHereLinger: TimeInterval = 60
 
-    private static func endIfAllHere(_ sessionID: String) async {
-        for activity in running(sessionID) {
-            var state = activity.content.state
-            guard let expected = state.expected, expected > 1, state.hereCount >= expected else { continue }
-            state.allHere = true
-            timers[sessionID]?.cancel()
-            timers[sessionID] = nil
-            let goAt = Date().addingTimeInterval(allHereLinger)
-            await activity.end(ActivityContent(state: state, staleDate: goAt), dismissalPolicy: .after(goAt))
-        }
-    }
-
+    /// Applies a change; if that makes everyone here, ends with "All N here ✓"
+    /// (checked on the new state itself, not a re-read).
     private static func mutate(_ sessionID: String, _ change: (inout State) -> Void) async {
         for activity in running(sessionID) {
             var state = activity.content.state
             change(&state)
+            if let expected = state.expected, expected > 1, state.hereCount >= expected {
+                state.allHere = true
+                LiveActivitySettings.markAllHere(sessionID)
+                timers[sessionID]?.cancel()
+                timers[sessionID] = nil
+                let goAt = Date().addingTimeInterval(allHereLinger)
+                await activity.end(ActivityContent(state: state, staleDate: goAt), dismissalPolicy: .after(goAt))
+                continue
+            }
             guard state != activity.content.state else { continue }
             await activity.update(ActivityContent(state: state, staleDate: state.staleDate()))
         }
@@ -169,6 +172,8 @@ enum LiveActivities {
     /// arrive", it goes now.
     static func arrived(sessionID: String) async {
         guard LiveActivitySettings.removal == .arrive else { return }
+        // "All 4 here ✓" is showing its last minute: let it.
+        guard !LiveActivitySettings.isAllHere(sessionID) else { return }
         await end(sessionID: sessionID)
     }
 

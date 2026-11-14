@@ -12,25 +12,32 @@ import PickerCore
 @MainActor
 enum GroupPlanActionRunner {
     static func run(_ action: GroupPlanAction, sessionID: String) async {
-        _ = FirebaseSetup.configureIfPossible()
+        guard FirebaseSetup.configureIfPossible() else { return }
         // Feels instant: the buttons change before the network work.
         let status: String = switch action {
         case .onMyWay: "onTheWay"
         case .late10, .late15: "late"
         case .arrived: "arrived"
         }
-        await LiveActivities.setMyStatus(sessionID: sessionID, status)
+        let previous = await LiveActivities.setMyStatus(sessionID: sessionID, status)
 
+        _ = try? await GroupService.shared.userID()
         guard let session = try? await GroupService.shared.fetchSession(sessionID),
               session.status == .decided,
               let winner = session.winner,
-              let meet = session.meetTime else { return }
+              let meet = session.meetTime else {
+            // Nothing was shared (offline, or the plan changed): put the buttons back.
+            await LiveActivities.setMyStatus(sessionID: sessionID, previous)
+            return
+        }
         switch action {
         case .onMyWay:
+            // No location prompt from the Lock Screen (none can show while the
+            // app is in the background): without permission it shares no time.
             _ = try? await OnMyWay.start(sessionID: sessionID,
                                          destination: CLLocationCoordinate2D(latitude: winner.latitude,
                                                                              longitude: winner.longitude),
-                                         meetTime: meet)
+                                         meetTime: meet, askForLocation: false)
         case .late10:
             try? await OnMyWay.runningLate(sessionID: sessionID, minutes: 10, meetTime: meet)
         case .late15:

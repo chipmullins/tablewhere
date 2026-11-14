@@ -85,11 +85,11 @@ private struct GroupPlanLockScreenView: View {
     let phase: GroupPlanAttributes.ContentState.Phase
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             summary
             GroupPlanButtons(sessionID: attributes.sessionID, state: state, phase: phase)
         }
-        .padding(16)
+        .padding(14)
     }
 
     private var summary: some View {
@@ -106,11 +106,15 @@ private struct GroupPlanLockScreenView: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(state.isAllHere ? GroupPlanText.allHere(state) : GroupPlanText.detail(attributes, state, phase))
-                    .font(Theme.body(13, .medium))
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                // Lock Screen activities top out at 160 pt: with friends' times
+                // showing, they replace the drive line.
+                if state.isAllHere || state.arrivalsLine() == nil {
+                    Text(state.isAllHere ? GroupPlanText.allHere(state) : GroupPlanText.detail(attributes, state, phase))
+                        .font(Theme.body(13, .medium))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
                 // Friends' "On my way" times (arrival times only, never locations).
                 if !state.isAllHere, let line = state.arrivalsLine() {
                     Label(line, systemImage: "car.fill")
@@ -175,7 +179,7 @@ private struct GroupPlanButtons: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .foregroundStyle(primary ? Theme.onSaffron : Color.white)
-                .frame(maxWidth: .infinity, minHeight: 34)
+                .frame(maxWidth: .infinity, minHeight: 30)
                 .background(primary ? Theme.saffron : Color.white.opacity(0.16),
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }

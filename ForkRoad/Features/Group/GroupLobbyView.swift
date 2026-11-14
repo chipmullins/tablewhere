@@ -493,16 +493,8 @@ struct GroupLobbyView: View {
             OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
                         line: live.arrivalLine, mine: live.myETA, updatesLive: true)
                 // Friends' times on your Lock Screen countdown while the app is open.
-                .onChange(of: live.etas, initial: true) {
-                    let me = GroupService.shared.currentUserID
-                    let arrivals = live.etas.filter { $0.userID != me }.map {
-                        GroupPlanAttributes.Arrival(name: $0.name, eta: $0.eta, status: $0.status.rawValue)
-                    }
-                    let mine = live.myETA?.status.rawValue
-                    let expected = live.expectedAtTable
-                    Task { await LiveActivities.updateArrivals(sessionID: session.id, arrivals,
-                                                               myStatus: mine, expected: expected) }
-                }
+                .onChange(of: live.etas, initial: true) { syncCountdown(session.id) }
+                .onChange(of: live.expectedAtTable) { syncCountdown(session.id) }
         }
         noteSection(session)
 
@@ -924,6 +916,20 @@ struct GroupLobbyView: View {
 
 /// Sheet for adding a place to an open session, with the same filters as
 /// Discover: radius, cuisines, diet, no fast food, and a name search.
+extension GroupLobbyView {
+    /// Friends' times, your status, and the table size on your Lock Screen
+    /// countdown while the plan is open.
+    func syncCountdown(_ sessionID: String) {
+        let me = GroupService.shared.currentUserID
+        let arrivals = live.etas.filter { $0.userID != me }.map {
+            GroupPlanAttributes.Arrival(name: $0.name, eta: $0.eta, status: $0.status.rawValue)
+        }
+        let mine = live.myETA?.status.rawValue
+        let expected = live.expectedAtTable
+        Task { await LiveActivities.updateArrivals(sessionID: sessionID, arrivals, myStatus: mine, expected: expected) }
+    }
+}
+
 private struct AddOptionView: View {
     let session: GroupSession
     var groupBlockedHashes: Set<String> = []
