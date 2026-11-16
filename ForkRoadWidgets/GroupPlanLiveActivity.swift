@@ -13,8 +13,11 @@ struct GroupPlanLiveActivity: Widget {
         ActivityConfiguration(for: GroupPlanAttributes.self) { context in
             GroupPlanLockScreenView(attributes: context.attributes, state: context.state,
                                     phase: context.state.phase(isStale: context.isStale))
-                .activityBackgroundTint(Theme.night)
-                .activitySystemActionForegroundColor(Theme.text)
+                // Always the dark look: Theme.night follows light/dark, and on
+                // a light Lock Screen it turned see-through with faded text.
+                .environment(\.colorScheme, .dark)
+                .activityBackgroundTint(Color(red: 11 / 255, green: 11 / 255, blue: 15 / 255).opacity(0.92))
+                .activitySystemActionForegroundColor(.white)
                 .widgetURL(context.attributes.url)
         } dynamicIsland: { context in
             let state = context.state
@@ -242,10 +245,16 @@ private struct GroupPlanCountdown: View {
 
     var body: some View {
         switch phase {
-        case .countdown:
-            // Counts down to leave-by; the stale date redraws it as "Go" when it hits zero.
-            Text(state.leaveAt, style: .timer)
-                .monospacedDigit()
+        case .countdown, .timeToGo where !state.hasNotLeft:
+            // On your way (or late): count down to the meet time, not leave-by.
+            if !state.hasNotLeft {
+                Text(state.meetTime, style: .timer)
+                    .monospacedDigit()
+            } else {
+                // Counts down to leave-by; the stale date redraws it as "Leave now" at zero.
+                Text(state.leaveAt, style: .timer)
+                    .monospacedDigit()
+            }
         case .timeToGo where state.hasNotLeft:
             Text(short ? "Now" : "Leave now")
                 .lineLimit(1)
@@ -274,8 +283,8 @@ enum GroupPlanText {
         if state.isAllHere { return "Everyone’s here" }
         switch state.myStatus {
         case "arrived": return "You’re here"
-        case "late": return "Running late"
-        case "onTheWay": return "On your way"
+        case "late": return "Late · meet in"
+        case "onTheWay": return "On your way · meet in"
         default: break
         }
         switch phase {
