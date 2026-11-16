@@ -99,11 +99,11 @@ struct OnboardingView: View {
             )
         case .spin:
             stepPage(art: AnyView(TourSpinMock()), title: "Tap to spin",
-                     text: "It picks from places near you. Switch to Eat in to spin your own home meals, and use filters for a cuisine, a diet, or no fast food.",
+                     text: "It picks from places near you. Switch to eating in to spin your own home meals, and use filters for a cuisine, a diet, or no fast food.",
                      primary: ("Next", next))
         case .lists:
             stepPage(art: AnyView(TourListsMock()), title: "Keep your places",
-                     text: "Discover what’s around, then save it: Favorites you love, places To try, Home meals, and a Blacklist the spin always skips.",
+                     text: "Find what’s around, then save it: favorites you love, places to try, meals you make at home, and a blacklist the spin always skips.",
                      primary: ("Next", next))
         case .groupWays:
             stepPage(art: AnyView(TourGroupWaysMock()), title: "Four ways to decide together",
@@ -190,21 +190,27 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 18) {
             if flexible { Spacer(minLength: 0) }
             art
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .allowsHitTesting(false)
-            if let titleView {
-                titleView
-            } else {
-                Text(title)
-                    .font(Theme.display(30))
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+            Group {
+                if let titleView {
+                    titleView
+                } else {
+                    Text(title)
+                        .font(Theme.display(30))
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             Text(text)
                 .font(Theme.body(16))
                 .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
             if flexible { Spacer(minLength: 0) } else { Color.clear.frame(height: 8) }
             primaryButton(primary.0, action: primary.1)
             if let secondary {
@@ -323,7 +329,7 @@ private struct WelcomeTitle: View {
     @State private var drawn: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 4) {
             Text("Where to eat?")
                 .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
