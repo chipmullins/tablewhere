@@ -22,7 +22,12 @@ enum GroupPlanActionRunner {
         }
         let previous = await LiveActivities.setMyStatus(sessionID: sessionID, status)
 
-        _ = try? await GroupService.shared.userID()
+        // Your existing sign-in only: never a new anonymous user (that would
+        // join the plan as a second you). No sign-in available: nothing sent.
+        guard await GroupService.shared.existingUserID() != nil else {
+            await LiveActivities.setMyStatus(sessionID: sessionID, previous)
+            return
+        }
         guard let session = try? await GroupService.shared.fetchSession(sessionID),
               session.status == .decided,
               let winner = session.winner,

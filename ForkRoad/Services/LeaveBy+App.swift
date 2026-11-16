@@ -22,6 +22,8 @@ extension LeaveBy {
         // Take down Live Activities whose meet time has passed, even offline.
         await LiveActivities.tidyUp()
         guard FirebaseSetup.isConfigured, (try? await GroupService.shared.userID()) != nil else { return }
+        // Tokens that came in while the phone was locked.
+        await LiveActivities.resaveTokens()
         for id in SharedCache.recentSessionIDs().prefix(5) {
             // Offline? Leave existing reminders alone rather than cancelling them.
             guard let snapshot = try? await GroupService.shared.sessionRef(id).getDocument() else { continue }

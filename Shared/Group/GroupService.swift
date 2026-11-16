@@ -57,6 +57,21 @@ final class GroupService {
         return try await Auth.auth().signInAnonymously().user.uid
     }
 
+    /// The signed-in user, waiting briefly for Firebase to restore it, but
+    /// never signing in as someone new. For work that runs in the background
+    /// (the Lock Screen buttons), where a new anonymous user would join the
+    /// plan as a second "you".
+    func existingUserID(waitingUpTo seconds: Double = 3) async -> String? {
+        guard FirebaseSetup.configureIfPossible() else { return nil }
+        if let user = Auth.auth().currentUser { return user.uid }
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(200))
+            if let user = Auth.auth().currentUser { return user.uid }
+        }
+        return nil
+    }
+
     func sessionRef(_ id: String) -> DocumentReference {
         db.collection("sessions").document(id)
     }
@@ -224,7 +239,8 @@ final class GroupService {
     /// plan, so the server can start the countdown at the right time.
     /// Private: only you (and the server) can read sessions/{id}/devices/{uid}.
     func saveDevice(sessionID: String) async {
-        guard let uid = try? await userID() else { return }
+        // Can run in the background while locked (token updates): never a new user.
+        guard let uid = await existingUserID() else { return }
         var data: [String: Any] = [
             "leadMinutes": LiveActivitySettings.leadHours * 60,
             "removeWhen": LiveActivitySettings.removal.rawValue,
@@ -248,7 +264,8 @@ final class GroupService {
     /// The running activity's own push token (for updates and the end push),
     /// and which meet time it's for, so the server doesn't start a second one.
     func saveActivityToken(sessionID: String, token: String?, meetTime: Date) async {
-        guard let uid = try? await userID() else { return }
+        // Often runs when a push wakes the app on a locked phone: never a new user.
+        guard let uid = await existingUserID() else { return }
         var data: [String: Any] = ["activityMeet": Timestamp(date: meetTime), "updatedAt": FieldValue.serverTimestamp()]
         if let token { data["updateToken"] = token }
         try? await sessionRef(sessionID).collection("devices").document(uid).setData(data, merge: true)
@@ -257,7 +274,7 @@ final class GroupService {
     /// This phone's leave-by time, so a countdown the server starts shows it.
     /// (A time, not a location. Only you and the server can read it.)
     func saveLeavePlan(sessionID: String, leaveAt: Date, travelMinutes: Int, meetTime: Date) async throws {
-        let uid = try await userID()
+        guard let uid = await existingUserID() else { throw GroupError.notConfigured }
         try await sessionRef(sessionID).collection("devices").document(uid).setData([
             "leaveAt": Timestamp(date: leaveAt),
             "travelMinutes": min(max(travelMinutes, 0), 1440),

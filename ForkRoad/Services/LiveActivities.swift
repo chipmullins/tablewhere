@@ -277,6 +277,18 @@ enum LiveActivities {
         }
     }
 
+    /// Saves each running activity's token again. A token that arrived while
+    /// the phone was locked (a push-started countdown) couldn't be saved then;
+    /// run when the app opens so the server can still update and end it.
+    static func resaveTokens() async {
+        for activity in Activity<GroupPlanAttributes>.activities
+        where activity.activityState == .active || activity.activityState == .stale {
+            guard let token = tokens[activity.id] else { continue }
+            await GroupService.shared.saveActivityToken(sessionID: activity.attributes.sessionID, token: token,
+                                                        meetTime: activity.content.state.meetTime)
+        }
+    }
+
     private static func hexString(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
