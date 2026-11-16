@@ -15,10 +15,6 @@ struct GroupPlanActionIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Update your group plan"
     static var description = IntentDescription("Tells your group you're on your way, running late, or there.")
     static var isDiscoverable: Bool = false
-    /// Asks for Face ID / passcode first when the phone is locked. While it's
-    /// locked, iOS keeps the app's saved sign-in out of reach, and the tap
-    /// would act as a brand-new anonymous user (a second "you" in the plan).
-    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Plan") var sessionID: String
     @Parameter(title: "Action") var action: String
