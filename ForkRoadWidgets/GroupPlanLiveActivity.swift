@@ -284,7 +284,8 @@ enum GroupPlanText {
         switch state.myStatus {
         case "arrived": return "You’re here"
         case "late": return "Late · meet in"
-        case "onTheWay": return "On your way · meet in"
+        // Short: the right column is narrow, and the buttons already say you're on your way.
+        case "onTheWay": return "Meet in"
         default: break
         }
         switch phase {
