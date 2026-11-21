@@ -5,7 +5,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gsta
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, runTransaction, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { isFastFood, isCoffeeOrSweets, isNotARestaurant, guessCuisine } from "./food-filters.js?v=43";
+import { isFastFood, isCoffeeOrSweets, isNotARestaurant, guessCuisine } from "./food-filters.js?v=45";
 
 const $ = (id) => document.getElementById(id);
 const sections = ["loading", "error", "name-step", "vote-step", "decided-step"];

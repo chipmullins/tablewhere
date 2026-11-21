@@ -20,6 +20,18 @@ public enum FastFood {
         "firehouse subs", "potbelly", "quiznos", "blimpie", "dunkin", "tim hortons",
         "krispy kreme", "cook out", "culvers", "freddys frozen custard", "portillos",
         "hot n now", "jollibee", "biscuitville",
+        // Regional chains, coast to coast.
+        "taco johns", "taco bueno", "taco time", "cookout", "braums", "runza", "spangles",
+        "lees famous recipe chicken", "golden chick", "bushs chicken", "slim chickens",
+        "daves hot chicken", "pollo tropical", "pollo campero", "rubios", "baja fresh",
+        "green burrito", "fatburger", "the habit burger grill", "habit burger", "wayback burgers",
+        "farmer boys", "back yard burgers", "milos hamburgers", "skyline chili", "gold star chili",
+        "charleys philly steaks", "charleys cheesesteaks", "nathans famous", "steak escape",
+        "penn station east coast subs", "which wich", "schlotzskys", "mcalisters deli",
+        "pita pit", "pei wei", "teriyaki madness", "tijuana flats",
+        "godfathers pizza", "pizza inn", "jets pizza", "donatos", "mod pizza", "blaze pizza",
+        "pie five", "rosas pizza", "toppers pizza",
+        "zippys", "arctic circle", "sheetz", "wawa", "kwik trip", "quiktrip",
         // Gas-station / convenience-store counters.
         "hunt brothers pizza", "hunt brothers",
         // Dairy Queen's other names ("DQ Grill & Chill").

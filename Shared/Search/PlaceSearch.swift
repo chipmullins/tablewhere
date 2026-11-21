@@ -184,7 +184,7 @@ struct MapKitPlaceSearch: PlaceSearching {
             throw URLError(.cannotLoadFromNetwork)
         }
 
-        let merged = Self.merge(batches.compactMap { $0 })
+        let merged = LabelMemory.shared.apply(Self.merge(batches.compactMap { $0 }))
         // Don't keep a partial list (some searches failed, were throttled, or
         // were skipped for the budget) for 10 minutes. A complete one is kept
         // even if the caller moved on, so those searches aren't wasted.
@@ -204,8 +204,8 @@ struct MapKitPlaceSearch: PlaceSearching {
                                         latitudinalMeters: radiusMeters * 2,
                                         longitudinalMeters: radiusMeters * 2)
         _ = await SearchCache.shared.reserve(1)  // counts toward the per-minute budget
-        return try await run(Job(query: text, region: region, cuisine: .all, diet: .none, trim: false),
-                             center: center, radiusMeters: radiusMeters)
+        return LabelMemory.shared.apply(try await run(Job(query: text, region: region, cuisine: .all, diet: .none, trim: false),
+                                                      center: center, radiusMeters: radiusMeters))
     }
 
     // MARK: Pieces

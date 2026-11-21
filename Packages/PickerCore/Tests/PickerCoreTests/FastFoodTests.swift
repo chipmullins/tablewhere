@@ -20,6 +20,26 @@ final class FastCasualTests: XCTestCase {
         XCTAssertFalse(FastFood.isFastFood("Moe's Original BBQ"))
     }
 
+    func testRegionalChainsNationwide() {
+        XCTAssertTrue(FastFood.isFastFood("Taco John's"))
+        XCTAssertTrue(FastFood.isFastFood("Cookout"))
+        XCTAssertTrue(FastFood.isFastFood("Cook Out"))
+        XCTAssertTrue(FastFood.isFastFood("Culver's"))
+        XCTAssertTrue(FastFood.isFastFood("Whataburger"))
+        XCTAssertTrue(FastFood.isFastFood("In-N-Out Burger"))
+        XCTAssertTrue(FastFood.isFastFood("Braum's Ice Cream & Dairy Store"))
+        XCTAssertTrue(FastFood.isFastFood("Slim Chickens"))
+        XCTAssertTrue(FastFood.isFastFood("Dave's Hot Chicken"))
+        XCTAssertTrue(FastFood.isFastFood("Pollo Tropical"))
+        XCTAssertTrue(FastFood.isFastFood("Skyline Chili"))
+        XCTAssertTrue(FastFood.isFastFood("Schlotzsky's"))
+        XCTAssertTrue(FastFood.isFastFood("Jet's Pizza"))
+        XCTAssertTrue(FastFood.isFastFood("Wawa"))
+        XCTAssertFalse(FastFood.isFastFood("Cookhouse Grill"))
+        XCTAssertFalse(FastFood.isFastFood("Skyline Steakhouse"))
+        XCTAssertFalse(FastFood.isFastFood("The Habitat Cafe"))
+    }
+
     func testLabelsFromNames() {
         XCTAssertEqual(CuisineLabel.guess(name: "Sam's Hot Dog Stand"), "Hot dogs")
         XCTAssertEqual(CuisineLabel.guess(name: "Flaming Grill Buffet"), "Buffet")
