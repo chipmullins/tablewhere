@@ -6,7 +6,7 @@
 
 **Let the table decide.** Tablewhere is an iPhone app for the oldest argument there is: where to eat. Spin for a pick nearby, or start a group, send the link, and let everyone vote or add a place. Once there's a plan, it tells you when to leave, counts down on your Lock Screen, and shows the group who's on the way.
 
-I designed, built and shipped it myself. It's live on the App Store and in active development.
+I designed, built and shipped it myself. It's [live on the App Store](https://apps.apple.com/us/app/tablewhere-where-to-eat/id6829308313) and in active development.
 
 ## Why I built it
 
