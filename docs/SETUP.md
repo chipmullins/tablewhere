@@ -12,7 +12,7 @@ You need a Mac with a current version of Xcode.
    ```
 2. Generate and open the project:
    ```sh
-   cd forkroad
+   cd tablewhere
    xcodegen generate
    open ForkRoad.xcodeproj
    ```
@@ -33,7 +33,7 @@ Everything except group picks works without this, and the project builds without
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Create a project** (e.g. `forkroad-app`). Analytics is optional. The free **Spark plan** is all you need here.
 2. **Turn on anonymous sign-in:** left sidebar → **Authentication** (also under **Security**) → **Get started** if shown → **Sign-in method** tab → **Anonymous** → **Enable** → **Save**.
-3. **Create the database:** left sidebar → **Databases & Storage → Firestore Database** → **Create database**. Pick the **Standard** edition if asked, a US location (can't be changed later), and **production mode**. ForkRoad's rules replace the defaults when you deploy in step 6.
+3. **Create the database:** left sidebar → **Databases & Storage → Firestore Database** → **Create database**. Pick the **Standard** edition if asked, a US location (can't be changed later), and **production mode**. Tablewhere's rules replace the defaults when you deploy in step 6.
 4. **Add the iPhone app:** **Project Overview → + Add app → Apple (iOS)**. Bundle ID: `com.chipmullins.forkroad`. Download **GoogleService-Info.plist** and put it in `Config/` (it's ignored by Git). Skip the "Add Firebase SDK" and "initialization code" steps; the app already does both.
 5. **Add the web app** (for the voting page): **Project Overview → + Add app → Web (`</>`)**. Copy the `firebaseConfig` it shows into `web/public/firebase-config.js` (start from `firebase-config.example.js`). You don't need Firebase Hosting setup from that screen; step 6 handles it.
 6. Deploy the web page and security rules:
@@ -49,7 +49,7 @@ Everything except group picks works without this, and the project builds without
 
 ### Adding places from the web vote page (optional)
 
-Friends without ForkRoad can suggest places on the vote page, using Apple Maps search (MapKit JS). It needs a token, made on your Mac from your MapKit JS key:
+Friends without the app can suggest places on the vote page, using Apple Maps search (MapKit JS). It needs a token, made on your Mac from your MapKit JS key:
 
 1. Apple Developer → **Certificates, Identifiers & Profiles** → **Keys** → your MapKit JS key (Key ID `6GP6SL584A`). Keep its `.p8` file on your Mac; never commit or share it.
 2. Run `node web/tools/make-mapkit-token.mjs /path/to/AuthKey_6GP6SL584A.p8`. It writes `web/public/mapkit-token.js`, which only works on forkroad-app.web.app and lasts a year.
@@ -59,7 +59,9 @@ The token is safe to commit (it's origin-restricted, and MapKit JS tokens are me
 
 ### Usage stats (private)
 
-ForkRoad counts a few anonymous daily totals (active devices, new devices, spins, groups started, places added, web visitors, votes, and picks) in `stats/{yyyy-mm-dd}` (UTC). Nothing about who, where, or which places. Users can turn it off in Settings.
+Tablewhere counts anonymous daily totals in `stats/{yyyy-mm-dd}` (UTC): active and new devices, spins (and eat-in spins), groups started, places added, RSVPs, On my way and Running late taps, tour finished or skipped, and web visitors, votes and picks. Cloud Functions add three counts only the server sees: Lock Screen countdowns started, plans that got a meet time, and plans where everyone arrived. Nothing about who, where, or which places. Users can turn the app's counts off in Settings.
+
+New count names have to be added in three places: `UsageStat` in `Shared/Group/UsageStats.swift` (or `web/functions/src/stats.ts` for server counts), `statFields()` in `web/firestore.rules` (app and web counts only), and `FIELDS` in `web/public/stats.js`.
 
 See them at **https://forkroad-app.web.app/stats**. One-time setup:
 
@@ -69,20 +71,25 @@ See them at **https://forkroad-app.web.app/stats**. One-time setup:
 
 Downloads, retention, and crashes come from App Store Connect → Analytics.
 
-### Group push notifications (optional)
+### Push notifications and Lock Screen countdowns (optional)
 
-"Maya voted" and "It's decided" alerts come from Cloud Functions in `web/functions/`.
+"Maya voted" and "It's decided" alerts, the Lock Screen countdowns, and the server-side stats come from Cloud Functions in `web/functions/`.
 
 1. Upgrade the Firebase project to the **Blaze (pay-as-you-go) plan**. Cloud Functions require it, but the free monthly allowance covers light use, so this usually costs nothing. Set a budget alert in Google Cloud if you want peace of mind.
 2. In the Apple Developer site, create an **APNs Auth Key** (.p8). In Firebase console → **Project settings → Cloud Messaging → Apple app configuration**, upload it with its Key ID and your Team ID.
-3. Deploy:
+3. Lock Screen countdowns are sent to APNs directly, so the functions need the same key as secrets (run in `web/`):
    ```sh
-   cd web/functions && npm install
-   cd .. && firebase deploy --only functions
+   firebase functions:secrets:set APNS_KEY_P8 < /path/to/AuthKey_XXXXXXXXXX.p8
+   firebase functions:secrets:set APNS_KEY_ID      # the 10-character Key ID
    ```
-4. Check delivery with `firebase functions:log`.
+4. Deploy (from `web/`):
+   ```sh
+   firebase deploy --only functions,firestore,hosting
+   ```
+   If the predeploy step fails with `Cannot read properties of undefined (reading 'stdin')`, the standalone Firebase CLI's bundled npm is the problem. Install the CLI with `npm install -g firebase-tools` instead.
+5. Check delivery with `firebase functions:log`. If a countdown never appears, look for `liveActivityTick` and `Live Activity start` lines first.
 
-Without this step, group picks still work. People just don't get alerts.
+Without this step, group picks still work. People just don't get alerts or countdowns.
 
 ### How group picks work
 
@@ -93,50 +100,17 @@ Without this step, group picks still work. People just don't get alerts.
 ## Run the tests
 
 ```sh
-cd Packages/PickerCore
-swift test
+(cd Packages/PickerCore && swift test)   # app logic
+node web/tests/run.mjs                   # web page, in a headless browser (needs Playwright)
+node web/tools/test-food-filters.mjs     # Swift and web filter lists match
 ```
 
-## Project layout
-
-```
-project.yml                 XcodeGen project definition (targets, entitlements, Info.plists)
-ForkRoad/                   The iPhone app
-  App/                      Entry point and shared AppModel
-  Features/                 Discover, Spin, Detail, Lists, Group, Trips
-  Models/                   SwiftData models (CloudKit-ready), list actions
-  Services/                 Location, MapKit search, Maps/phone links
-  UI/                       In-app browser
-MessagesExtension/          The iMessage app
-Shared/                     Code and fonts compiled into both the app and the iMessage app
-  Group/                    Firebase setup, GroupService, LiveSession
-  Support/                  App config, shared preferences and caches
-  UI/                       Theme and shared components
-Packages/PickerCore/        Pure logic + tests: Place, randomizer, fast food, tally, join codes
-ForkRoadWidgets/            Home Screen and Lock Screen widget
-web/                        Firebase Hosting vote page, Firestore rules, Cloud Functions (pushes)
-Design/                     Source artwork (app icon SVG, plus an alternate fork icon)
-Licenses/                   Font and library licenses (shown in Settings → Acknowledgements)
-Config/                     Your GoogleService-Info.plist (not committed)
-```
+The fast-food, coffee-and-sweets and not-a-restaurant lists live in Swift (`Packages/PickerCore`). After editing them, run `node web/tools/make-food-filters.mjs` to regenerate the web page's copy.
 
 ## Known limits
 
-- **MapKit has no cuisine data.** Cuisine chips search for phrases like "Mexican restaurant."
+- **MapKit has no cuisine data.** Cuisine chips search for phrases like "Mexican restaurant." Once a place has been labeled by a cuisine search, the app remembers that label (`Shared/Search/LabelMemory.swift`).
 - **MapKit has no hours, photos, or menus.** The restaurant screen links to the restaurant's website, and Look Around stands in for photos.
-- **"No fast food" matches a list of chain names** (`PickerCore/FastFood.swift`). Add names to it as you find gaps.
-- **iMessage voting needs ForkRoad installed.** Friends without it use the web link, which is sent along with the vote.
+- **"No fast food" matches a list of chain names** (`PickerCore/FastFood.swift`). Add names to it as you find gaps, with a test in `FastFoodTests.swift`.
+- **iMessage voting needs Tablewhere installed.** Friends without it use the web link, which is sent along with the vote.
 
-## Roadmap
-
-- [x] Phase 1: Discover, search radius, spin, lists, menu links, Look Around
-- [x] Phase 2: Group picks in the app, iMessage app, web voting
-- [x] Phase 3: Trips
-- [x] iCloud sync of lists and trips
-- [x] Outfit + DM Sans type
-- [x] Push notifications for group picks
-- [x] Onboarding, settings, light mode, cuisine icons, spin animation
-- [x] Siri, Shortcuts, and a Home Screen widget
-- [x] "How was it?" follow-ups, notes, dietary filters
-- [ ] Hours and "Open now" (needs Google Places)
-- [ ] Universal links, so vote links open the app when it's installed
