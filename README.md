@@ -1,163 +1,110 @@
+<p align="center">
+  <img src="docs/images/banner.png" alt="Tablewhere: Let the table decide." width="800">
+</p>
+
 # Tablewhere
 
-Formerly ForkRoad, then briefly Tablespin (renamed Nov 2026 after another app took that name). The public name is Tablewhere; code, targets, bundle IDs, the iCloud container, the app group, Firebase (`forkroad-app`) and `forkroad://` links keep the ForkRoad name so existing installs and data keep working.
+**Let the table decide.** Tablewhere is an iPhone app for the oldest argument there is: where to eat. Spin for a pick nearby, or start a group, send the link, and let everyone vote or add a place. Once there's a plan, it tells you when to leave, counts down on your Lock Screen, and shows the group who's on the way.
 
-**Let the table decide.** Tablewhere helps you decide where to eat: browse what’s nearby, spin for a pick (or a home meal), and plan with friends in the app, iMessage, or on the web.
+I designed, built and shipped it myself. It's live on the App Store and in active development.
 
-Built with SwiftUI, SwiftData + CloudKit, MapKit, and Firebase. iOS 17+. Type is Outfit (headings) and DM Sans (body), bundled under the SIL Open Font License (see `Licenses/`).
+## Why I built it
 
-## Features
+My family could never agree on where to eat. Once we finally picked a place, we'd argue about what time to meet, then about when to leave, and someone always ended up texting "where are you?" from the table. Eventually my mom asked if I could make an app to settle it. This is that app: it takes the family from "I don't care, you pick" to everyone sitting down.
 
-- **Onboarding:** a short welcome that explains location before asking (or lets you pick a city instead) and asks your name for group votes
-- **Discover:** search restaurants by name or craving, a live map with your search radius (0.5 to 10 mi), multi-select cuisine filters (mix up to 4), dietary filters (vegetarian, vegan, gluten-free), and a "No fast food" toggle
-- **Spin:** a slot-machine pick from Nearby, Favorites, or Interested with a landing burst, skipping blacklisted places and repeats from the past week
-- **Restaurant screen:** Look Around, call, directions, menu and hours (their website, in the app), Favorite, Try, Blacklist, and your own notes
-- **Lists:** Favorites (places you love), Interested (places to try), and Blacklisted (one place or a whole category). Any saved place can be left out of spins while staying on its list. Saved places are grouped into metro areas (cities within about 25 miles join the biggest one), so lists and spins show the area you're in, any other area, or all of them. Syncs with iCloud.
-- **"How was it?":** after you get directions somewhere, ForkRoad asks how it went (in the app and with a quiet notification). Loved it → Favorites, Never again → Blacklist.
-- **Group picks:** vote or spin together, with a live tally, fair tie-breaks, a meeting time, "send everyone the plan," and push alerts ("Maya voted," "It's decided")
-- **iMessage app:** start and vote on a dinner pick right in a group text
-- **Web voting:** friends without ForkRoad vote from a link in any browser
-- **Trips:** pick a city, browse its restaurants, and save spots for the trip
-- **Siri and Shortcuts:** "Pick dinner with ForkRoad" and "Spin ForkRoad"
-- **Widget:** "Tonight's Pick" on the Home Screen or Lock Screen, with a Spin again button
-- **Settings:** your name, search defaults, appearance (System, Light, Dark), notifications, clear spin history
-- **Looks:** dark and light mode, custom cuisine icons, Outfit and DM Sans type
+<p align="center">
+  <img src="docs/images/group.png" width="200" alt="Starting a group plan">
+  <img src="docs/images/on-the-way.png" width="200" alt="Seeing who's on the way">
+  <img src="docs/images/lock-screen.png" width="200" alt="Lock Screen countdown">
+  <img src="docs/images/web-join.png" width="200" alt="Joining from a link in the browser">
+</p>
 
-## Run it
+## What it does
 
-You need a Mac with a current version of Xcode.
+**On your own**
+- Browse restaurants nearby on a map, with filters for cuisine, diet, distance and "no fast food"
+- Spin for a random pick that skips places you've blacklisted or picked recently
+- Spin your own home meals when you're eating in
+- Keep lists of favorites, places to try, and places you never want to see again, synced across devices with iCloud
+- Plan ahead for a trip by browsing and saving spots in another city
 
-1. Install [Homebrew](https://brew.sh), then XcodeGen:
-   ```sh
-   brew install xcodegen
-   ```
-2. Generate and open the project:
-   ```sh
-   cd forkroad
-   xcodegen generate
-   open ForkRoad.xcodeproj
-   ```
-3. Set signing for **all three** targets (ForkRoad, ForkRoadMessages, ForkRoadWidgets): **Signing & Capabilities** → Team.
-4. Pick an iPhone simulator or your phone and press **Run**.
+**With a group**
+- Four ways to decide: vote, spin everyone's picks, let the wheel choose, or just pick and send the plan
+- Friends join from a link in any browser, so nobody needs the app to take part
+- Start and vote right inside an iMessage conversation
+- Set a meet time, see who's coming, and get alerts when someone votes or it's decided
 
-The project file, Info.plists, and entitlements are generated from `project.yml`, so edit that instead of changing them in Xcode. Run `xcodegen generate` again after pulling changes.
+**Getting there**
+- A leave-by reminder based on live traffic
+- A Lock Screen countdown (Live Activity) that the server starts ahead of time, with buttons for "On my way", "Running late" and "I'm here"
+- Arrival times shared with the group, never anyone's location
 
-**Simulator tip:** set a location with **Features → Location**, or the app uses Lexington, KY.
+## Why it's different
 
-### Apple Developer Program
+Most "where should we eat" apps stop once a restaurant is picked. Restaurant apps help one person find a place, and group polls settle a vote. After that, the group is back in the text thread asking who's leaving when and who's already there.
 
-iCloud sync, the shared sign-in between the app and the iMessage extension, and TestFlight need a paid Apple Developer Program membership on your team. On a free account, the app still runs, but lists stay on the device. If signing complains about iCloud or Keychain Sharing, check that your paid team is selected for both targets.
+Tablewhere covers the whole evening in one place:
 
-## Firebase setup (for group voting)
+1. **Deciding.** Vote, spin everyone's picks, or let the wheel choose, with filters the whole group shares.
+2. **Including everyone.** Friends join from a link in any browser, so the one person without the app isn't left out.
+3. **Making it a plan.** A meet time, who's coming, and alerts when it's decided.
+4. **Getting there.** Leave-by reminders, a Lock Screen countdown that starts on its own, and live arrival times that never reveal anyone's location.
 
-Everything except group picks works without this, and the project builds without it (you'll see a warning). It takes about 10 minutes and is free on Firebase's Spark plan.
+Each piece exists somewhere else on its own. What Tablewhere adds is connecting them, so the group goes from "I don't care, you pick" to everyone sitting down without a single "where are you?" text.
 
-1. Go to [console.firebase.google.com](https://console.firebase.google.com) → **Create a project** (e.g. `forkroad-app`). Analytics is optional. The free **Spark plan** is all you need here.
-2. **Turn on anonymous sign-in:** left sidebar → **Authentication** (also under **Security**) → **Get started** if shown → **Sign-in method** tab → **Anonymous** → **Enable** → **Save**.
-3. **Create the database:** left sidebar → **Databases & Storage → Firestore Database** → **Create database**. Pick the **Standard** edition if asked, a US location (can't be changed later), and **production mode**. ForkRoad's rules replace the defaults when you deploy in step 6.
-4. **Add the iPhone app:** **Project Overview → + Add app → Apple (iOS)**. Bundle ID: `com.chipmullins.forkroad`. Download **GoogleService-Info.plist** and put it in `Config/` (it's ignored by Git). Skip the "Add Firebase SDK" and "initialization code" steps; the app already does both.
-5. **Add the web app** (for the voting page): **Project Overview → + Add app → Web (`</>`)**. Copy the `firebaseConfig` it shows into `web/public/firebase-config.js` (start from `firebase-config.example.js`). You don't need Firebase Hosting setup from that screen; step 6 handles it.
-6. Deploy the web page and security rules:
-   ```sh
-   npm install -g firebase-tools
-   cd web
-   firebase login
-   firebase use --add          # pick your project
-   firebase deploy --only hosting,firestore
-   ```
-7. In `Shared/Support/AppConfig.swift`, set `webHost` to `<your-project-id>.web.app`.
-8. Run `xcodegen generate` again and rebuild.
+## How it's built
 
-### Adding places from the web vote page (optional)
+| Part | Stack |
+|---|---|
+| iPhone app | Swift, SwiftUI, SwiftData + CloudKit, MapKit, ActivityKit, WidgetKit, App Intents |
+| iMessage app | Messages framework, sharing code with the main app |
+| Shared logic | A Swift package (`PickerCore`) with no UI or network code, covered by unit tests |
+| Backend | Firebase: Firestore, anonymous Auth, Cloud Functions (TypeScript), Hosting |
+| Web | Plain JavaScript and MapKit JS for the join-by-link page, tested with Playwright |
+| Push | APNs, sent straight from Cloud Functions with a signed JWT for Live Activity updates |
 
-Friends without ForkRoad can suggest places on the vote page, using Apple Maps search (MapKit JS). It needs a token, made on your Mac from your MapKit JS key:
+The project file is generated from `project.yml` with XcodeGen, so targets, entitlements and settings live in one readable file instead of in Xcode's project format.
 
-1. Apple Developer → **Certificates, Identifiers & Profiles** → **Keys** → your MapKit JS key (Key ID `6GP6SL584A`). Keep its `.p8` file on your Mac; never commit or share it.
-2. Run `node web/tools/make-mapkit-token.mjs /path/to/AuthKey_6GP6SL584A.p8`. It writes `web/public/mapkit-token.js`, which only works on forkroad-app.web.app and lasts a year.
-3. `cd web && firebase deploy --only hosting`.
+## Problems worth mentioning
 
-The token is safe to commit (it's origin-restricted, and MapKit JS tokens are meant to sit in web pages). Without it, the page still works for voting; the Suggest button just doesn't appear.
+**Group decisions that every device agrees on.** Ties and spins are settled by a random pick seeded with the session ID. Every phone and browser gets the same answer without asking a server to referee.
 
-### Usage stats (private)
+**Security without accounts.** Nobody signs up. Everyone gets an anonymous Firebase identity, and the Firestore rules do the rest. Anyone with the link can see a session, but nobody can list sessions. You can only change your own vote, and only while voting is open. Only the creator can lock in a result. Device tokens are readable only by their owner, and arrival times only by people in the plan.
 
-ForkRoad counts a few anonymous daily totals (active devices, new devices, spins, groups started, places added, web visitors, votes, and picks) in `stats/{yyyy-mm-dd}` (UTC). Nothing about who, where, or which places. Users can turn it off in Settings.
+**Lock Screen countdowns that start themselves.** iOS only lets an app start a Live Activity while it's open, which doesn't help when dinner is in three hours. The app registers a push-to-start token, and a scheduled Cloud Function starts the countdown at the right time for each person, keeps it updated as friends leave or arrive, and ends it when everyone's there.
 
-See them at **https://forkroad-app.web.app/stats**. One-time setup:
+**Sharing ETAs without sharing location.** "On my way" tracks location on the phone only, works out the drive time, and shares just the estimated arrival time. Updates go out only when that time moves by two minutes or more, which keeps both battery use and database writes down.
 
-1. Firebase console → **Authentication → Sign-in method → Add new provider → Google** → Enable → Save.
-2. Open the stats page and sign in with Google. It shows your user ID.
-3. Firebase console → **Firestore** → start a collection **`admins`** → add a document whose **ID is that user ID** (any field, e.g. `name` = `Chip`). Reload the page.
+**One source of truth for food filters.** The cuisine, diet and fast-food lists live in Swift. A small Node script generates the same lists for the web page, and a test fails if the two ever drift apart.
 
-Downloads, retention, and crashes come from App Store Connect → Analytics.
+**Privacy by default.** The only analytics are anonymous daily totals, like the number of spins, with no names, places or device IDs. They're viewable on a private admin page and can be turned off in Settings.
 
-### Group push notifications (optional)
+## Repository layout
 
-"Maya voted" and "It's decided" alerts come from Cloud Functions in `web/functions/`.
+```
+ForkRoad/              iPhone app (features, models, services)
+MessagesExtension/     iMessage app
+ForkRoadWidgets/       Home Screen widget and Lock Screen Live Activity
+Shared/                Code shared by the app, iMessage app and widgets
+Packages/PickerCore/   Pure logic and unit tests: spins, tallies, filters, arrivals
+web/                   Firebase Hosting site, Firestore rules, Cloud Functions, Playwright tests
+Design/                App icon source art
+```
 
-1. Upgrade the Firebase project to the **Blaze (pay-as-you-go) plan**. Cloud Functions require it, but the free monthly allowance covers light use, so this usually costs nothing. Set a budget alert in Google Cloud if you want peace of mind.
-2. In the Apple Developer site, create an **APNs Auth Key** (.p8). In Firebase console → **Project settings → Cloud Messaging → Apple app configuration**, upload it with its Key ID and your Team ID.
-3. Deploy:
-   ```sh
-   cd web/functions && npm install
-   cd .. && firebase deploy --only functions
-   ```
-4. Check delivery with `firebase functions:log`.
+The app was called ForkRoad early on, and the code still uses that name. Renaming bundle IDs, the iCloud container or the Firebase project would break existing installs, so only the public name changed.
 
-Without this step, group picks still work. People just don't get alerts.
-
-### How group picks work
-
-- Sessions live in Firestore (`sessions/{id}`, with `votes` and `members` subcollections). Everyone signs in anonymously, so there are no accounts.
-- `web/firestore.rules` lets anyone with the link see a session, but nobody can list sessions. Join codes are looked up one at a time through `joinCodes/{code}`. Only you can write your own vote, and only until the timer runs out. Only the creator can lock in the result or set the meeting time. Other people get **one pick each** while it's open (recorded in `picksBy`): in a Spin everyone, creator included, adds one place; in a Vote the creator can add up to 12 and everyone else can suggest one. After changing the rules, deploy them with `firebase deploy --only firestore`.
-- Ties and spins are decided by a fair, repeatable pick seeded by the session ID, so every device agrees.
-
-## Run the tests
+## Tests
 
 ```sh
-cd Packages/PickerCore
-swift test
+(cd Packages/PickerCore && swift test)   # app logic
+node web/tests/run.mjs                   # web page, in a headless browser (needs Playwright)
+node web/tools/test-food-filters.mjs     # Swift and web filter lists match
 ```
 
-## Project layout
+## Running it yourself
 
-```
-project.yml                 XcodeGen project definition (targets, entitlements, Info.plists)
-ForkRoad/                   The iPhone app
-  App/                      Entry point and shared AppModel
-  Features/                 Discover, Spin, Detail, Lists, Group, Trips
-  Models/                   SwiftData models (CloudKit-ready), list actions
-  Services/                 Location, MapKit search, Maps/phone links
-  UI/                       In-app browser
-MessagesExtension/          The iMessage app
-Shared/                     Code and fonts compiled into both the app and the iMessage app
-  Group/                    Firebase setup, GroupService, LiveSession
-  Support/                  App config, shared preferences and caches
-  UI/                       Theme and shared components
-Packages/PickerCore/        Pure logic + tests: Place, randomizer, fast food, tally, join codes
-ForkRoadWidgets/            Home Screen and Lock Screen widget
-web/                        Firebase Hosting vote page, Firestore rules, Cloud Functions (pushes)
-Design/                     Source artwork (app icon SVG, plus an alternate fork icon)
-Licenses/                   Font and library licenses (shown in Settings → Acknowledgements)
-Config/                     Your GoogleService-Info.plist (not committed)
-```
+You'll need a Mac with Xcode, XcodeGen, and your own Firebase project. [docs/SETUP.md](docs/SETUP.md) covers each step.
 
-## Known limits
+---
 
-- **MapKit has no cuisine data.** Cuisine chips search for phrases like "Mexican restaurant."
-- **MapKit has no hours, photos, or menus.** The restaurant screen links to the restaurant's website, and Look Around stands in for photos.
-- **"No fast food" matches a list of chain names** (`PickerCore/FastFood.swift`). Add names to it as you find gaps.
-- **iMessage voting needs ForkRoad installed.** Friends without it use the web link, which is sent along with the vote.
-
-## Roadmap
-
-- [x] Phase 1: Discover, search radius, spin, lists, menu links, Look Around
-- [x] Phase 2: Group picks in the app, iMessage app, web voting
-- [x] Phase 3: Trips
-- [x] iCloud sync of lists and trips
-- [x] Outfit + DM Sans type
-- [x] Push notifications for group picks
-- [x] Onboarding, settings, light mode, cuisine icons, spin animation
-- [x] Siri, Shortcuts, and a Home Screen widget
-- [x] "How was it?" follow-ups, notes, dietary filters
-- [ ] Hours and "Open now" (needs Google Places)
-- [ ] Universal links, so vote links open the app when it's installed
+Built by Chip Mullins.
