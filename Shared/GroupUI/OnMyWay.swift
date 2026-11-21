@@ -78,6 +78,7 @@ enum OnMyWay {
         }
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: .onTheWay, leftAt: Date())
         shared[sessionID] = Shared(status: .onTheWay, eta: eta)
+        UsageStats.record(.onMyWay)
         // Live updates need location; without it you're "on the way" with one time.
         if allowed { liveTracker?(sessionID, destination, meetTime) }
         return eta
@@ -105,6 +106,7 @@ enum OnMyWay {
         try await GroupService.shared.shareETA(sessionID: sessionID, eta: eta, status: .late,
                                                 lateMinutes: minutes, lateNote: note)
         shared[sessionID] = Shared(status: .late, lateMinutes: minutes, lateNote: note, eta: eta)
+        UsageStats.record(.runningLate)
     }
 
     /// You're there (by tapping "I'm here", or the live tracker noticing).

@@ -26,6 +26,7 @@ struct OnboardingView: View {
     @State private var isAsking = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var askedNotifications = false
+    @State private var skippedTour = false
 
     private var page: TourPage { pages[min(index, pages.count - 1)] }
     private var isLast: Bool { index >= pages.count - 1 }
@@ -253,6 +254,7 @@ struct OnboardingView: View {
     /// The first run still needs location (or a city): Skip goes to that
     /// step. A replay, or the group pages alone, just closes.
     private func skip() {
+        skippedTour = true
         if let last = pages.firstIndex(of: .permissions), index < last {
             if reduceMotion { index = last } else { withAnimation(.snappy) { index = last } }
         } else {
@@ -303,6 +305,11 @@ struct OnboardingView: View {
     /// Land on Spin, with a hint pointing at the button (the full tour only).
     private func finish() {
         UserDefaults.standard.set(true, forKey: TourPage.seenNewKey)
+        // The full tour, counted once per device (a replay from Settings doesn't count again).
+        if pages.contains(.welcome) && !UserDefaults.standard.bool(forKey: "stats.tourCounted") {
+            UserDefaults.standard.set(true, forKey: "stats.tourCounted")
+            UsageStats.record(skippedTour ? .tourSkipped : .tourFinished)
+        }
         if pages.contains(.welcome) {
             model.selectedTab = .spin
             Hint.spinFirst.show()

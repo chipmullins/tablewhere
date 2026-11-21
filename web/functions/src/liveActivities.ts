@@ -15,6 +15,7 @@
  * Content-state and attributes must match GroupPlanAttributes in
  * Shared/Activity/GroupPlanAttributes.swift.
  */
+import { bumpStat } from "./stats";
 import { FieldValue, Timestamp, getFirestore, type DocumentData, type DocumentReference,
   type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
@@ -182,6 +183,7 @@ async function start(sessionDoc: QueryDocumentSnapshot, session: DocumentData, m
       ? { laStartFails: fails, laStartFailsFor: meet }
       : { laStartedFor: FieldValue.delete(), laStartFails: fails, laStartFailsFor: meet }).catch(() => {});
   }
+  if (result.ok) await bumpStat("countdownsStarted");
   logger.info("Live Activity start", { sessionId: sessionDoc.id, uid: device.id, ok: result.ok });
 }
 

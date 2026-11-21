@@ -5,6 +5,7 @@ import FirebaseFirestore
 /// the stats page (web/public/stats.js).
 enum UsageStat: String {
     case activeDevices, newDevices, spins, groupsVote, groupsSpin, groupsPlan, rsvps, groupPicks, customPlaces
+    case eatInSpins, onMyWay, runningLate, tourFinished, tourSkipped
 }
 
 /// Anonymous daily usage counts for Chip's stats page: one number per thing

@@ -16,6 +16,7 @@ import { FieldValue, getFirestore, type DocumentData, type DocumentSnapshot } fr
 import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { bumpStat } from "./stats";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { Timestamp } from "firebase-admin/firestore";
 import { APNS_KEY_ID, APNS_KEY_P8 } from "./apns";
@@ -317,6 +318,33 @@ async function notifyCreatorOfNewPlaces(sessionId: string, before: DocumentData,
   }
 }
 
+// MARK: - Stats: groups that became real plans
+
+/**
+ * A decided plan with a meet time counts once ("Plans with a time" on the
+ * stats page), however it got there: decided then timed, timed then decided,
+ * or an "I'll pick" plan created with both. `planCountedAt` keeps it to once.
+ */
+async function countPlan(ref: FirebaseFirestore.DocumentReference, data: DocumentData): Promise<void> {
+  if (data.status !== "decided" || !(data.meetTime instanceof Timestamp) || data.planCountedAt) return;
+  try {
+    const claimed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.get("planCountedAt")) return false;
+      tx.update(ref, { planCountedAt: Timestamp.now() });
+      return true;
+    });
+    if (claimed) await bumpStat("plansWithTime");
+  } catch (err) {
+    logger.warn("countPlan failed", { sessionId: ref.id, err: String(err) });
+  }
+}
+
+export const onSessionCreated = onDocumentCreated("sessions/{sessionId}", async (event) => {
+  const data = event.data?.data();
+  if (data && event.data) await countPlan(event.data.ref, data);
+});
+
 // MARK: - Session decided / meeting time → everyone but the creator
 
 export const onSessionUpdated = onDocumentUpdated({ document: "sessions/{sessionId}", secrets: apnsSecrets }, async (event) => {
@@ -326,6 +354,7 @@ export const onSessionUpdated = onDocumentUpdated({ document: "sessions/{session
     if (!before || !after) return;
     const sessionId = event.params.sessionId;
     await liveActivityChanges(event.data!.after.ref, before, after);
+    await countPlan(event.data!.after.ref, after);
     const creator = str(after.createdBy);
     const except = creator ? [creator] : [];
 
@@ -511,6 +540,7 @@ export const onETAWritten = onDocumentWritten(
           const place = winnerName(session);
           const to = await recipients(sessionId, { except: [] });
           await send(sessionId, to, sessionTitle(session), `Everyone’s here. Enjoy ${place}!`, { collapse: "everyone-here" });
+          await bumpStat("everyoneHere");
           if (meet !== undefined) await everyoneHere(sessionRef, meet, await expectedPeople(sessionRef));
           return;
         }

@@ -750,6 +750,7 @@ private struct SpinStage: View {
         // Things you typed onto your wheel and home meals aren't restaurants.
         if !pick.id.hasPrefix("typed|") && !HomeRecipe.isRecipe(pick) { actions.recordSpin(pick) }
         UsageStats.record(.spins)
+        if HomeRecipe.isRecipe(pick) { UsageStats.record(.eatInSpins) }
         AccessibilityNotification.Announcement("Your pick: \(pick.name)").post()
         // After the reel tightens and the card starts in.
         Task { @MainActor in

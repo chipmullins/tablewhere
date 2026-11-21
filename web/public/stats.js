@@ -32,12 +32,20 @@ const FIELDS = [
   ["activeDevices", "Active devices"],
   ["newDevices", "New devices"],
   ["spins", "Spins"],
+  ["eatInSpins", "Eat in spins"],
   ["groupsVote", "Group votes"],
   ["groupsSpin", "Group spins"],
   ["groupsPlan", "Plans sent (I’ll pick)"],
   ["rsvps", "RSVPs"],
   ["groupPicks", "Places added to groups"],
   ["customPlaces", "Own restaurants added"],
+  ["plansWithTime", "Plans with a time"],
+  ["countdownsStarted", "Lock Screen countdowns"],
+  ["onMyWay", "On my way"],
+  ["runningLate", "Running late"],
+  ["everyoneHere", "Everyone’s here"],
+  ["tourFinished", "Tour finished"],
+  ["tourSkipped", "Tour skipped"],
   ["webVisitors", "Web visitors"],
   ["webVotes", "Web votes"],
   ["webPicks", "Web picks"],
@@ -135,6 +143,8 @@ $("refresh").addEventListener("click", load);
 const fmt = (n) => n.toLocaleString();
 const plural = (n, word) => `${fmt(n)} ${word}${n === 1 ? "" : "s"}`;
 const sum = (key) => rows.reduce((a, r) => a + r[key], 0);
+// "—" until there's something to divide by.
+const pct = (part, whole) => (whole ? `${Math.min(100, Math.round((part / whole) * 100))}%` : "—");
 const shortDate = (day) => new Date(day + "T12:00:00Z").toLocaleDateString([], { month: "short", day: "numeric", timeZone: "UTC" });
 
 function render() {
@@ -157,6 +167,7 @@ function renderTiles() {
   const today = rows[rows.length - 1] || {};
   const avg = rows.length ? sum("activeDevices") / rows.length : 0;
   const range = `last ${days} days`;
+  const started = sum("groupsVote") + sum("groupsSpin") + sum("groupsPlan");
   $("tiles").replaceChildren(
     tile("Active today", fmt(today.activeDevices || 0), "devices that opened Tablewhere"),
     tile("Daily active", avg < 10 ? avg.toFixed(1) : fmt(Math.round(avg)), `average, ${range}`),
@@ -165,6 +176,13 @@ function renderTiles() {
     tile("Groups started", fmt(sum("groupsVote") + sum("groupsSpin") + sum("groupsPlan")),
       `${plural(sum("groupsVote"), "vote")} · ${plural(sum("groupsSpin"), "spin")} · ${plural(sum("groupsPlan"), "plan")}`),
     tile("Web visitors", fmt(sum("webVisitors")), `friends without the app, ${range}`),
+    tile("Groups that became plans", pct(sum("plansWithTime"), started),
+      `${plural(sum("plansWithTime"), "plan")} with a time, of ${plural(started, "group")}`),
+    tile("Everyone made it", fmt(sum("everyoneHere")), `plans where the whole table showed up, ${range}`),
+    tile("Lock Screen countdowns", fmt(sum("countdownsStarted")),
+      `${plural(sum("onMyWay"), "On my way tap")} · ${plural(sum("runningLate"), "late tap")}`),
+    tile("Tour finished", pct(sum("tourFinished"), sum("tourFinished") + sum("tourSkipped")),
+      `${fmt(sum("tourFinished"))} finished · ${fmt(sum("tourSkipped"))} skipped`),
   );
 }
 
@@ -175,6 +193,8 @@ const CHARTS = [
   { title: "Spins", key: "spins" },
   { title: "Groups started", key: (r) => r.groupsVote + r.groupsSpin + (r.groupsPlan || 0), note: "votes + spins + plans" },
   { title: "Web visitors", key: "webVisitors" },
+  { title: "Plans with a time", key: "plansWithTime" },
+  { title: "Lock Screen countdowns", key: "countdownsStarted" },
 ];
 
 function niceMax(max) {

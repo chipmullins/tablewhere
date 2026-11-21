@@ -238,7 +238,10 @@ service cloud.firestore {
     // for today (give or take a day for time zones). Only admins can read.
     function statFields() {
       return ['activeDevices', 'newDevices', 'spins', 'groupsVote', 'groupsSpin', 'groupsPlan', 'rsvps',
-              'groupPicks', 'customPlaces', 'webVisitors', 'webVotes', 'webPicks'];
+              'groupPicks', 'customPlaces', 'webVisitors', 'webVotes', 'webPicks',
+              'eatInSpins', 'onMyWay', 'runningLate', 'tourFinished', 'tourSkipped'];
+      // (countdownsStarted, everyoneHere and plansWithTime are counted by
+      // Cloud Functions, which don't go through these rules.)
     }
 
     // An admin has a document at admins/{their user ID}, created by hand in
@@ -270,7 +273,9 @@ service cloud.firestore {
         && sameOrPlusOne('activeDevices') && sameOrPlusOne('newDevices') && sameOrPlusOne('spins')
         && sameOrPlusOne('groupsVote') && sameOrPlusOne('groupsSpin') && sameOrPlusOne('groupsPlan')
         && sameOrPlusOne('rsvps') && sameOrPlusOne('groupPicks') && sameOrPlusOne('customPlaces')
-        && sameOrPlusOne('webVisitors') && sameOrPlusOne('webVotes') && sameOrPlusOne('webPicks');
+        && sameOrPlusOne('webVisitors') && sameOrPlusOne('webVotes') && sameOrPlusOne('webPicks')
+        && sameOrPlusOne('eatInSpins') && sameOrPlusOne('onMyWay') && sameOrPlusOne('runningLate')
+        && sameOrPlusOne('tourFinished') && sameOrPlusOne('tourSkipped');
     }
 
     function sameOrPlusOne(field) {
