@@ -168,7 +168,7 @@ struct SettingsView: View {
             .background(Theme.night)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
-            .tint(Theme.saffron)
+            .tint(Theme.accentText)
             .listSectionSpacing(.compact)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
