@@ -24,30 +24,39 @@ struct MonogramTile: View {
     }
 }
 
-/// One restaurant in a list.
+/// One restaurant in a list (1.2): a colored initial tile, the name, what
+/// and how far, on a clean row with a hairline under it.
 struct PlaceRow: View {
     let place: Place
+    var showsChevron = true
+    var showsDivider = true
 
     var body: some View {
         HStack(spacing: 14) {
-            MonogramTile(name: place.name, category: place.category)
-            VStack(alignment: .leading, spacing: 4) {
+            InitialTile(name: place.name)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(place.name)
-                    .font(Theme.body(16, .semibold))
+                    .font(Theme.body(16, .bold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Text("\(place.category) · \(place.distanceLabel)")
                     .font(Theme.body(13))
                     .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(Theme.body(14, .semibold))
-                .foregroundStyle(Theme.muted.opacity(0.6))
-                .accessibilityHidden(true)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(Theme.body(14, .semibold))
+                    .foregroundStyle(Theme.muted.opacity(0.6))
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(12)
-        .card()
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            if showsDivider { Rectangle().fill(Theme.hairline).frame(height: 1) }
+        }
         .contentShape(Rectangle())
     }
 }
@@ -115,7 +124,7 @@ struct ActionTile: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, minHeight: 66)
-            .background(background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(background, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
             .opacity(isEnabled ? 1 : 0.4)
         }
         .buttonStyle(.pressable)
@@ -146,14 +155,14 @@ struct SectionLabel: View {
     }
 }
 
-/// A shimmering stand-in for a restaurant row (a `PlaceRow` card) while results load.
+/// A shimmering stand-in for a restaurant row (a `PlaceRow`) while results load.
 /// Wrap a group of them in `.loadingSkeleton()` so VoiceOver hears one "Loading".
 struct PlaceRowPlaceholder: View {
-    var tileSize: CGFloat = 60
+    var tileSize: CGFloat = 52
 
     var body: some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: tileSize * 0.27, style: .continuous)
+            RoundedRectangle(cornerRadius: tileSize * 0.31, style: .continuous)
                 .fill(Theme.surfaceHigh)
                 .frame(width: tileSize, height: tileSize)
             VStack(alignment: .leading, spacing: 8) {
@@ -162,8 +171,7 @@ struct PlaceRowPlaceholder: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .card()
+        .padding(.vertical, 12)
         .shimmering()
     }
 }
@@ -239,7 +247,7 @@ struct StateCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .padding(.horizontal, 20)
-        .card(radius: 22)
+        .card(radius: Theme.Radius.hero)
     }
 }
 

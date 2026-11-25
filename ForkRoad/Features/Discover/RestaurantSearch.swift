@@ -10,9 +10,12 @@ struct RestaurantSearchField: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.muted)
-            TextField("Search restaurants or cravings", text: $text)
-                .font(Theme.body(15, .medium))
+                .accessibilityHidden(true)
+            TextField("Craving something?", text: $text)
+                .font(Theme.body(16, .medium))
+                .accessibilityLabel("Search restaurants or cravings")
                 .foregroundStyle(Theme.text)
                 .focused($isFocused)
                 .submitLabel(.search)
@@ -28,8 +31,8 @@ struct RestaurantSearchField: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(height: 50)
-        .card(radius: 16)
+        .frame(height: 52)
+        .card(radius: Theme.Radius.button)
         .accessibilityElement(children: .contain)
     }
 }
@@ -67,7 +70,7 @@ struct RestaurantSearchResults: View {
                     .foregroundStyle(Theme.muted)
             }
 
-            LazyVStack(spacing: 10) {
+            LazyVStack(spacing: 0) {
                 ForEach(results) { place in
                     NavigationLink(value: place) {
                         PlaceRow(place: place)
@@ -80,7 +83,7 @@ struct RestaurantSearchResults: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
                                         .background(Theme.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-                                        .padding(10)
+                                        .padding(.top, 8)
                                 }
                             }
                             .zoomSource(id: place.id, ns: zoom)

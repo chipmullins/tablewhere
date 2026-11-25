@@ -9,13 +9,20 @@ struct DiscoverView: View {
     @Environment(AppModel.self) private var model
     @Query private var blockedPlaces: [BlockedPlace]
     @Query private var blockedCategories: [BlockedCategory]
+    @Query private var saved: [SavedPlace]
     @State private var showLocationPicker = false
     @State private var showSettings = false
+    @State private var showFilters = false
+    @State private var showMap = false
     @State private var searchText = ""
     /// How many of the nearby places the list shows (Show more adds 40).
     @State private var shownCount = 40
     @FocusState private var searchFocused: Bool
     @Namespace private var zoom
+
+    private var favoriteIDs: Set<String> {
+        Set(saved.filter { $0.list == .favorites }.map(\.placeID))
+    }
 
     private var isSearching: Bool { searchText.trimmingCharacters(in: .whitespaces).count >= 2 }
 
@@ -27,28 +34,23 @@ struct DiscoverView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
-                Text("Which way\nto eat?")
-                    .font(Theme.display(36))
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
                 RestaurantSearchField(text: $searchText, isFocused: $searchFocused)
                 if isSearching {
                     RestaurantSearchResults(query: searchText, zoom: zoom)
                 } else if !model.hasLocation {
                     whereToLook
                 } else {
-                    HintCard(.discoverMap)
-                    NearbyMap(places: visiblePlaces)
-                    RadiusControl()
                     cuisineChips
+                    filterPills
+                    HintCard(.discoverMap)
                     spinBanner
                     LateNightNote(placeCount: visiblePlaces.count)
                     results
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -63,7 +65,11 @@ struct DiscoverView: View {
         }
         .refreshable { await model.refresh() }
         .onChange(of: model.places.first?.id) { shownCount = 40 }
-        .scrollDismissesKeyboard(.immediately)
+        .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showFilters) { SearchFiltersSheet() }
+        .fullScreenCover(isPresented: $showMap) { FullMapView() }
+        .onChange(of: showMap) { if showMap { Hint.discoverMap.dismiss() } }
     }
 
     /// Before ForkRoad knows where you are: ask, instead of guessing a city.
@@ -114,33 +120,32 @@ struct DiscoverView: View {
         .padding(.top, 4)
     }
 
+    /// "Find a place" and Settings.
     private var header: some View {
-        HStack {
+        HStack(alignment: .center) {
+            Text("Find a place")
+                .font(Theme.display(34))
+                .tracking(-1)
+                .foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            RoundIconButton(label: "Settings", systemImage: "gearshape", size: 44) { showSettings = true }
+        }
+        .padding(.top, 12)
+    }
+
+    /// Where you're looking and how far, as two small pills.
+    private var filterPills: some View {
+        HStack(spacing: 8) {
             Button { showLocationPicker = true } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    SectionLabel(text: model.isUsingCurrentLocation ? "Near you" : "Searching near")
-                    HStack(spacing: 6) {
-                        Image(systemName: model.isUsingCurrentLocation ? "location.fill" : "mappin")
-                            .foregroundStyle(Theme.accentText)
-                        Text(model.locationName)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(Theme.body(12, .bold))
-                            .foregroundStyle(Theme.muted)
-                    }
-                    .font(Theme.body(16, .semibold))
-                    .foregroundStyle(Theme.text)
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+                pill(icon: model.isUsingCurrentLocation ? "location.fill" : "mappin", text: model.locationName)
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Searching near \(model.locationName). Change location")
             if !model.isUsingCurrentLocation && !model.location.isDenied {
                 Button { model.useCurrentLocation() } label: {
-                    Label("Use my location", systemImage: "location.fill")
-                        .labelStyle(.iconOnly)
-                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.accentText)
                         .frame(width: 36, height: 36)
                         .background(Theme.accentSoft, in: Circle())
@@ -150,26 +155,41 @@ struct DiscoverView: View {
                 .buttonStyle(.pressable)
                 .accessibilityLabel("Use my location")
             }
-            Spacer()
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Theme.hairline))
+            Button { showFilters = true } label: {
+                pill(icon: "slider.horizontal.3", text: filtersPillText)
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Settings")
+            .accessibilityLabel("Filters: \(filtersPillText)")
+            .accessibilityHint("Change how far, diet, and what kind of food")
+            Spacer(minLength: 0)
         }
-        .padding(.top, 8)
-        .sheet(isPresented: $showLocationPicker) { LocationPickerView() }
-        .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
+    private var filtersPillText: String {
+        var parts = [model.radiusLabel]
+        if model.diet != .none { parts.append(model.diet.label) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func pill(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.accentText)
+            Text(text)
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 40)
+        .background(Theme.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.hairline))
+    }
+
+    /// Cuisines up top (diet lives in Filters).
     private var cuisineChips: some View {
-        CuisineChips(selection: Binding(get: { model.cuisines }, set: { model.cuisines = $0 }),
-                     diet: Binding(get: { model.diet }, set: { model.diet = $0 }))
+        CuisineChips(selection: Binding(get: { model.cuisines }, set: { model.cuisines = $0 }))
     }
 
     /// "165 places · 2 mi · Mexican · No fast food": what the spin will use.
@@ -190,21 +210,27 @@ struct DiscoverView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "sparkles")
-                    .font(Theme.body(22, .semibold))
-                    .foregroundStyle(Theme.saffron)
-                    .frame(width: 48, height: 48)
-                    .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(Theme.onSaffron)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.saffron, in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Spin for it").font(Theme.display(19))
+                    Text("Spin for it").font(Theme.body(15, .bold)).foregroundStyle(Theme.text)
                     Text(spinBannerDetail)
-                        .font(Theme.body(13, .medium))
+                        .font(Theme.body(13))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(Theme.body(16, .bold))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                    .accessibilityHidden(true)
             }
-            .foregroundStyle(Theme.onSaffron)
-            .padding(16)
-            .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(14)
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.button + 2, style: .continuous))
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.pressable)
         .disabled(visiblePlaces.isEmpty)
@@ -213,10 +239,18 @@ struct DiscoverView: View {
     @ViewBuilder
     private var results: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Nearby").font(Theme.display(22)).foregroundStyle(Theme.text)
+            Text("Nearby").font(Theme.display(18)).foregroundStyle(Theme.text)
+                .accessibilityAddTraits(.isHeader)
+            if model.isLoading { ProgressView().tint(Theme.muted).padding(.leading, 4) }
             Spacer()
-            if model.isLoading { ProgressView().tint(Theme.muted) }
+            Button("Map") { showMap = true }
+                .font(Theme.body(14, .semibold))
+                .foregroundStyle(Theme.accentText)
+                .frame(minHeight: 44)
+                .accessibilityLabel("Show on map")
+                .accessibilityHint("Map of \(plural(visiblePlaces.count, "restaurant")) within \(model.radiusLabel)")
         }
+        .padding(.top, 4)
 
         if model.location.isDenied && model.isUsingCurrentLocation {
             StateCard(icon: "location.slash",
@@ -229,7 +263,7 @@ struct DiscoverView: View {
                       message: "Check your connection and try again.",
                       action: ("Try again", { Task { await model.refresh() } }))
         } else if !model.hasSearched || (model.isLoading && visiblePlaces.isEmpty) {
-            VStack(spacing: 10) {
+            VStack(spacing: 0) {
                 ForEach(0..<4, id: \.self) { _ in PlaceRowPlaceholder() }
             }
             .loadingSkeleton()
@@ -239,12 +273,16 @@ struct DiscoverView: View {
 
         // Searches can bring back 100+ places: show the nearest first, more on request.
         let shown = visiblePlaces.prefix(shownCount)
-        LazyVStack(spacing: 10) {
+        LazyVStack(spacing: 0) {
             ForEach(shown) { place in
-                NavigationLink(value: place) {
-                    PlaceRow(place: place).zoomSource(id: place.id, ns: zoom)
+                HStack(spacing: 4) {
+                    NavigationLink(value: place) {
+                        PlaceRow(place: place, showsChevron: false, showsDivider: false).zoomSource(id: place.id, ns: zoom)
+                    }
+                    .buttonStyle(.pressable)
+                    FavoriteHeart(place: place, isFavorite: favoriteIDs.contains(place.id))
                 }
-                .buttonStyle(.pressable)
+                .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline).frame(height: 1) }
             }
         }
         if visiblePlaces.count > shown.count {
@@ -255,10 +293,36 @@ struct DiscoverView: View {
                     .font(Theme.body(15, .bold))
                     .foregroundStyle(Theme.text)
                     .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
             }
             .buttonStyle(.pressable)
+            .padding(.top, 8)
         }
+    }
+}
+
+/// The heart at the end of a Discover row: adds to (or takes off) Favorites.
+private struct FavoriteHeart: View {
+    let place: Place
+    let isFavorite: Bool
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        let actions = ListActions(context: context)
+        Button {
+            actions.toggle(place, in: .favorites)
+        } label: {
+            Image(systemName: isFavorite ? "heart.fill" : "heart")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(isFavorite ? Theme.accentText : Theme.muted)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .sensoryFeedback(Haptic.tick, trigger: isFavorite)
+        .accessibilityLabel("Favorite \(place.name)")
+        .accessibilityAddTraits(isFavorite ? .isSelected : [])
+        .accessibilityValue(isFavorite ? "On" : "Off")
     }
 }
 
