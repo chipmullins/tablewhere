@@ -112,6 +112,7 @@ struct GroupLobbyView: View {
         view
         .background(Theme.night)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .toolbar {
             if let session = shownSession {
                 ToolbarItem(placement: .topBarTrailing) {

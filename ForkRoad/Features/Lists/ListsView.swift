@@ -76,6 +76,7 @@ struct ListsView: View {
         .listRowSeparatorTint(Theme.hairline)
         .background(Theme.night)
         .navigationTitle("Your lists")
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

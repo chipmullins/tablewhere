@@ -8,10 +8,13 @@ enum PickShareContext: Equatable {
     case spin
     /// The group decided on it (with the meeting time and the plan's note, if set).
     case group(meetTime: Date?, note: String? = nil)
+    /// Shared from a place's details (not a spin or a plan).
+    case place
 
     var eyebrow: String {
         switch self {
         case .spin: return "THE WHEEL PICKED"
+        case .place: return "LET’S EAT AT"
         case .group: return "WE’RE GOING TO"
         }
     }
@@ -156,7 +159,7 @@ struct SharePickButton<LabelView: View>: View {
             if let image {
                 ShareLink(item: image,
                           subject: Text(card.name),
-                          message: Text("\(context == .spin ? "The wheel picked" : "We’re going to") \(card.name)"),
+                          message: Text("\(context == .spin ? "The wheel picked" : context == .place ? "Let’s eat at" : "We’re going to") \(card.name)"),
                           preview: SharePreview(card.name, image: image)) {
                     label()
                 }

@@ -34,6 +34,7 @@ struct GroupHomeView: View {
             .onChange(of: model.pendingPlanPlace?.id, initial: true) {
                 guard let place = model.pendingPlanPlace else { return }
                 model.pendingPlanPlace = nil
+                guard FirebaseSetup.isConfigured else { return }  // Group shows its notice
                 path = []
                 startingPlace = place
                 withName(.create)
@@ -58,7 +59,7 @@ struct GroupHomeView: View {
                         art: .chat,
                         title: "No more “idk, you pick”",
                         message: "Start a plan, send it to the group chat, and let everyone vote or add a pick. Friends don’t need the app.",
-                        primary: ("Start a group plan", { withName(.create) }),
+                        primary: ("Start a group plan", { startPlain() }),
                         secondary: ("Got a code? Join the group", { withAnimation(.snappy) { showJoin = true } })
                     )
                     .padding(.top, 40)
@@ -78,6 +79,7 @@ struct GroupHomeView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .navigationDestination(for: String.self) { GroupLobbyView(sessionID: $0) }
         .sheet(isPresented: $showCreate, onDismiss: { startingPlace = nil }) {
             CreateGroupView(startingPlace: startingPlace) { session in
@@ -156,7 +158,7 @@ struct GroupHomeView: View {
     /// The one primary action here: a dark hero card that starts a plan.
     private var startCard: some View {
         Button {
-            withName(.create)
+            startPlain()
         } label: {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
@@ -244,6 +246,12 @@ struct GroupHomeView: View {
     }
 
     // MARK: Actions
+
+    /// A plain "Start a group plan" (not from a spin).
+    private func startPlain() {
+        startingPlace = nil
+        withName(.create)
+    }
 
     private func withName(_ action: PendingAction) {
         Hint.groupStart.dismiss()

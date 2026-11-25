@@ -158,10 +158,18 @@ struct OnMyWayCard: View {
             .disabled(isWorking)
         case .onTheWay?, .late?:
             HStack(spacing: 10) {
-                Button { act { try await OnMyWay.arrived(sessionID: sessionID) } } label: {
-                    Label("I’m here", systemImage: "checkmark.circle.fill")
+                if mine?.leftAt == nil {
+                    // Said "Late +10" before leaving: you can still start the drive.
+                    Button { act { _ = try await OnMyWay.start(sessionID: sessionID, destination: destination, meetTime: meetTime) } } label: {
+                        Label("I’m on my way", systemImage: "car.fill")
+                    }
+                    .buttonStyle(SleekButtonStyle(kind: .saffron, height: 56))
+                } else {
+                    Button { act { try await OnMyWay.arrived(sessionID: sessionID) } } label: {
+                        Label("I’m here", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(SleekButtonStyle(kind: .saffron, height: 56))
                 }
-                .buttonStyle(SleekButtonStyle(kind: .saffron, height: 56))
                 lateMenu(primaryMinutes: nil, title: "Running late")
                     .fixedSize(horizontal: true, vertical: false)
             }

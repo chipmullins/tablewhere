@@ -56,6 +56,7 @@ struct DiscoverView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .navigationDestination(for: Place.self) { place in
             PlaceDetailView(place: place).zoomDestination(id: place.id, ns: zoom)
         }

@@ -112,14 +112,14 @@ final class LiveSession {
         return etas.first { $0.userID == uid }
     }
 
-    /// Who's expected at the table: everyone in the plan except people who
-    /// said they can't make it (same rule as the server's "Everyone's here").
     /// Members minus anyone who said they can't make it (the On the way rows).
     var comingMembers: [GroupMember] {
         let declined = Set(rsvps.filter { !$0.going }.map(\.userID))
         return members.filter { !declined.contains($0.id) }
     }
 
+    /// Who's expected at the table: everyone in the plan except people who
+    /// said they can't make it (same rule as the server's "Everyone's here").
     var expectedAtTable: Int {
         let declined = Set(rsvps.filter { !$0.going }.map(\.userID))
         return members.filter { !declined.contains($0.id) }.count

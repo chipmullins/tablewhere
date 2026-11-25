@@ -234,10 +234,12 @@ struct SpinResultView: View {
         .buttonStyle(.sleekPrimary)
         .accessibilityHint("Opens directions")
 
-        Button { model.startPlan(with: place) } label: {
-            SleekRow(systemImage: "person.2", title: "Make it a group plan", subtitle: "Send the link, pick a time")
+        if FirebaseSetup.isConfigured {
+            Button { model.startPlan(with: place) } label: {
+                SleekRow(systemImage: "person.2", title: "Make it a group plan", subtitle: "Send the link, pick a time")
+            }
+            .buttonStyle(.pressable)
         }
-        .buttonStyle(.pressable)
 
         Button("See details") { showDetail = true }
             .font(Theme.body(14, .semibold))

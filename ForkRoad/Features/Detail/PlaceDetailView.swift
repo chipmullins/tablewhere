@@ -86,7 +86,7 @@ struct PlaceDetailView: View {
                                    hint: "Choose this place or all of its kind") { showBlockOptions = true }
                     }
                     Spacer(minLength: 6)
-                    SharePickButton(place: place, context: .spin) {
+                    SharePickButton(place: place, context: .place) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 21, weight: .semibold))
                             .foregroundStyle(Theme.text)
@@ -161,6 +161,7 @@ struct PlaceDetailView: View {
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .task { if actions.saved(place)?.hasExactLocation ?? true { await loadLookAround() } }
         .sheet(isPresented: $showEdit) {
             if let record = actions.saved(place) {

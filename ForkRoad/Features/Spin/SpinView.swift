@@ -90,6 +90,7 @@ struct SpinView: View {
         .animation(Motion.standard, value: result?.id)
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
         .overlay {
             if let reveal {
                 SpinReveal(names: reveal.names, winner: reveal.winner) { self.reveal = nil }
@@ -106,8 +107,9 @@ struct SpinView: View {
             if model.spinSource == .picked { Hint.myWheel.dismiss() }
         }
         .onChange(of: model.eatIn) { if model.eatIn { Hint.eatIn.dismiss() } }
-        // Changing where or what you spin closes an old pick.
-        .onChange(of: resetKey) { result = nil }
+        // Changing where or what you spin closes an old pick (not a GPS
+        // fix drifting a few meters, which would pop an open detail screen).
+        .onChange(of: resultKey) { result = nil }
         // "Spin for it" from another tab while a pick is open: back to the wheel.
         .onChange(of: model.pendingSpin) { if model.pendingSpin { result = nil } }
         .sheet(isPresented: $showAddRecipe) { RecipeForm() }
@@ -138,11 +140,12 @@ struct SpinView: View {
                         Color.clear
                             .frame(height: max(0, mapHeight - geo.safeAreaInsets.top - 40))
                             .contentShape(Rectangle())
-                            .onTapGesture { if !model.eatIn { showFullMap = true } }
+                            // The big map shows Nearby, so only Nearby opens it.
+                            .onTapGesture { if opensFullMap { showFullMap = true } }
                             .accessibilityElement()
-                            .accessibilityLabel(model.eatIn ? "" : "Map of \(plural(pool.count, "place")). Opens a bigger map.")
-                            .accessibilityAddTraits(model.eatIn ? [] : .isButton)
-                            .accessibilityHidden(model.eatIn)
+                            .accessibilityLabel(opensFullMap ? "Map of \(plural(pool.count, "place")). Opens a bigger map." : "")
+                            .accessibilityAddTraits(opensFullMap ? .isButton : [])
+                            .accessibilityHidden(!opensFullMap)
                         sheet(pool)
                     }
                 }
@@ -362,6 +365,16 @@ struct SpinView: View {
     /// Recipe notes by reel ID, for the result.
     private var recipeNotes: [String: String] {
         Dictionary(recipes.map { ($0.asSpinItem.id, $0.note) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private var opensFullMap: Bool { !model.eatIn && model.spinSource == .nearby }
+
+    /// Like `resetKey`, but with where you are rounded (~100 m), so GPS
+    /// jitter doesn't close a pick you're looking at.
+    private var resultKey: String {
+        [model.eatIn ? "in" : "out", model.spinSource.rawValue, "\(model.listCity)",
+         String(format: "%.3f,%.3f", model.center.latitude, model.center.longitude),
+         "\(model.radiusMiles)", model.pickedWheel.map(\.id).joined(separator: ",")].joined(separator: "|")
     }
 
     /// When any of these change, the wheel starts over.
