@@ -4,10 +4,10 @@ import UIKit
 /// ForkRoad's colors and type. Every color adapts to light and dark mode;
 /// dark (night + saffron) is the signature look.
 enum Theme {
-    static let night = Color(light: 0xF6F5F1, dark: 0x0B0B0F)        // app background
+    static let night = Color(light: 0xF7F4EE, dark: 0x0B0B0F)        // app background (cream / near-black)
     static let surface = Color(light: 0xFFFFFF, dark: 0x16161D)      // cards
     static let surfaceHigh = Color(light: 0xEFEDE8, dark: 0x1F1F29)  // buttons on cards
-    static let hairline = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.08, darkAlpha: 0.07)
+    static let hairline = Color(light: 0xECE7DE, dark: 0xFFFFFF, lightAlpha: 1, darkAlpha: 0.07)
     static let text = Color(light: 0x15171A, dark: 0xF5F3EE)
     static let muted = Color(light: 0x5C5F66, dark: 0xA19FAA)        // 4.5:1+ on both backgrounds
     /// Saffron for fills (buttons, chips, the spin button). Same in both modes.
@@ -29,6 +29,34 @@ enum Theme {
     /// Blue used for trips.
     static let trip = Color(light: 0x2457A6, dark: 0x8FB4FF)
     static let tripSoft = Color(light: 0xDCE8F7, dark: 0x1B2433)
+
+    // MARK: Sleek layout (1.2)
+
+    /// The ink of the floating tab bar and dark hero cards. Lifted a little in
+    /// dark mode so it still reads as a card on the near-black background.
+    static let ink = Color(light: 0x15171A, dark: 0x1F1F29)
+    /// Text and icons on `ink`.
+    static let onInk = Color(hex: 0xFFFFFF)
+    /// Secondary text on `ink`.
+    static let onInkMuted = Color(hex: 0xB9BCC4)
+    /// The track behind segmented controls and progress bars.
+    static let segmentTrack = Color(light: 0xF0ECE4, dark: 0x1F1F29)
+    /// The selected segment.
+    static let segmentThumb = Color(light: 0xFFFFFF, dark: 0x2C2C38)
+    /// Floating pills over the map.
+    static let floating = Color(light: 0xFFFFFF, dark: 0x1F1F29)
+
+    /// Corner radii: one family across the app.
+    enum Radius {
+        static let small: CGFloat = 14
+        static let button: CGFloat = 18
+        static let card: CGFloat = 22
+        static let hero: CGFloat = 28
+        static let sheet: CGFloat = 32
+    }
+
+    /// Room kept clear at the bottom of each tab for the floating tab bar.
+    static let tabBarClearance: CGFloat = 78
 
     // Type: Outfit for headings, DM Sans for everything else (same pairing as
     // Glofly). Both are bundled from Google Fonts under the SIL Open Font License
@@ -72,6 +100,7 @@ enum Theme {
         segmented.setTitleTextAttributes([.font: font("DMSans-Bold", 13)], for: .selected)
 
         UITabBarItem.appearance().setTitleTextAttributes([.font: font("DMSans-Medium", 10)], for: .normal)
+        nav.tintColor = UIColor(accentText)
     }
 
     /// Tile colors, picked by a stable hash of the name so a restaurant
@@ -140,7 +169,7 @@ extension UIColor {
 
 /// The standard rounded card used across screens.
 struct CardBackground: ViewModifier {
-    var radius: CGFloat = 20
+    var radius: CGFloat = Theme.Radius.card
     func body(content: Content) -> some View {
         content
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -152,5 +181,5 @@ struct CardBackground: ViewModifier {
 }
 
 extension View {
-    func card(radius: CGFloat = 20) -> some View { modifier(CardBackground(radius: radius)) }
+    func card(radius: CGFloat = Theme.Radius.card) -> some View { modifier(CardBackground(radius: radius)) }
 }

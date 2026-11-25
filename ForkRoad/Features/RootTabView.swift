@@ -13,31 +13,44 @@ struct RootTabView: View {
 
     @State private var followUp: Visit?
 
+    init() {
+        // The floating pill replaces the system tab bar everywhere, pushed screens too.
+        UITabBar.appearance().isHidden = true
+    }
+
     var body: some View {
         @Bindable var model = model
 
         TabView(selection: $model.selectedTab) {
             NavigationStack { DiscoverView() }
-                .tabItem { Label("Discover", systemImage: "safari") }
+                .floatingTabBarClearance()
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.discover)
 
             NavigationStack { SpinView() }
-                .tabItem { Label("Spin", systemImage: "sparkles") }
+                .floatingTabBarClearance()
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.spin)
 
             NavigationStack { ListsView() }
-                .tabItem { Label("Lists", systemImage: "heart") }
+                .floatingTabBarClearance()
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.lists)
 
             GroupHomeView()  // owns its NavigationStack so it can push new sessions
-                .tabItem { Label("Group", systemImage: "person.2") }
+                .floatingTabBarClearance()
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.group)
 
         }
-        .toolbarBackground(Theme.night, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
         // Big text, but not so big the fixed-size pieces (Spin button, reel) break.
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        // The sleek tab bar floats over every tab (the system one is hidden).
+        .overlay(alignment: .bottom) {
+            FloatingTabBar(selection: $model.selectedTab)
+                .padding(.bottom, 8)
+                .ignoresSafeArea(.keyboard)
+        }
         .overlay(alignment: .bottom) { UndoToastHost() }
         // A toast from one tab doesn't follow you to the next.
         .onChange(of: model.selectedTab) { UndoCenter.shared.hide() }

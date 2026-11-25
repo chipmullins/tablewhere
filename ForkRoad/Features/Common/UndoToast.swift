@@ -41,7 +41,7 @@ final class UndoCenter {
     }
 }
 
-/// Sits above the tab bar. Added once, in RootTabView.
+/// Sits above the floating tab bar. Added once, in RootTabView.
 struct UndoToastHost: View {
     @State private var center = UndoCenter.shared
 
@@ -63,7 +63,7 @@ struct UndoToastHost: View {
             .background(Theme.text, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
             .padding(.horizontal, 16)
-            .padding(.bottom, 58)
+            .padding(.bottom, 80)  // above the floating tab bar
             .id(item.id)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .gesture(DragGesture(minimumDistance: 10).onEnded { value in
