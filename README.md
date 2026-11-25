@@ -19,6 +19,8 @@ My family could never agree on where to eat. Once we finally picked a place, we'
   <img src="docs/images/web-join.png" width="200" alt="Joining from a link in the browser">
 </p>
 
+<sub>Screenshots are from 1.1. Version 1.2 moves to a new, sleeker layout (a floating tab bar, a map-first Spin screen with one big Spin button, and a full-screen result); new screenshots are on the way.</sub>
+
 ## What it does
 
 **On your own**
