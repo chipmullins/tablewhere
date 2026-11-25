@@ -11,10 +11,10 @@ struct SleekButtonStyle: ButtonStyle {
     var height: CGFloat = 60
 
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration, kind: kind, height: height)
+        StyledLabel(configuration: configuration, kind: kind, height: height)
     }
 
-    private struct Body: View {
+    private struct StyledLabel: View {
         let configuration: Configuration
         let kind: Kind
         let height: CGFloat
