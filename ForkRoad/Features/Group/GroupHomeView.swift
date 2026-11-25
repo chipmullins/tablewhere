@@ -43,13 +43,8 @@ struct GroupHomeView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    SectionLabel(text: "Group plan")
-                    Text("Decide together")
-                        .font(Theme.display(34))
-                        .foregroundStyle(Theme.text)
-                }
-                .padding(.top, 8)
+                ScreenTitle(title: "Decide together", eyebrow: "Group plan")
+                    .padding(.top, 12)
 
                 if FirebaseSetup.isConfigured && !seenNew {
                     newInThisVersion
@@ -158,26 +153,45 @@ struct GroupHomeView: View {
         .card()
     }
 
+    /// The one primary action here: a dark hero card that starts a plan.
     private var startCard: some View {
         Button {
             withName(.create)
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "person.2.fill")
-                    .font(Theme.body(20, .semibold))
-                    .foregroundStyle(Theme.accentText)
-                    .frame(width: 48, height: 48)
-                    .background(Theme.onSaffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Start a group plan").font(Theme.display(19))
-                    Text("Vote or spin, then send everyone the plan").font(Theme.body(13, .medium))
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("NEW PLAN")
+                        .font(Theme.body(11, .bold))
+                        .tracking(1.8)
+                        .foregroundStyle(Theme.saffron)
+                    Spacer()
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Theme.onInkMuted)
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(Theme.body(16, .bold))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Start a group plan")
+                        .font(Theme.display(28))
+                        .tracking(-0.5)
+                        .foregroundStyle(Theme.onInk)
+                    Text("Vote or spin, then send everyone the plan")
+                        .font(Theme.body(14, .medium))
+                        .foregroundStyle(Theme.onInkMuted)
+                }
+                HStack(spacing: 8) {
+                    Text("Start")
+                    Image(systemName: "arrow.right")
+                }
+                .font(Theme.display(16))
+                .foregroundStyle(Theme.onSaffron)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 44)
+                .background(Theme.saffron, in: Capsule())
             }
-            .foregroundStyle(Theme.onSaffron)
-            .padding(16)
-            .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.ink, in: RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.pressable)
     }
@@ -185,16 +199,16 @@ struct GroupHomeView: View {
     private var joinCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Got a code?")
-                .font(Theme.body(15, .semibold))
+                .font(Theme.display(18))
                 .foregroundStyle(Theme.text)
             HStack(spacing: 10) {
                 TextField("K7Q·4MZ", text: $joinCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .font(Theme.code(20))
-                    .padding(.horizontal, 14)
-                    .frame(height: 50)
-                    .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .frame(height: 52)
+                    .background(Theme.surfaceHigh, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
                     .foregroundStyle(Theme.text)
                     .accessibilityLabel("Join code")
                 Button {
@@ -204,14 +218,14 @@ struct GroupHomeView: View {
                 }
                 .font(Theme.body(15, .bold))
                 .foregroundStyle(Theme.night)
-                .frame(width: 80, height: 50)
-                .background(Theme.text, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .frame(width: 80, height: 52)
+                .background(Theme.text, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
                 .buttonStyle(.pressable)
                 .disabled(JoinCode.normalize(joinCode).count != 6 || isJoining)
             }
         }
-        .padding(16)
-        .card()
+        .padding(18)
+        .card(radius: Theme.Radius.card)
     }
 
     @ViewBuilder
@@ -295,8 +309,8 @@ private struct RecentSessionRow: View {
                     .foregroundStyle(Theme.muted.opacity(0.6))
                     .accessibilityLabel(live.isGone ? "Remove" : "")
             }
-            .padding(14)
-            .card()
+            .padding(16)
+            .card(radius: Theme.Radius.button + 2)
         }
         .buttonStyle(.pressable)
         .task { await live.start() }

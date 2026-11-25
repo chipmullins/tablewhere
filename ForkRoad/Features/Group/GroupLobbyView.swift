@@ -457,18 +457,36 @@ struct GroupLobbyView: View {
         let how = howDecided(session, votes: count)
         WinnerCard(option: winner,
                    detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0)) · \(how)" } ?? "\(how) · \(winner.category)",
-                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED")
+                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED",
+                   meetTime: session.meetTime,
+                   people: live.comingMembers.map(\.name),
+                   hereCount: live.etas.filter { $0.status == .arrived }.count,
+                   showsArrivals: session.meetTime.map { OnMyWay.isRelevant(meetTime: $0) } ?? false)
 
-        HStack(spacing: 8) {
-            ActionTile(title: "Directions", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
+        // Around the meet time, who's on the way comes right under the plan.
+        if let meet = session.meetTime, OnMyWay.isRelevant(meetTime: meet) {
+            OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
+                        line: live.arrivalLine, mine: live.myETA, updatesLive: true,
+                        etas: live.etas, members: live.comingMembers)
+                // Friends' times on your Lock Screen countdown while the app is open.
+                .onChange(of: live.etas, initial: true) { syncCountdown(session.id) }
+                .onChange(of: live.etasLoaded) { syncCountdown(session.id) }
+                .onChange(of: live.expectedAtTable) { syncCountdown(session.id) }
+        }
+        // One primary (directions), the rest as icons.
+        HStack(spacing: 10) {
+            Button {
                 PlaceLinks.openDirections(winner.place)
                 VisitFollowUp.record(winner.place, in: context)
+            } label: {
+                Label("Directions", systemImage: "location.north.fill")
             }
-            ActionTile(title: "Call", systemImage: "phone", tint: Theme.accentText, background: Theme.surface) {
+            .buttonStyle(SleekButtonStyle(kind: .ink, height: 56))
+            IconAction(label: "Call", systemImage: "phone") {
                 if let url = PlaceLinks.phoneURL(winner.place) { openURL(url) }
             }
             .disabled(winner.phoneNumber == nil)
-            ActionTile(title: "Website", systemImage: "safari", tint: Theme.accentText, background: Theme.surface) {
+            IconAction(label: "Website", systemImage: "safari") {
                 browserURL = winner.place.websiteURL
             }
             .disabled(winner.websiteURL == nil)
@@ -488,14 +506,6 @@ struct GroupLobbyView: View {
                 }
                 return LeaveBy.origin(model)
             }
-        }
-        if let meet = session.meetTime, OnMyWay.isRelevant(meetTime: meet) {
-            OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
-                        line: live.arrivalLine, mine: live.myETA, updatesLive: true)
-                // Friends' times on your Lock Screen countdown while the app is open.
-                .onChange(of: live.etas, initial: true) { syncCountdown(session.id) }
-                .onChange(of: live.etasLoaded) { syncCountdown(session.id) }
-                .onChange(of: live.expectedAtTable) { syncCountdown(session.id) }
         }
         noteSection(session)
 

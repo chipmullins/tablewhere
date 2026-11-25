@@ -533,19 +533,24 @@ struct MessageVoteView: View {
     private func decidedSection(_ session: GroupSession, winner: GroupOption) -> some View {
         WinnerCard(option: winner,
                    detail: session.meetTime.map { "Meet \(MeetTimes.phrase(for: $0))" } ?? winner.category,
-                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED")
-        HStack(spacing: 8) {
-            ActionTile(title: "Directions", systemImage: "location.north.line",
-                       tint: Theme.accentText, background: Theme.surface) {
+                   eyebrow: session.mode == .plan ? "THE PLAN" : session.mode == .spin ? "THE WHEEL PICKED" : "THE GROUP PICKED",
+                   meetTime: session.meetTime,
+                   people: live.comingMembers.map(\.name),
+                   hereCount: live.etas.filter { $0.status == .arrived }.count,
+                   showsArrivals: session.meetTime.map { OnMyWay.isRelevant(meetTime: $0) } ?? false)
+        // One primary (directions), the rest as icons.
+        HStack(spacing: 10) {
+            Button {
                 if let url = directionsURL(winner) { state.open(url: url) }
+            } label: {
+                Label("Directions", systemImage: "location.north.fill")
             }
-            ActionTile(title: "Call", systemImage: "phone",
-                       tint: Theme.accentText, background: Theme.surface) {
+            .buttonStyle(SleekButtonStyle(kind: .ink, height: 56))
+            IconAction(label: "Call", systemImage: "phone") {
                 if let url = phoneURL(winner) { state.open(url: url) }
             }
             .disabled(phoneURL(winner) == nil)
-            ActionTile(title: "Website", systemImage: "safari",
-                       tint: Theme.accentText, background: Theme.surface) {
+            IconAction(label: "Website", systemImage: "safari") {
                 if let url = winner.place.websiteURL { state.open(url: url) }
             }
             .disabled(winner.place.websiteURL == nil)
@@ -592,7 +597,8 @@ struct MessageVoteView: View {
         }
         if let meet = session.meetTime, OnMyWay.isRelevant(meetTime: meet) {
             OnMyWayCard(sessionID: session.id, winner: winner, meetTime: meet,
-                        line: live.arrivalLine, mine: live.myETA)
+                        line: live.arrivalLine, mine: live.myETA,
+                        etas: live.etas, members: live.comingMembers)
         }
         if session.hasRSVP {
             RSVPPanel(session: session, count: live.rsvpCount, mine: live.myRSVP,

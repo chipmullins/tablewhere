@@ -244,14 +244,32 @@ struct WinnerCard: View {
     let detail: String
     /// "THE PLAN" for an "I'll pick" plan.
     var eyebrow = "THE GROUP PICKED"
+    /// With a meet time still ahead (1.2): the dark hero, counting down
+    /// ("MEET IN 42:10"), with who's coming and how many are there.
+    var meetTime: Date? = nil
+    /// Everyone in the plan, for the stacked avatars.
+    var people: [String] = []
+    /// How many have arrived (from On my way).
+    var hereCount: Int = 0
+    /// "1 of 4 here" instead of "4 in" (around the meet time).
+    var showsArrivals = false
 
     var body: some View {
+        if let meetTime, meetTime.timeIntervalSinceNow > -45 * 60 {
+            hero(meetTime)
+        } else {
+            plain
+        }
+    }
+
+    private var plain: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(eyebrow)
                 .font(Theme.body(12, .heavy))
                 .tracking(1.2)
             Text(option.name)
-                .font(Theme.display(32))
+                .font(Theme.display(34))
+                .tracking(-1)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
             Text(detail)
@@ -259,11 +277,92 @@ struct WinnerCard: View {
         }
         .foregroundStyle(Theme.onSaffron)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(22)
+        .background(Theme.saffron, in: RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(eyebrow.capitalized): \(option.name). \(detail)")
         .accessibilityAddTraits(.isHeader)
+    }
+
+    private func hero(_ meetTime: Date) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Self.countdownLabel(meetTime, now: context.date))
+                            .font(Theme.body(11, .bold))
+                            .tracking(1.8)
+                            .foregroundStyle(Theme.saffron)
+                        Text(Self.countdown(meetTime, now: context.date))
+                            .font(.custom("Outfit-ExtraBold", size: 52, relativeTo: .largeTitle))
+                            .tracking(-2)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .foregroundStyle(Theme.onInk)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.spokenCountdown(meetTime, now: context.date))
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(option.name)
+                        .font(Theme.display(20))
+                        .multilineTextAlignment(.trailing)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(Theme.onInk)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(meetTime.formatted(date: .omitted, time: .shortened))
+                        .font(Theme.body(13, .medium))
+                        .foregroundStyle(Theme.onInkMuted)
+                }
+            }
+            HStack {
+                AvatarStack(names: people, ring: Theme.ink)
+                Spacer()
+                Text(peopleLine)
+                    .font(Theme.body(13, .semibold))
+                    .foregroundStyle(Theme.onInkMuted)
+            }
+            Text(detail)
+                .font(Theme.body(13, .medium))
+                .foregroundStyle(Theme.onInkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.ink, in: RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(eyebrow.capitalized): \(option.name)")
+    }
+
+    private var peopleLine: String {
+        if showsArrivals { return "\(hereCount) of \(max(people.count, hereCount)) here" }
+        return people.count == 1 ? "1 person" : "\(people.count) people"
+    }
+
+    static func countdownLabel(_ meetTime: Date, now: Date) -> String {
+        meetTime.timeIntervalSince(now) > 0 ? "MEET IN" : "MEET TIME"
+    }
+
+    /// "42:10" under an hour, "3h 20m" under a day, then "Fri 7:00 PM".
+    static func countdown(_ meetTime: Date, now: Date) -> String {
+        let left = Int(meetTime.timeIntervalSince(now))
+        if left <= 0 { return "Now" }
+        if left < 3600 { return String(format: "%d:%02d", left / 60, left % 60) }
+        if left < 24 * 3600 { return "\(left / 3600)h \((left % 3600) / 60)m" }
+        return meetTime.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+
+    static func spokenCountdown(_ meetTime: Date, now: Date) -> String {
+        let left = Int(meetTime.timeIntervalSince(now))
+        if left <= 0 { return "It’s meet time" }
+        let minutes = max(1, left / 60)
+        if minutes < 60 { return "Meet in \(minutes) minute\(minutes == 1 ? "" : "s")" }
+        if left < 24 * 3600 { return "Meet in \(minutes / 60) hours \(minutes % 60) minutes" }
+        return "Meet \(meetTime.formatted(date: .abbreviated, time: .shortened))"
     }
 }
 
