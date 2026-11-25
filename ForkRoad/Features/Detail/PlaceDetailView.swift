@@ -42,13 +42,16 @@ struct PlaceDetailView: View {
                         }
                         .padding(.top, 60)
                     }
-                    .frame(height: 260)
+                    .frame(height: 300)
                 }
 
+                VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(place.name)
-                        .font(Theme.display(32))
+                        .font(Theme.display(34))
+                        .tracking(-1)
                         .foregroundStyle(Theme.text)
+                        .accessibilityAddTraits(.isHeader)
                     Text(isCustom
                          ? (hasDirections ? "\(place.category) · \(place.distanceLabel) · added by you"
                                           : "\(place.category) · added by you · no address")
@@ -56,50 +59,61 @@ struct PlaceDetailView: View {
                         .font(Theme.body(15))
                         .foregroundStyle(Theme.muted)
                 }
-                .padding(.horizontal, 16)
 
-                HStack(spacing: 8) {
-                    ActionTile(title: "Call", systemImage: "phone", tint: Theme.accentText, background: Theme.surface) {
+                // Icon-only actions, then one primary: directions.
+                HStack {
+                    IconAction(label: "Call", systemImage: "phone") {
                         if let url = PlaceLinks.phoneURL(place) { openURL(url) }
                     }
                     .disabled(place.phoneNumber == nil)
-
-                    ActionTile(title: "Go", systemImage: "location.north.line", tint: Theme.accentText, background: Theme.surface) {
-                        PlaceLinks.openDirections(place)
-                        VisitFollowUp.record(place, in: context)
-                    }
-                    .disabled(!hasDirections)
-
-                    ActionTile(title: "Favorite",
-                               systemImage: onList == .favorites ? "heart.fill" : "heart",
-                               tint: onList == .favorites ? Theme.onSaffron : Theme.text,
-                               background: onList == .favorites ? Theme.saffron : Theme.surface,
+                    Spacer(minLength: 6)
+                    IconAction(label: "Favorite", systemImage: onList == .favorites ? "heart.fill" : "heart",
                                isOn: onList == .favorites) {
                         actions.toggle(place, in: .favorites)
                         refresh += 1
                     }
-
-                    ActionTile(title: "Try",
-                               systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
-                               tint: onList == .interested ? Theme.onSaffron : Theme.text,
-                               background: onList == .interested ? Theme.saffron : Theme.surface,
-                               isOn: onList == .interested) {
+                    Spacer(minLength: 6)
+                    IconAction(label: "Try later", systemImage: onList == .interested ? "bookmark.fill" : "bookmark",
+                               isOn: onList == .interested, hint: "Saves it to your To try list") {
                         actions.toggle(place, in: .interested)
                         refresh += 1
                     }
-
+                    Spacer(minLength: 6)
                     if isCustom {
-                        ActionTile(title: "Edit", systemImage: "pencil", background: Theme.surface) {
-                            showEdit = true
-                        }
+                        IconAction(label: "Edit", systemImage: "pencil") { showEdit = true }
                     } else {
-                        ActionTile(title: "Blacklist", systemImage: "nosign", background: Theme.surface) {
-                            showBlockOptions = true
-                        }
+                        IconAction(label: "Blacklist", systemImage: "nosign", haptic: Haptic.destructive,
+                                   hint: "Choose this place or all of its kind") { showBlockOptions = true }
                     }
+                    Spacer(minLength: 6)
+                    SharePickButton(place: place, context: .spin) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                            .frame(width: 56, height: 56)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous).strokeBorder(Theme.hairline))
+                    }
+                    .accessibilityLabel("Share")
                 }
-                .padding(.horizontal, 16)
                 .sensoryFeedback(Haptic.tick, trigger: refresh)
+
+                Button {
+                    PlaceLinks.openDirections(place)
+                    VisitFollowUp.record(place, in: context)
+                } label: {
+                    Label("Let’s go · directions", systemImage: "location.north.fill")
+                }
+                .buttonStyle(.sleekPrimary)
+                .disabled(!hasDirections)
+                .accessibilityLabel("Directions")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .background(Theme.night, in: UnevenRoundedRectangle(topLeadingRadius: Theme.Radius.sheet,
+                                                                     topTrailingRadius: Theme.Radius.sheet,
+                                                                     style: .continuous))
+                .padding(.top, -50)
 
                 if let onList {
                     Toggle(isOn: Binding(
@@ -116,15 +130,15 @@ struct PlaceDetailView: View {
                         }
                     }
                     .tint(Theme.saffron)
-                    .padding(14)
+                    .padding(16)
                     .card()
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
 
                     NoteField(placeID: place.id)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 20)
                 }
 
-                menuButton.padding(.horizontal, 16)
+                menuButton.padding(.horizontal, 20)
 
                 if let address = place.address {
                     HStack(spacing: 14) {
@@ -137,7 +151,7 @@ struct PlaceDetailView: View {
                     }
                     .padding(16)
                     .card()
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
                 }
             }
             .padding(.bottom, 24)
@@ -183,36 +197,15 @@ struct PlaceDetailView: View {
                 .allowsHitTesting(false)
             }
         }
-        .frame(height: 300)
-        .overlay(alignment: .bottom) {
-            LinearGradient(colors: [.clear, Theme.night], startPoint: .top, endPoint: .bottom)
-                .frame(height: 80)
-                .allowsHitTesting(false)
-        }
+        .frame(height: 340)
     }
 
     private var menuButton: some View {
         Button {
             browserURL = place.websiteURL
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "menucard")
-                    .font(Theme.body(20, .semibold))
-                    .foregroundStyle(Theme.onSaffron)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("View menu & hours").font(Theme.display(16)).foregroundStyle(Theme.text)
-                    Text(place.websiteURL == nil ? "No website listed" : "Opens their website in the app")
-                        .font(Theme.body(12))
-                        .foregroundStyle(Theme.muted)
-                }
-                Spacer()
-                Image(systemName: "arrow.up.right").foregroundStyle(Theme.muted)
-            }
-            .padding(14)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.saffron.opacity(0.35)))
+            SleekRow(systemImage: "menucard", title: "View menu & hours",
+                     subtitle: place.websiteURL == nil ? "No website listed" : "Opens their website in the app")
         }
         .buttonStyle(.pressable)
         .disabled(place.websiteURL == nil)
