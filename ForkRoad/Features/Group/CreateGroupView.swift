@@ -6,6 +6,8 @@ import CoreLocation
 /// Sheet for starting a group plan: how you'll decide, a name, then the
 /// places (chosen in their own sheet, or drawn from nearby for Surprise us).
 struct CreateGroupView: View {
+    /// A place picked already (Spin → "Make it a group plan"): starts as "I'll pick" with it.
+    var startingPlace: Place? = nil
     var onCreated: (GroupSession) -> Void
 
     @Environment(AppModel.self) private var model
@@ -108,6 +110,13 @@ struct CreateGroupView: View {
             }
             // Don't lose your picks to a stray swipe.
             .interactiveDismissDisabled(!selected.isEmpty)
+            // From a spin: "I'll pick" with that place, ready to set a time and send.
+            .onAppear {
+                if let startingPlace, selected.isEmpty {
+                    setup = .plan
+                    selected = [startingPlace]
+                }
+            }
             .sensoryFeedback(Haptic.commit, trigger: startTaps)
             .navigationTitle("New group plan")
             .navigationBarTitleDisplayMode(.inline)

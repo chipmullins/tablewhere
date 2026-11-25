@@ -138,6 +138,15 @@ final class AppModel {
     var pendingGroupSessionID: String?
     /// A place to open on Discover (from the widget).
     var pendingPlace: Place?
+    /// A place to start an "I'll pick" group plan with (Spin → "Make it a group
+    /// plan"); GroupHomeView opens New group plan with it.
+    var pendingPlanPlace: Place?
+
+    /// Opens Group and starts a plan for this place.
+    func startPlan(with place: Place) {
+        pendingPlanPlace = place
+        selectedTab = .group
+    }
 
     /// The city you're searching in ("Lexington, KY"), looked up from `center`.
     private(set) var currentCity: String?

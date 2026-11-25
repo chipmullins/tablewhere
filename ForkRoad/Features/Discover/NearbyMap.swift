@@ -14,6 +14,11 @@ struct NearbyMap: View {
     let places: [Place]
     /// The full-screen version (bigger, with a hint and a Done button).
     var isExpanded = false
+    /// Spin's home (1.2): fills the top of the screen behind the floating
+    /// pills and the bottom sheet. Doesn't move; the page opens the big map.
+    var isHero = false
+    /// The search radius circle (off for saved lists, whose places can be anywhere).
+    var showsRadius = true
 
     @State private var camera: MapCameraPosition = .automatic
     /// Where the map is looking after the user drags it.
@@ -47,9 +52,11 @@ struct NearbyMap: View {
                     Marker(model.locationName, systemImage: "mappin", coordinate: model.center)
                         .tint(Theme.text)
                 }
-                MapCircle(center: model.center, radius: model.radiusMeters)
-                    .foregroundStyle(Theme.saffron.opacity(0.08))
-                    .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
+                if showsRadius {
+                    MapCircle(center: model.center, radius: model.radiusMeters)
+                        .foregroundStyle(Theme.saffron.opacity(0.08))
+                        .stroke(Theme.saffron.opacity(0.6), lineWidth: 1.5)
+                }
                 ForEach(markerPlaces) { place in
                     Marker(place.name, systemImage: "fork.knife", coordinate: place.coordinate)
                         .tint(selected?.id == place.id ? Theme.text : Theme.saffron)
@@ -79,10 +86,10 @@ struct NearbyMap: View {
                 search(at: spot)
             }
         }
-        .frame(height: isExpanded ? nil : 170)
-        .clipShape(RoundedRectangle(cornerRadius: isExpanded ? 0 : 22, style: .continuous))
+        .frame(height: isExpanded || isHero ? nil : 170)
+        .clipShape(RoundedRectangle(cornerRadius: isExpanded || isHero ? 0 : Theme.Radius.card, style: .continuous))
         // Bottom right: Apple's "Maps · Legal" mark sits bottom left and must stay visible.
-        .overlay(alignment: .bottomTrailing) { if selected == nil { countBadge } }
+        .overlay(alignment: .bottomTrailing) { if selected == nil && !isHero { countBadge } }
         .overlay(alignment: .bottom) {
             if isExpanded, let selected {
                 MapPlaceCard(place: selected) { self.selected = nil }
@@ -96,7 +103,7 @@ struct NearbyMap: View {
             if let selected, !places.contains(where: { $0.id == selected.id }) { self.selected = nil }
         }
         .overlay(alignment: .top) {
-            if movedAway {
+            if movedAway && !isHero {
                 Button {
                     if let viewCenter { search(at: viewCenter) }
                 } label: {
@@ -114,7 +121,7 @@ struct NearbyMap: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if !isExpanded {
+            if !isExpanded && !isHero {
                 Button { showFullMap = true } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(Theme.body(13, .bold))
@@ -132,6 +139,8 @@ struct NearbyMap: View {
         .onChange(of: model.radiusMiles) { fitToRadius() }
         .onChange(of: model.center.latitude) { fitToRadius() }
         .onChange(of: model.center.longitude) { fitToRadius() }
+        .onChange(of: showsRadius) { fitToRadius() }
+        .onChange(of: places.map(\.id)) { if !showsRadius { fitToRadius() } }
         .sensoryFeedback(.selection, trigger: model.center.latitude)
         .fullScreenCover(isPresented: $showFullMap) { FullMapView() }
         .onChange(of: showFullMap) { if showFullMap { Hint.discoverMap.dismiss() } }
@@ -178,6 +187,12 @@ struct NearbyMap: View {
 
     /// Zoom so the whole radius circle fits.
     private func fitToRadius() {
+        // Saved lists: fit their pins instead of the radius.
+        guard showsRadius else {
+            withAnimation(.easeInOut(duration: 0.35)) { camera = .automatic }
+            viewCenter = nil
+            return
+        }
         let span = model.radiusMeters * 2.4
         withAnimation(.easeInOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(center: model.center,

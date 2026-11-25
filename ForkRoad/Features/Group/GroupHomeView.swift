@@ -6,6 +6,8 @@ struct GroupHomeView: View {
     @Environment(AppModel.self) private var model
     @State private var path: [String] = []
     @State private var showCreate = false
+    /// "Make it a group plan" from a spin: the plan starts with this place.
+    @State private var startingPlace: Place?
     @State private var showNamePrompt = false
     @State private var pendingAction: PendingAction?
     @State private var joinCode = ""
@@ -27,6 +29,14 @@ struct GroupHomeView: View {
                 guard let id = model.pendingGroupSessionID else { return }
                 model.pendingGroupSessionID = nil
                 if path.last != id { path = [id] }
+            }
+            // Spin → "Make it a group plan".
+            .onChange(of: model.pendingPlanPlace?.id, initial: true) {
+                guard let place = model.pendingPlanPlace else { return }
+                model.pendingPlanPlace = nil
+                path = []
+                startingPlace = place
+                withName(.create)
             }
     }
 
@@ -74,9 +84,10 @@ struct GroupHomeView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { GroupLobbyView(sessionID: $0) }
-        .sheet(isPresented: $showCreate) {
-            CreateGroupView { session in
+        .sheet(isPresented: $showCreate, onDismiss: { startingPlace = nil }) {
+            CreateGroupView(startingPlace: startingPlace) { session in
                 showCreate = false
+                startingPlace = nil
                 recentIDs = SharedCache.recentSessionIDs()
                 path.append(session.id)
                 Task { await PushTokens.requestGroupAlerts() }
