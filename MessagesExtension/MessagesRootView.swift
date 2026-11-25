@@ -46,12 +46,8 @@ struct MessagesRootView: View {
     private func startButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(Theme.display(18))
-                .foregroundStyle(Theme.onSaffron)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.sleekSaffron)
         .padding(16)
     }
 }

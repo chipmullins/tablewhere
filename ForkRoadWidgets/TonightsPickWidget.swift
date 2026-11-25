@@ -93,7 +93,8 @@ struct TonightsPickView: View {
             Spacer(minLength: 0)
             if let pick = entry.pick {
                 Text(pick.place.name)
-                    .font(Theme.display(18))
+                    .font(Theme.display(20))
+                    .tracking(-0.5)
                     .foregroundStyle(Theme.text)
                     .lineLimit(2)
                     .minimumScaleFactor(0.6)
@@ -118,10 +119,11 @@ struct TonightsPickView: View {
             Spacer(minLength: 0)
             if let pick = entry.pick {
                 HStack(spacing: 12) {
-                    MonogramTile(name: pick.place.name, size: 52)
+                    InitialTile(name: pick.place.name, size: 52)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(pick.place.name)
-                            .font(Theme.display(22))
+                            .font(Theme.display(26))
+                            .tracking(-0.8)
                             .foregroundStyle(Theme.text)
                             .lineLimit(2)
                             .minimumScaleFactor(0.6)
@@ -170,9 +172,9 @@ struct TonightsPickView: View {
     }
 
     private var header: some View {
-        Text("TABLEWHERE · YOUR PICK")
+        Label("THE WHEEL PICKED", systemImage: "sparkles")
             .font(Theme.body(10, .bold))
-            .tracking(0.8)
+            .tracking(1.4)
             .foregroundStyle(Theme.accentText)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
