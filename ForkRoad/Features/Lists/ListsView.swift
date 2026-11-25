@@ -48,13 +48,11 @@ struct ListsView: View {
     var body: some View {
         List {
             Section {
-                Picker("List", selection: $tab) {
-                    ForEach(Tab.allCases) { Text(label(for: $0)).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .sensoryFeedback(Haptic.tick, trigger: tab)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                SleekSegmented(title: "List",
+                               options: Tab.allCases.map { (label: label(for: $0), value: $0) },
+                               selection: $tab)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
             }
 
             if HintStore.shared.isVisible(.listsAdd) {
@@ -74,6 +72,8 @@ struct ListsView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .listSectionSpacing(.compact)
+        .listRowSeparatorTint(Theme.hairline)
         .background(Theme.night)
         .navigationTitle("Your lists")
         .toolbar {
@@ -236,10 +236,10 @@ struct ListsView: View {
             let place = item.asPlace(from: model.center)
             NavigationLink(value: place) {
                 HStack(spacing: 12) {
-                    MonogramTile(name: item.name, category: item.category, size: 44)
+                    InitialTile(name: item.name, size: 44)
                         .opacity(item.skipInSpins ? 0.45 : 1)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.name).font(Theme.body(16, .semibold))
+                        Text(item.name).font(Theme.body(16, .bold))
                         Text(rowDetail(item))
                             .font(Theme.body(13))
                             .foregroundStyle(Theme.muted)
@@ -346,10 +346,10 @@ struct ListsView: View {
                                 .font(Theme.body(18, .semibold))
                                 .foregroundStyle(Theme.accentText)
                                 .frame(width: 44, height: 44)
-                                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(recipe.name).font(Theme.body(16, .semibold)).foregroundStyle(Theme.text)
+                                Text(recipe.name).font(Theme.body(16, .bold)).foregroundStyle(Theme.text)
                                 if !recipe.note.isEmpty {
                                     Text(recipe.note).font(Theme.body(13)).foregroundStyle(Theme.muted).lineLimit(1)
                                 }
