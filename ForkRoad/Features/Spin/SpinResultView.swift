@@ -91,6 +91,8 @@ struct SpinResultView: View {
                         }
                         .accessibilityLabel("Share your pick")
                     }
+                    RoundIconButton(label: "Spin again", systemImage: "arrow.clockwise",
+                                    background: .white.opacity(0.6), bordered: false, action: onSpinAgain)
                     RoundIconButton(label: "Back to Spin", systemImage: "xmark",
                                     background: .white.opacity(0.6), bordered: false, action: onClose)
                 }
