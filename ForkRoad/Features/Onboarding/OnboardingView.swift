@@ -197,7 +197,8 @@ struct OnboardingView: View {
                 titleView
             } else {
                 Text(title)
-                    .font(Theme.display(30))
+                    .font(Theme.display(34))
+                    .tracking(-1)
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -227,12 +228,8 @@ struct OnboardingView: View {
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(Theme.display(18))
-                .foregroundStyle(Theme.onSaffron)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.sleekSaffron)
     }
 
     private func symbolArt(_ name: String) -> some View {
@@ -240,7 +237,7 @@ struct OnboardingView: View {
             .font(.system(size: 34, weight: .semibold))
             .foregroundStyle(Theme.accentText)
             .frame(width: 84, height: 84)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
             .accessibilityHidden(true)
     }
 

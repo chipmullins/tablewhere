@@ -55,33 +55,35 @@ private func placeRow(_ name: String, _ category: String, _ detail: String) -> s
 /// Spin: Eat out | Eat in, a landed pick, the Spin button, filter chips.
 struct TourSpinMock: View {
     var body: some View {
-        TourCard(label: "The Spin screen: a pick from places nearby, and a Spin button") {
+        TourCard(label: "The Spin screen: Tonight?, Eat out or Eat in, and one big Spin button") {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Tonight?").font(Theme.display(20)).foregroundStyle(Theme.text)
+                Spacer()
+                Text("21 places nearby").font(Theme.body(11, .medium)).foregroundStyle(Theme.muted)
+            }
             HStack(spacing: 0) {
                 Text("Eat out").frame(maxWidth: .infinity, minHeight: 28)
-                    .background(Theme.saffron, in: Capsule()).foregroundStyle(Theme.onSaffron)
+                    .background(Theme.segmentThumb, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .foregroundStyle(Theme.text)
                 Text("Eat in").frame(maxWidth: .infinity, minHeight: 28).foregroundStyle(Theme.muted)
             }
             .font(Theme.body(12, .bold))
             .padding(3)
-            .background(Theme.surfaceHigh, in: Capsule())
-            HStack(spacing: 12) {
-                MonogramTile(name: "Sora Ramen", category: "Ramen", size: 54)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("TONIGHT’S PICK").font(Theme.body(10, .heavy)).tracking(0.8).foregroundStyle(Theme.accentText)
-                    Text("Sora Ramen").font(Theme.display(20)).foregroundStyle(Theme.text)
-                    Text("Ramen · 0.4 mi").font(Theme.body(12)).foregroundStyle(Theme.muted)
-                }
+            .background(Theme.segmentTrack, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(spacing: 2) {
+                Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
+                Text("Spin").font(Theme.display(20))
             }
-            Text("Spin")
-                .font(Theme.display(17))
-                .foregroundStyle(Theme.onSaffron)
-                .frame(maxWidth: .infinity, minHeight: 42)
-                .background(Theme.saffron, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            HStack(spacing: 6) {
-                chip("No fast food", systemImage: "checkmark", isOn: true)
-                chip("Mexican")
-                chip("2 mi")
-            }
+            .foregroundStyle(Theme.onSaffron)
+            .frame(width: 92, height: 92)
+            .background(Theme.saffron, in: Circle())
+            .background(Circle().fill(Theme.accentSoft).padding(-8))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            Text("No fast food · skips places you’ve had lately")
+                .font(Theme.body(11, .medium))
+                .foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity)
         }
     }
 }

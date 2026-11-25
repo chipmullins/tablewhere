@@ -167,7 +167,9 @@ struct SettingsView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.night)
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
+            .tint(Theme.saffron)
+            .listSectionSpacing(.compact)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { saveName(); dismiss() }.bold()
