@@ -10,7 +10,7 @@ branch, with where it lives now. Nothing ships unticked.
 - If it was merged and you want it gone: `git checkout main && git reset --hard pre-redesign` then a force push (only with your OK), or just build from `pre-redesign`.
 
 ## Status
-All items carried over and ticked. Compile review (read-only, no Swift toolchain in the sandbox) found no compile errors; its eight behavior notes were fixed in "Review fixes". Still to check on a device: the system tab bar never flashes back on push/pop, and nothing sits under the floating pill.
+All items carried over and ticked. Compile review (read-only, no Swift toolchain in the sandbox) found no compile errors; its eight behavior notes were fixed in "Review fixes". Device test round 1: the lobby's bottom button sat under the floating pill (a NavigationStack doesn't pass its inset to pushed screens). Fixed: each screen now keeps itself clear of the pill, and the lobby's bottom bar sits above it.
 
 ## App shell (RootTabView)
 _Now: `FloatingTabBar` over a `TabView` with the system bar hidden; every tab gets `floatingTabBarClearance()`. Undo toast moved above the pill. Deep links, caches, follow-up unchanged._
@@ -89,7 +89,7 @@ _Now: pill segmented tabs, initial tiles, compact sections. Forms unchanged apar
 
 ## Groups (GroupHomeView, CreateGroupView, GroupLobbyView, Shared/GroupUI, Shared/UI/GroupComponents)
 _Now: dark Start card on Group home; `WinnerCard` becomes the dark "Meet in" hero (countdown, avatars, "1 of 4 here") while a meet time is ahead; Directions is the one primary with Call/Website as icons. Everything else in the lobby is unchanged in behavior._
-- [x] Group home: Start a group plan, Got a code? Join, Recent (live title/status, remove), name prompt, setup notice, empty state
+- [x] Group home: Start a group plan, Got a code? Join, Recent (live title/status, remove; now also clears itself 12 h after the meet time, 3 days after start without a time, or once ended), name prompt, setup notice. The old empty state is replaced by the same two cards plus the "Pick with friends" tip (Chip's call, 1.2).
 - [x] "New in" card → group tour pages
 - [x] Create: Vote, Spin our picks, Surprise us, I'll pick; name; places picker; Surprise wheel (area, filters, shuffle, remove); group filters; voting closes; date & time; I'll pick note, RSVPs, reply-by; Send the plan share sheet
 - [x] Lobby: header (title, meet time, filters line, join code, avatars, count line, invite share), invite card, expected count, group filters card

@@ -77,6 +77,9 @@ struct ListsView: View {
         .background(Theme.night)
         .navigationTitle("Your lists")
         .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
+        // Each screen keeps itself clear of the pill (a NavigationStack doesn't
+        // pass a safe-area inset on to the screens pushed onto it).
+        .floatingTabBarClearance()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

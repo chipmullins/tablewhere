@@ -91,6 +91,9 @@ struct SpinView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
+        // Each screen keeps itself clear of the pill (a NavigationStack doesn't
+        // pass a safe-area inset on to the screens pushed onto it).
+        .floatingTabBarClearance()
         .overlay {
             if let reveal {
                 SpinReveal(names: reveal.names, winner: reveal.winner) { self.reveal = nil }

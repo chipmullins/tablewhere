@@ -137,6 +137,8 @@ struct GroupLobbyView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
+        // After the bottom bar, so the bar sits above the floating tab bar.
+        .floatingTabBarClearance()
     }
 
     private var errorBinding: Binding<Bool> {

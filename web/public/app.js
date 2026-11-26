@@ -181,6 +181,7 @@ function start() {
     session = snap.data();
     render();
     refreshRuledOut();
+    autoJoin();
   }, () => fail("Couldn’t load this plan. Check your connection and try again.", true));
 
   onSnapshot(collection(sessionRef, "votes"), (snap) => {
@@ -219,6 +220,7 @@ function start() {
     membersLoaded = true;
     render();
     refreshRuledOut();
+    autoJoin();
   }, () => { membersLoaded = true; render(); });
 
   $("name-form").addEventListener("submit", async (event) => {
@@ -231,6 +233,7 @@ function start() {
     if (members.some((m) => m.id === uid)) await join(name);
     else store.remove(sessionNameKey());
     render();
+    autoJoin();
   });
 
   // "Not you? Change name": back to the name step (a shared phone, a typo).
@@ -253,6 +256,24 @@ function uniqueName(name) {
     if (!taken.has(`${name} ${n}`.toLowerCase())) return `${name} ${n}`;
   }
   return name;
+}
+
+// Surprise us, and "I'll pick" without RSVPs, have nothing to tap: giving
+// your name (or opening the link with one saved) is how you join, so you
+// show up in the group and in "N in the group".
+function joinsOnName() {
+  return !!session && (isSurprise() || (isPlan() && session.asksRSVP !== true));
+}
+
+let autoJoining = false;
+async function autoJoin() {
+  if (autoJoining || !uid || !membersLoaded || !joinsOnName()) return;
+  if (members.some((m) => m.id === uid)) return;
+  const name = myName();
+  if (!name) return;
+  autoJoining = true;
+  try { await join(name); } catch { /* offline: tries again on the next update */ }
+  finally { autoJoining = false; }
 }
 
 /** Join the group the first time you do something (vote, add a pick, RSVP). */

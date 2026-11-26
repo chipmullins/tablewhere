@@ -271,7 +271,8 @@ await test("On my way: others' times, and no card far from the meet time", async
   await page.waitForSelector("#omw:not([hidden])");
   await page.waitForFunction(() => document.querySelector("#omw-line").textContent.startsWith("Alex ~"));
   const line = await page.textContent("#omw-line");
-  assert(/Chip, Jo haven’t left|Jo, Chip haven’t left/.test(line), line);
+  // Opening an "I'll pick" plan with your name puts you in the group, so you're listed too.
+  assert(/(Chip, Jo|Jo, Chip), you haven’t left|you, (Chip, Jo|Jo, Chip) haven’t left/.test(line), line);
   await context.close();
   const far = await openPlan(browser, base, { setup: setupScript({ session: decidedSeed(6 * 60) }), storage: named });
   await far.page.waitForSelector("#decided-step:not([hidden])");
@@ -290,6 +291,28 @@ await test("On my way without a name asks for it first, then shares", async () =
   await page.waitForFunction(() => window.__fake.get("sessions/s1/eta/web-user")?.status === "onTheWay");
   assert((await page.evaluate(() => window.__fake.get("sessions/s1/eta/web-user").name)) === "Jo", "name");
   assert(await page.evaluate(() => !!window.__fake.get("sessions/s1/members/web-user")), "joined");
+  await context.close();
+});
+
+await test("Surprise us: opening the link with a name joins the group", async () => {
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ session: { surprise: true } }), storage: named });
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/members/web-user")?.name === "Sam", null, { timeout: 4000 });
+  await context.close();
+});
+
+await test("Surprise us: typing your name joins the group", async () => {
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ session: { surprise: true } }) });
+  await page.waitForSelector("#name-step:not([hidden])");
+  await page.fill("#name-input", "Jo");
+  await page.click("#name-form button[type=submit]");
+  await page.waitForFunction(() => window.__fake.get("sessions/s1/members/web-user")?.name === "Jo", null, { timeout: 4000 });
+  await context.close();
+});
+
+await test("Vote: just looking doesn't join (you join when you vote)", async () => {
+  const { page, context } = await openPlan(browser, base, { setup: setupScript({ session: { mode: "vote" } }), storage: named });
+  await page.waitForTimeout(600);
+  assert(await page.evaluate(() => !window.__fake.get("sessions/s1/members/web-user")), "not joined");
   await context.close();
 });
 

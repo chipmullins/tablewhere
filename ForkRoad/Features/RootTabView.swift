@@ -23,22 +23,18 @@ struct RootTabView: View {
 
         TabView(selection: $model.selectedTab) {
             NavigationStack { DiscoverView() }
-                .floatingTabBarClearance()
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.discover)
 
             NavigationStack { SpinView() }
-                .floatingTabBarClearance()
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.spin)
 
             NavigationStack { ListsView() }
-                .floatingTabBarClearance()
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.lists)
 
             GroupHomeView()  // owns its NavigationStack so it can push new sessions
-                .floatingTabBarClearance()
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.group)
 

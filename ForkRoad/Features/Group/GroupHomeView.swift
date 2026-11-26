@@ -11,8 +11,6 @@ struct GroupHomeView: View {
     @State private var showNamePrompt = false
     @State private var pendingAction: PendingAction?
     @State private var joinCode = ""
-    /// The empty state's "Got a code?" link opens the usual cards.
-    @State private var showJoin = false
     @State private var isJoining = false
     @State private var errorMessage: String?
     @State private var recentIDs = SharedCache.recentSessionIDs()
@@ -53,17 +51,9 @@ struct GroupHomeView: View {
 
                 if !FirebaseSetup.isConfigured {
                     setupNotice
-                } else if recentIDs.isEmpty && !showJoin {
-                    // First time here: a friendly empty state instead of two cards.
-                    EmptyState(
-                        art: .chat,
-                        title: "No more “idk, you pick”",
-                        message: "Start a plan, send it to the group chat, and let everyone vote or add a pick. Friends don’t need the app.",
-                        primary: ("Start a group plan", { startPlain() }),
-                        secondary: ("Got a code? Join the group", { withAnimation(.snappy) { showJoin = true } })
-                    )
-                    .padding(.top, 40)
                 } else {
+                    // Same two cards whether or not you've made a plan yet
+                    // (they read better than the old empty state).
                     if recentIDs.isEmpty { HintCard(.groupStart) }
                     startCard
                     joinCard
@@ -80,6 +70,9 @@ struct GroupHomeView: View {
         .background(Theme.night)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
+        // Each screen keeps itself clear of the pill (a NavigationStack doesn't
+        // pass a safe-area inset on to the screens pushed onto it).
+        .floatingTabBarClearance()
         .navigationDestination(for: String.self) { GroupLobbyView(sessionID: $0) }
         .sheet(isPresented: $showCreate, onDismiss: { startingPlace = nil }) {
             CreateGroupView(startingPlace: startingPlace) { session in
@@ -238,7 +231,7 @@ struct GroupHomeView: View {
                 ForEach(recentIDs, id: \.self) { id in
                     RecentSessionRow(sessionID: id, open: { path.append(id) }) {
                         SharedCache.forgetSession(id)
-                        recentIDs = SharedCache.recentSessionIDs()
+                        withAnimation(.snappy) { recentIDs = SharedCache.recentSessionIDs() }
                     }
                 }
             }
@@ -323,9 +316,20 @@ private struct RecentSessionRow: View {
         .buttonStyle(.pressable)
         .task { await live.start() }
         .onDisappear { live.stop() }
+        // Old plans clear themselves out of Recent (ended ones too).
+        .onChange(of: isFinished, initial: true) { if isFinished { remove() } }
         .contextMenu {
             Button("Remove from Recent", systemImage: "trash", role: .destructive, action: remove)
         }
+    }
+
+    /// Ended, or long past: 12 hours after the meet time, or 3 days after it
+    /// was started if it never got a time.
+    private var isFinished: Bool {
+        if live.isGone { return true }
+        guard let session = live.session else { return false }
+        if let meet = session.meetTime { return Date.now > meet.addingTimeInterval(12 * 3600) }
+        return Date.now > session.createdAt.addingTimeInterval(3 * 24 * 3600)
     }
 
     private var subtitle: String {

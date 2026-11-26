@@ -162,6 +162,9 @@ struct PlaceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)  // the floating pill replaces it
+        // Each screen keeps itself clear of the pill (a NavigationStack doesn't
+        // pass a safe-area inset on to the screens pushed onto it).
+        .floatingTabBarClearance()
         .task { if actions.saved(place)?.hasExactLocation ?? true { await loadLookAround() } }
         .sheet(isPresented: $showEdit) {
             if let record = actions.saved(place) {
